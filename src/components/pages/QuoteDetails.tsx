@@ -23,6 +23,7 @@ import {
   MessageSquare,
   ShieldCheck,
   Check,
+  CheckCircle,
   Info,
   Lock,
 } from "lucide-react";
@@ -130,6 +131,13 @@ export function QuoteDetails() {
   const [otp, setOtp] = useState<string>(urlOtp || "");
   const [otpSent, setOtpSent] = useState(false);
   const [resendingOtp, setResendingOtp] = useState(false);
+
+  // ─── "Use the same addresses?" — the ONE confirm step ──────────────
+  // Requirement: the form opens with the addresses carried over from the
+  // landing page and a single confirm question — confirm or edit, no
+  // retyping. Confirming collapses the card; editing returns to the
+  // landing map (the address memory pre-fills it there).
+  const [addressesConfirmed, setAddressesConfirmed] = useState(false);
 
   // Clear stale draft when user starts a new quote (arrives with fresh data from landing page)
   useEffect(() => {
@@ -559,11 +567,11 @@ export function QuoteDetails() {
                       <h2 className="text-2xl font-black text-slate-900 dark:text-white mt-2">
                         ${estimatedPrice.toFixed(2)}
                         <span className="text-sm font-bold text-slate-500 dark:text-slate-400 ml-2">
-                          (estimated)
+                          (prepaid total)
                         </span>
                       </h2>
                       <p className="text-sm text-slate-600 dark:text-slate-400 mt-2">
-                        Estimate shown first. Details collected on this page.
+                        Your real price from our pricing engine — not an estimate. Confirm the addresses, then complete the request.
                       </p>
                     </div>
                     <Button variant="outline" size="sm" className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-slate-100 dark:bg-slate-800/60 text-slate-700 dark:text-slate-200 font-bold hover:opacity-90 transition border border-slate-200 dark:border-slate-700" asChild>
@@ -616,6 +624,44 @@ export function QuoteDetails() {
                     <p className="text-[11px] text-amber-900 dark:text-amber-200 leading-normal font-medium">
                       Real quote from backend. Details collected below.
                     </p>
+                  </div>
+
+                  {/* ── "Use the same addresses?" — the one confirm step ── */}
+                  <div className="mt-4 p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700">
+                    {addressesConfirmed ? (
+                      <div className="flex items-center gap-2 text-sm font-bold text-slate-900 dark:text-white">
+                        <CheckCircle className="w-5 h-5 text-lime-500 shrink-0" />
+                        Using these addresses — no retyping needed.
+                      </div>
+                    ) : (
+                      <>
+                        <p className="text-sm font-extrabold text-slate-900 dark:text-white">
+                          Use the same addresses?
+                        </p>
+                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 leading-relaxed break-words">
+                          From <span className="font-bold text-slate-700 dark:text-slate-200">{pickupAddress}</span>
+                          {" → to "}
+                          <span className="font-bold text-slate-700 dark:text-slate-200">{dropoffAddress}</span>
+                        </p>
+                        <div className="flex flex-wrap gap-2 mt-3">
+                          <Button
+                            size="sm"
+                            className="px-4 py-2 rounded-xl bg-lime-500 text-slate-950 font-extrabold hover:bg-lime-600"
+                            onClick={() => setAddressesConfirmed(true)}
+                          >
+                            Yes, use these addresses
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="px-4 py-2 rounded-xl font-bold"
+                            asChild
+                          >
+                            <Link to="/home#quote">Edit addresses</Link>
+                          </Button>
+                        </div>
+                      </>
+                    )}
                   </div>
                 </div>
               </div>

@@ -1,6 +1,6 @@
 //@ts-nocheck
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { Link } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -62,11 +62,12 @@ import RouteMap from '@/components/map/RouteMap';
 import LocationAutocomplete from "../map/LocationAutocomplete";
 import { useJsApiLoader } from "@react-google-maps/api";
 import { GOOGLE_MAPS_LIBRARIES, GOOGLE_MAPS_SCRIPT_ID } from '@/lib/google-maps-config';
-import { useCreate, useDataQuery } from "@/lib/tanstack/dataQuery";
+import { useCreate, useDataQuery, isAuthenticated, getLastKnownRoles } from "@/lib/tanstack/dataQuery";
 import { toast } from "sonner";
 import { usePickupZones } from "@/hooks/usePickupZones";
 import { isInPickupZone } from "@/lib/geo-utils";
-import { calculateHomeQuote, getAdvertisedRateSummary } from "@/lib/pricing/home-quote";
+import { getAdvertisedRateSummary } from "@/lib/pricing/home-quote";
+import { WhatsAppIcon } from "@/components/shared/WhatsAppSupportButton";
 import { PublicFooter } from "@/components/shared/PublicFooter";
 import { usePublicDefaultPricing } from "@/hooks/pricing/usePublicDefaultPricing";
 import { SEOHead } from "../shared/SEOHead";
@@ -99,15 +100,55 @@ interface InvestorLeadForm {
   message: string;
 }
 
+// ─── Landing-page quote memory (module scope) ──────────────────────
+// Memory rule: remember the visitor's last delivery type + addresses so a
+// returning visitor never has to retype them. The saved type also drives
+// the "skip straight to the address fields" behavior after clicking
+// "Request a Delivery".
+const HOME_QUOTE_PREFILL_KEY = "homeQuotePrefill";
+type HomeDeliveryType = "BUSINESS" | "PERSONAL";
+function readHomeQuotePrefill(): {
+  deliveryType?: HomeDeliveryType;
+  pickupAddress?: string;
+  dropoffAddress?: string;
+} {
+  try {
+    const raw = localStorage.getItem(HOME_QUOTE_PREFILL_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
+  }
+}
+
 export default function LandingPage() {
+  const navigate = useNavigate();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [pickupAddress, setPickupAddress] = useState("");
-  const [dropoffAddress, setDropoffAddress] = useState("");
+  const savedPrefill = readHomeQuotePrefill();
+  const [pickupAddress, setPickupAddress] = useState(savedPrefill.pickupAddress ?? "");
+  const [dropoffAddress, setDropoffAddress] = useState(savedPrefill.dropoffAddress ?? "");
   const [pickupCoords, setPickupCoords] = useState<google.maps.LatLngLiteral | null>(null);
   const [dropoffCoords, setDropoffCoords] = useState<google.maps.LatLngLiteral | null>(null);
   const [distance, setDistance] = useState<number | null>(null);
-  const [quoteResult, setQuoteResult] = useState<ReturnType<typeof calculateHomeQuote> | null>(null);
+  const [quoteResult, setQuoteResult] = useState<any>(null);
   const [isLoadingQuote, setIsLoadingQuote] = useState(false);
+
+  // ─── Delivery type (Business / Personal) ───────────────────────────
+  // Requirement: the delivery-type question is the FIRST interactive
+  // element on the page and Business is selected by default. The choice
+  // drives which pricing model the SERVER engine applies (BUSINESS → flat
+  // PER_MILE, PERSONAL → A-B-C bands) and is remembered for next visits.
+  const [deliveryType, setDeliveryType] = useState<HomeDeliveryType>(
+    savedPrefill.deliveryType ?? "BUSINESS"
+  );
+
+  // Logged-in customers skip the delivery-type question ("land on the map
+  // with their saved type and real rate"). Drivers/admins still see it —
+  // they are not delivery customers.
+  const isLoggedInCustomer = (() => {
+    if (!isAuthenticated()) return false;
+    const roles = getLastKnownRoles();
+    return !roles.includes("DRIVER") && !roles.includes("ADMIN");
+  })();
 
   // ─── Live pricing config ───────────────────────────────────────────
   // Fetches the admin-configured default pricing config from the
@@ -120,10 +161,9 @@ export default function LandingPage() {
   // available, falls back to hard-coded values otherwise).
   const advertisedRate = getAdvertisedRateSummary(livePricingConfig);
 
-  // Ref mirror of livePricingConfig so handleCalculateEstimate can read
-  // the latest config WITHOUT having it in its deps array. This prevents
-  // the auto-fire effect from re-firing when the config arrives after
-  // the initial quote was already computed.
+  // Ref mirror of livePricingConfig — kept for the advertised-rate subtitle
+  // and JSON-LD (SEO). The quote itself is computed SERVER-SIDE now, so the
+  // config no longer participates in any pricing math here.
   const livePricingConfigRef = useRef(livePricingConfig);
   useEffect(() => {
     livePricingConfigRef.current = livePricingConfig;
@@ -134,27 +174,12 @@ export default function LandingPage() {
   const estimateRef = useRef<HTMLElement | null>(null);
 
   // Signature of the last quoted input combination
-  // (pickupAddress || dropoffAddress || distance). Guarantees each exact
-  // route is quoted exactly ONCE: without it, the auto-quote effect
-  // re-fired whenever isLoadingQuote flipped back to false or the
-  // callback identity changed — a loop that burned ALL THREE quota
-  // attempts on the very first quote, after which the price froze for
-  // the rest of the session (pin moved, price didn't). With the guard,
-  // one route change = exactly one quote = exactly one attempt, so the
-  // user genuinely gets 3 free quotes per session.
+  // (deliveryType || pickupAddress || dropoffAddress). Guarantees each
+  // exact route+type combination is quoted exactly ONCE: without it, the
+  // auto-quote effect would re-fire whenever isLoadingQuote flipped back
+  // to false or the callback identity changed — quoting identical inputs
+  // in a loop and creating duplicate Quote rows server-side.
   const lastQuotedKeyRef = useRef<string | null>(null);
-
-  // Rate limit quote calculations to 3 per session (kept by design).
-  // Stored in sessionStorage so the quota resets when the tab closes.
-  // Key is "quoteAttemptsV2" (not the legacy "quoteAttempts") so sessions
-  // created by the old buggy build — whose counter was already exhausted
-  // by the re-fire loop — start with a clean slate.
-  const QUOTE_MAX_ATTEMPTS = 3;
-  const [quoteAttempts, setQuoteAttempts] = useState<number>(() => {
-    const stored = sessionStorage.getItem("quoteAttemptsV2");
-    return stored ? parseInt(stored, 10) : 0;
-  });
-  const quoteLimitReached = quoteAttempts >= QUOTE_MAX_ATTEMPTS;
 
   // Bumped every time the route inputs change (address selected/cleared).
   // In-flight Google Directions callbacks compare against this counter
@@ -273,23 +298,15 @@ export default function LandingPage() {
       setPickupCoords({ lat, lng });
       setPickupAddress(address);
       setPickupInZone(true);
-      // Invalidate the previously computed driving distance so the
-      // auto-quote effect only ever fires with a distance that matches the
-      // CURRENT addresses (prevents a stale-price recalc from the old miles).
+      // Invalidate the previous quote so the auto-quote effect re-quotes
+      // the CURRENT addresses only (server-side pricing).
       setDistance(null);
+      setQuoteResult(null);
       lastQuotedKeyRef.current = null;
-      routeVersionRef.current += 1; // discard in-flight Directions results
-      // Quota exhausted: drop the previous quote so the "Free Previews
-      // Used" gate shows instead of a stale price for an unquotable route.
-      if (quoteLimitReached && quoteResult) {
-        setQuoteResult(null);
-        toast.info("Free quotes used", {
-          description: `You've used all ${QUOTE_MAX_ATTEMPTS} free quote calculations. Sign up for a dealer account to get unlimited quotes.`,
-        });
-      }
+      routeVersionRef.current += 1;
       console.log('Pickup address set:', address, 'Coords:', { lat, lng });
     }
-  }, [zones, quoteLimitReached, quoteResult]);
+  }, [zones]);
 
   const handleDropoffSelect = useCallback((place: google.maps.places.PlaceResult) => {
     setDropoffError("");
@@ -299,23 +316,15 @@ export default function LandingPage() {
       setDropoffCoords({ lat, lng });
       const address = place.formatted_address || '';
       setDropoffAddress(address);
-      // Invalidate the previously computed driving distance so the
-      // auto-quote effect only ever fires with a distance that matches the
-      // CURRENT addresses (prevents a stale-price recalc from the old miles).
+      // Invalidate the previous quote so the auto-quote effect re-quotes
+      // the CURRENT addresses only (server-side pricing).
       setDistance(null);
+      setQuoteResult(null);
       lastQuotedKeyRef.current = null;
-      routeVersionRef.current += 1; // discard in-flight Directions results
-      // Quota exhausted: drop the previous quote so the "Free Previews
-      // Used" gate shows instead of a stale price for an unquotable route.
-      if (quoteLimitReached && quoteResult) {
-        setQuoteResult(null);
-        toast.info("Free quotes used", {
-          description: `You've used all ${QUOTE_MAX_ATTEMPTS} free quote calculations. Sign up for a dealer account to get unlimited quotes.`,
-        });
-      }
+      routeVersionRef.current += 1;
       console.log('Dropoff address set:', address, 'Coords:', { lat, lng });
     }
-  }, [quoteLimitReached, quoteResult]);
+  }, []);
 
   // Handle clearing pickup address
   const handlePickupClear = useCallback(() => {
@@ -349,87 +358,14 @@ export default function LandingPage() {
     }
   }, [quoteResult, pickupCoords, zones]);
 
-  const calculateDistance = () => {
-    if (!pickupCoords || !dropoffCoords) return;
-    // Quota exhausted — stop spending Google Directions calls on the
-    // quote distance state (RouteMap still renders the route itself).
-    if (quoteLimitReached) return;
-
-    const versionAtStart = routeVersionRef.current;
-    const directionsService = new google.maps.DirectionsService();
-    directionsService.route(
-      {
-        origin: pickupCoords,
-        destination: dropoffCoords,
-        travelMode: google.maps.TravelMode.DRIVING,
-      },
-      (result, status) => {
-        // Discard stale responses — the user changed the route while this
-        // request was in flight, so this distance no longer matches it.
-        if (routeVersionRef.current !== versionAtStart) return;
-        if (status === 'OK' && result) {
-          const distanceInMeters = result.routes[0].legs[0].distance?.value;
-          if (distanceInMeters) {
-            const miles = distanceInMeters * 0.000621371;
-            setDistance(Math.round(miles));
-          }
-        }
-      }
-    );
-  };
-
-  /**
-   * Promise-returning wrapper around Google Directions API.
-   * Used by `handleCalculateEstimate` when the user clicks the
-   * "Instant Quote" button before the auto-fire effect has had a
-   * chance to populate `distance`. Keeps the button click responsive.
-   */
-  const computeDrivingDistanceMiles = useCallback((
-    origin: google.maps.LatLngLiteral,
-    destination: google.maps.LatLngLiteral,
-  ): Promise<number> => {
-    return new Promise((resolve, reject) => {
-      const directionsService = new google.maps.DirectionsService();
-      directionsService.route(
-        { origin, destination, travelMode: google.maps.TravelMode.DRIVING },
-        (result, status) => {
-          if (status === 'OK' && result) {
-            const meters = result.routes[0].legs[0].distance?.value;
-            if (meters) {
-              resolve(Math.round(meters * 0.000621371));
-              return;
-            }
-          }
-          reject(new Error(`Directions API failed: ${status}`));
-        },
-      );
-    });
-  }, []);
-
-  useEffect(() => {
-    if (pickupCoords && dropoffCoords) {
-      calculateDistance();
-    }
-  }, [pickupCoords, dropoffCoords]);
-
-  // Compute the quote using the LIVE admin-configured pricing config
-  // (fetched via usePublicDefaultPricing) and (optionally) smooth-scroll
-  // to the #estimate section so the customer sees the price.
-  //
-  // Pricing math is delegated to the shared `calculatePricing` util
-  // (single source of truth on the frontend) via the `calculateHomeQuote`
-  // adapter. If the live config hasn't loaded yet (or the endpoint
-  // failed), the adapter falls back to HOME_FLAT_QUOTE_CONFIG so the
-  // home page stays resilient.
+  // Compute the REAL price on the server — the same pricing engine that
+  // prices the eventual delivery. One source of truth: the landing price
+  // and the charged price can no longer diverge. The delivery type drives
+  // the pricing model (BUSINESS → flat PER_MILE, PERSONAL → A-B-C bands);
+  // the server also validates the addresses and computes the route.
   const handleCalculateEstimate = useCallback(async (opts?: { scrollToEstimate?: boolean }) => {
     const scrollToEstimate = opts?.scrollToEstimate ?? false;
 
-    if (quoteLimitReached) {
-      toast.error("Quote limit reached", {
-        description: `You've used all ${QUOTE_MAX_ATTEMPTS} free quote calculations. Please sign up for a dealer account to get unlimited quotes.`,
-      });
-      return;
-    }
     if (!pickupAddress || !dropoffAddress) {
       if (!pickupAddress) setPickupError("From address is required");
       if (!dropoffAddress) setDropoffError("To address is required");
@@ -447,52 +383,57 @@ export default function LandingPage() {
 
     try {
       const versionAtStart = routeVersionRef.current;
-      // Use the already-computed driving distance if available;
-      // otherwise compute it inline so the button click is
-      // responsive even if the auto-fire effect hasn't run yet.
-      let miles = distance;
-      if (miles == null && pickupCoords && dropoffCoords) {
-        try {
-          miles = await computeDrivingDistanceMiles(pickupCoords, dropoffCoords);
-          // The user changed the route while this lookup was in flight —
-          // discard the stale result instead of quoting the old route.
-          if (routeVersionRef.current !== versionAtStart) return;
-          setDistance(miles);
-        } catch (e) {
-          console.error('Inline distance computation failed:', e);
+      const response = await fetch(
+        `${import.meta.env.VITE_API_URL}/api/deliveryRequests/individual/quote-preview`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            pickupAddress,
+            dropoffAddress,
+            serviceType: deliveryType === "BUSINESS" ? "BETWEEN_LOCATIONS" : "HOME_DELIVERY",
+            deliveryType,
+          }),
         }
-      }
-      if (miles == null) {
-        toast.error("Could not calculate distance", {
-          description: "Please try again in a moment.",
-        });
-        setIsLoadingQuote(false);
+      );
+      // The user changed the route (or type) while this request was in
+      // flight — discard the stale result instead of showing a price for
+      // a route they already left behind.
+      if (routeVersionRef.current !== versionAtStart) return;
+
+      if (!response.ok) {
+        let message = "Could not calculate the price right now. Please try again in a moment.";
+        try {
+          const body = await response.json();
+          if (body?.message) {
+            message = Array.isArray(body.message) ? body.message.join(", ") : body.message;
+          }
+        } catch { /* non-JSON error body — keep the default message */ }
+        setQuoteResult(null);
+        toast.error("Price unavailable", { description: message });
         return;
       }
 
-      // Compute the quote using the live config (or fallback). Pure
-      // function, no I/O — the live config was already fetched by the
-      // usePublicDefaultPricing hook above. Read from the ref so this
-      // callback doesn't need livePricingConfig in its deps (which
-      // would re-fire the auto-quote effect every time the config
-      // arrives — the signature guard makes that harmless, but skipping
-      // the dep keeps the callback identity stable).
-      const result = calculateHomeQuote(miles, livePricingConfigRef.current);
-      setQuoteResult(result);
+      const quote = await response.json();
+      setQuoteResult(quote);
+      setDistance(quote?.distanceMiles != null ? Math.round(quote.distanceMiles) : null);
 
-      // Mark this exact route+distance as quoted so the auto-fire effect
-      // doesn't re-quote the same combination right after a manual click —
-      // one successful quote must cost exactly ONE attempt.
-      lastQuotedKeyRef.current = `${pickupAddress}||${dropoffAddress}||${miles}`;
+      // Mark this exact type+route as quoted so the auto-fire effect
+      // doesn't re-quote the same combination right after a manual click.
+      lastQuotedKeyRef.current = `${deliveryType}||${pickupAddress}||${dropoffAddress}`;
 
-      // Consume one attempt of the 3-per-session quota. Only successful
-      // quotes consume an attempt — failed distance lookups are free.
-      const newCount = quoteAttempts + 1;
-      setQuoteAttempts(newCount);
-      sessionStorage.setItem("quoteAttemptsV2", String(newCount));
+      // Memory rule — remember what the visitor entered (type + addresses)
+      // so a returning visitor never has to retype. Also enables the
+      // "skip straight to the address fields" behavior for saved types.
+      try {
+        localStorage.setItem(
+          HOME_QUOTE_PREFILL_KEY,
+          JSON.stringify({ deliveryType, pickupAddress, dropoffAddress })
+        );
+      } catch { /* storage unavailable (private mode) — memory rule just won't persist */ }
 
-      // Smooth-scroll to the Service Price section so the user sees the price.
-      // Slight delay so the quote result is painted before the scroll fires.
+      // Smooth-scroll to the Service Price section so the user sees the
+      // price. Slight delay so the quote result is painted first.
       if (scrollToEstimate) {
         setTimeout(() => {
           estimateRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -501,53 +442,96 @@ export default function LandingPage() {
     } finally {
       setIsLoadingQuote(false);
     }
-  }, [pickupAddress, dropoffAddress, pickupInZone, pickupCoords, dropoffCoords, distance, quoteLimitReached, quoteAttempts, computeDrivingDistanceMiles]);
+  }, [pickupAddress, dropoffAddress, pickupInZone, deliveryType]);
 
-  // Auto-trigger estimate as soon as both addresses are set, pickup is in
-  // zone, AND the driving distance has been computed. We wait for
-  // `distance` because the quote is computed client-side from the
-  // driving distance using the live pricing config (or fallback).
-  //
-  // The lastQuotedKeyRef signature guard makes this fire exactly ONCE per
-  // (pickup, dropoff, distance) combination: without it, the effect would
-  // re-fire whenever isLoadingQuote flipped back to false or the callback
-  // identity changed, re-quoting identical inputs in a loop. When the user
-  // changes an address, the select handlers reset `distance` to null, so
-  // this effect stays idle until the fresh Directions distance arrives —
-  // guaranteeing the displayed price always reflects the CURRENT addresses.
+  // Auto-fire the server quote as soon as both addresses are selected and
+  // pickup is confirmed inside the zone. The server computes the driving
+  // distance AND the price in one call, so no client-side Directions
+  // pre-pass is needed anymore. The lastQuotedKeyRef signature guard keeps
+  // this at exactly ONE request per (type, pickup, dropoff) combination.
   // Note: this auto-fire does NOT scroll — only the button click scrolls,
   // so the page doesn't jump around while the user is still typing.
   useEffect(() => {
-    if (pickupAddress && dropoffAddress && pickupInZone === true && distance != null && !isLoadingQuote && !quoteLimitReached) {
-      const signature = `${pickupAddress}||${dropoffAddress}||${distance}`;
+    if (pickupAddress && dropoffAddress && pickupCoords && dropoffCoords && pickupInZone === true && !isLoadingQuote) {
+      const signature = `${deliveryType}||${pickupAddress}||${dropoffAddress}`;
       if (lastQuotedKeyRef.current === signature) return;
       lastQuotedKeyRef.current = signature;
       handleCalculateEstimate({ scrollToEstimate: false });
     }
-  }, [pickupAddress, dropoffAddress, pickupInZone, distance, isLoadingQuote, quoteLimitReached, handleCalculateEstimate]);
+  }, [pickupAddress, dropoffAddress, pickupCoords, dropoffCoords, pickupInZone, deliveryType, isLoadingQuote, handleCalculateEstimate]);
 
-  // ─── Silent recompute when live config arrives ────────────────────
-  // When the live pricing config arrives from the backend (after the
-  // initial quote was already computed with fallback values), silently
-  // recompute the EXISTING quote with the new config. This only updates
-  // the displayed price to reflect the live admin-configured values;
-  // it does not consume anything or touch the signature guard.
-  // Without this, the user would see fallback values ($101/25/$1.80)
-  // until they manually clicked "Recalculate".
-  useEffect(() => {
-    if (quoteResult && distance != null) {
-      const recomputed = calculateHomeQuote(distance, livePricingConfig);
-      // Only update state if the price actually changed — avoids
-      // an infinite render loop (setQuoteResult → re-render → effect
-      // fires again with the same values).
-      if (recomputed.estimatedPrice !== quoteResult.estimatedPrice) {
-        setQuoteResult(recomputed);
-      }
+  // ─── Delivery type switch ───────────────────────────────────────────
+  // The map shows TWO different prices depending on the request type —
+  // switching the type must drop the old quote so the fresh price for the
+  // selected model (flat vs A-B-C) computes immediately.
+  const handleDeliveryTypeChange = useCallback((type: HomeDeliveryType) => {
+    if (type === deliveryType) return;
+    setDeliveryType(type);
+    setQuoteResult(null);
+    lastQuotedKeyRef.current = null;
+    try {
+      localStorage.setItem(
+        HOME_QUOTE_PREFILL_KEY,
+        JSON.stringify({ deliveryType: type, pickupAddress, dropoffAddress })
+      );
+    } catch { /* storage unavailable */ }
+  }, [deliveryType, pickupAddress, dropoffAddress]);
+
+  // ─── "Sign up and request a delivery" ───────────────────────────────
+  // One button. Carries the server quote through signup so NOTHING has to
+  // be retyped: Personal goes straight into the completion flow (which
+  // creates the account inline — email + password + OTP), Business goes to
+  // business signup and the quote is saved as a draft on their dashboard
+  // (their account needs admin approval before a delivery can be placed).
+  const handleSignupAndRequest = useCallback(() => {
+    if (!quoteResult?.id) {
+      // No server quote yet (or the last one failed) — get one first.
+      handleCalculateEstimate({ scrollToEstimate: true });
+      return;
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [livePricingConfig]);
+    try {
+      localStorage.setItem("quoteDraft", JSON.stringify({
+        formData: null,
+        quoteData: quoteResult,
+        deliveryType,
+        pickupAddress,
+        dropoffAddress,
+      }));
+    } catch { /* storage unavailable */ }
+    if (deliveryType === "BUSINESS") {
+      navigate({ to: "/auth/dealer-signup" });
+    } else {
+      navigate({
+        to: "/quote-details",
+        state: {
+          quote: quoteResult,
+          pickupCoords,
+          dropoffCoords,
+          pickupAddress,
+          dropoffAddress,
+          distance: quoteResult.distanceMiles != null ? Math.round(quoteResult.distanceMiles) : null,
+        },
+      });
+    }
+  }, [quoteResult, deliveryType, pickupAddress, dropoffAddress, pickupCoords, dropoffCoords, handleCalculateEstimate, navigate]);
 
-  // Dealer lead submission
+  // "If a type is already selected, it skips straight to the address
+  // fields": when the visitor arrives via "Request a Delivery" (#quote)
+  // and we remember their delivery type, scroll past the type cards to
+  // the address inputs. First-time visitors stay on the type question.
+  useEffect(() => {
+    try {
+      if (window.location.hash !== "#quote") return;
+      const saved = readHomeQuotePrefill();
+      if (saved.deliveryType) {
+        setTimeout(() => {
+          document.getElementById("quote-inputs")?.scrollIntoView({ behavior: "smooth", block: "start" });
+        }, 150);
+      }
+    } catch { /* ignore */ }
+  }, []);
+
+  // ─── Dealer / investor lead submissions ─────────────────────────────
   const submitDealerLead = useCreate(`${import.meta.env.VITE_API_URL}/api/dealerLeads/public`, {
     fetchWithoutRefresh: true,
     publicEndpoint: true, // Skip token refresh on 401 - this is a public endpoint
@@ -777,8 +761,90 @@ export default function LandingPage() {
             </p>
           </div>
 
+          {/* ── Delivery type selector — the first interactive element ── */}
+          {/* Requirement: sits directly under the hero heading + Instant
+              Quote line, BEFORE the address fields. Business is selected by
+              default (dark card, checkmark); Personal is the light card. */}
+          <div id="quote" className="mt-6 scroll-mt-24">
+            {isLoggedInCustomer ? (
+              // Logged-in customers skip the type question — show their
+              // saved choice as a chip instead of the two cards.
+              <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-slate-900 dark:bg-white text-white dark:text-slate-950 text-xs font-black">
+                <Check className="h-4 w-4 text-lime-400 dark:text-lime-600" />
+                {deliveryType === "BUSINESS" ? "Business Delivery" : "Personal Delivery"} — your saved choice
+              </div>
+            ) : (
+              <>
+                <h2 className="text-lg sm:text-xl font-black text-slate-900 dark:text-white">
+                  Choose your delivery type
+                </h2>
+                <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {/* Business Delivery — dark card, selected by default */}
+                  <button
+                    type="button"
+                    onClick={() => handleDeliveryTypeChange("BUSINESS")}
+                    aria-pressed={deliveryType === "BUSINESS"}
+                    className={`relative text-left p-4 sm:p-5 rounded-2xl bg-slate-900 text-white transition-all duration-150 ${
+                      deliveryType === "BUSINESS"
+                        ? "ring-2 ring-lime-400 ring-offset-2 ring-offset-white dark:ring-offset-slate-950 shadow-lg"
+                        : "opacity-80 hover:opacity-100"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="font-black text-sm sm:text-base flex items-center gap-2">
+                        <Building className="h-4 w-4 text-lime-400" />
+                        Business Delivery
+                      </span>
+                      {deliveryType === "BUSINESS" && (
+                        <span className="w-6 h-6 rounded-full bg-lime-400 flex items-center justify-center shrink-0">
+                          <Check className="h-4 w-4 text-slate-950" />
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs mt-2 text-slate-300 leading-relaxed">
+                      For dealerships, rental companies, and other businesses needing vehicle delivery services
+                    </p>
+                    <p className="text-[10px] mt-2 font-black uppercase tracking-widest text-lime-400">
+                      $101 prepaid · flat rate
+                    </p>
+                  </button>
+
+                  {/* Personal Delivery — light card, unselected by default */}
+                  <button
+                    type="button"
+                    onClick={() => handleDeliveryTypeChange("PERSONAL")}
+                    aria-pressed={deliveryType === "PERSONAL"}
+                    className={`relative text-left p-4 sm:p-5 rounded-2xl bg-white dark:bg-slate-900 text-slate-900 dark:text-white border border-slate-200 dark:border-slate-700 transition-all duration-150 ${
+                      deliveryType === "PERSONAL"
+                        ? "ring-2 ring-lime-500 ring-offset-2 ring-offset-white dark:ring-offset-slate-950 shadow-lg"
+                        : "opacity-80 hover:opacity-100"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="font-black text-sm sm:text-base flex items-center gap-2">
+                        <User className="h-4 w-4 text-lime-600 dark:text-lime-400" />
+                        Personal Delivery
+                      </span>
+                      {deliveryType === "PERSONAL" && (
+                        <span className="w-6 h-6 rounded-full bg-lime-500 flex items-center justify-center shrink-0">
+                          <Check className="h-4 w-4 text-slate-950" />
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs mt-2 text-slate-500 dark:text-slate-400 leading-relaxed">
+                      For individuals who need their own car moved from point A to point B
+                    </p>
+                    <p className="text-[10px] mt-2 font-black uppercase tracking-widest text-lime-600 dark:text-lime-400">
+                      A-B-C prepaid · distance-based
+                    </p>
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+
           {/* Input panel card */}
-          <Card className="mt-5 rounded-2xl shadow-lg border-slate-200/70 dark:border-slate-800">
+          <Card id="quote-inputs" className="mt-5 rounded-2xl shadow-lg border-slate-200/70 dark:border-slate-800 scroll-mt-24">
             <CardContent className="p-4 sm:p-5">
               <div className="space-y-3">
                 {/* From input */}
@@ -872,41 +938,28 @@ export default function LandingPage() {
                   )}
                 </div>
 
-                {/* Recalculate button — estimate auto-fires when both addresses are set,
-                    but the button ALSO smooth-scrolls to the #estimate section so the
-                    customer sees the price after clicking. */}
-                {!quoteLimitReached ? (
-                  <a
-                    href="#estimate"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      // Fire the calculation with scroll-to-estimate enabled.
-                      // handleCalculateEstimate is async — it will smooth-scroll
-                      // to #estimate after the quote is computed.
-                      handleCalculateEstimate({ scrollToEstimate: true });
-                    }}
-                    className={`w-full px-6 py-3.5 rounded-2xl bg-lime-500 text-slate-950 hover:bg-lime-600 hover:shadow-lg hover:shadow-lime-500/20 font-extrabold transition flex items-center justify-center gap-2 ${
-                      isLoadingQuote || !pickupAddress || !dropoffAddress || pickupInZone === false
-                        ? "opacity-50 pointer-events-none"
-                        : ""
-                    }`}
-                  >
-                    {isLoadingQuote
-                      ? "Calculating..."
-                      : quoteResult
-                        ? "Recalculate"
-                        : "Instant Quote"}
-                    {!isLoadingQuote && <ArrowRight className="h-4 w-4" />}
-                  </a>
-                ) : (
-                  <a
-                    href="#estimate"
-                    className="w-full px-6 py-3.5 rounded-2xl bg-lime-500 text-slate-950 hover:bg-lime-600 hover:shadow-lg hover:shadow-lime-500/20 font-extrabold transition flex items-center justify-center gap-2"
-                  >
-                    <Lock className="h-4 w-4" />
-                    Free Previews Used — Sign Up
-                  </a>
-                )}
+                {/* Recalculate button — the server quote auto-fires when both
+                    addresses are set; the button ALSO smooth-scrolls to the
+                    #estimate section so the customer sees the price. */}
+                <a
+                  href="#estimate"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    handleCalculateEstimate({ scrollToEstimate: true });
+                  }}
+                  className={`w-full px-6 py-3.5 rounded-2xl bg-lime-500 text-slate-950 hover:bg-lime-600 hover:shadow-lg hover:shadow-lime-500/20 font-extrabold transition flex items-center justify-center gap-2 ${
+                    isLoadingQuote || !pickupAddress || !dropoffAddress || pickupInZone === false
+                      ? "opacity-50 pointer-events-none"
+                      : ""
+                  }`}
+                >
+                  {isLoadingQuote
+                    ? "Calculating..."
+                    : quoteResult
+                      ? "Recalculate"
+                      : "Instant Quote"}
+                  {!isLoadingQuote && <ArrowRight className="h-4 w-4" />}
+                </a>
               </div>
             </CardContent>
           </Card>
@@ -916,40 +969,8 @@ export default function LandingPage() {
         <section className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 pb-6">
           <div className="relative w-full h-[340px] sm:h-[420px] lg:h-[560px] rounded-2xl overflow-hidden">
 
-            {quoteLimitReached && !quoteResult ? (
-              <>
-                {/* Blurred static placeholder — no Google Maps API calls */}
-                <div className="absolute inset-0 bg-slate-200 dark:bg-slate-800 backdrop-blur-[2px] flex items-center justify-center">
-                  <div className="text-center px-4">
-                    <div className="w-14 h-14 rounded-2xl bg-white/80 dark:bg-slate-700/80 flex items-center justify-center mx-auto mb-4 shadow-lg">
-                      <Map className="h-7 w-7 text-slate-400" />
-                    </div>
-                    <h3 className="text-lg sm:text-xl font-black text-slate-900 dark:text-white">
-                      Free Previews Used
-                    </h3>
-                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-1.5 max-w-xs mx-auto leading-relaxed">
-                      Sign up for a business account to get unlimited route previews and estimates.
-                    </p>
-                    <a
-                      href="#dealers"
-                      className="inline-flex items-center gap-2 mt-4 px-6 py-3 rounded-2xl bg-lime-500 text-slate-950 hover:bg-lime-600 hover:shadow-lg hover:shadow-lime-500/20 font-extrabold transition text-sm"
-                    >
-                      Sign Up
-                      <ArrowRight className="h-4 w-4" />
-                    </a>
-                  </div>
-                </div>
-                {/* Zone legend still visible */}
-                <div className="absolute bottom-3 right-3 z-10">
-                  <div className="bg-white/95 dark:bg-slate-900/95 backdrop-blur px-2.5 py-1.5 rounded-xl text-[9px] font-bold text-slate-700 dark:text-slate-300 shadow-lg flex items-center gap-1.5 border border-slate-200 dark:border-slate-700">
-                    <span className="w-2.5 h-2.5 rounded-sm bg-[#39FF14] inline-block shrink-0" />
-                    Green area = Pickup Zone
-                  </div>
-                </div>
-              </>
-            ) : (
-              <>
-                <RouteMap
+            <>
+              <RouteMap
                   pickup={pickupCoords}
                   dropoff={dropoffCoords}
                   isLoaded={isLoaded}
@@ -1013,7 +1034,6 @@ export default function LandingPage() {
                   </div>
                 </div>
               </>
-            )}
           </div>
         </section>
 
@@ -1023,43 +1043,6 @@ export default function LandingPage() {
           ref={estimateRef}
           className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 pb-8 scroll-mt-4"
         >
-          {quoteLimitReached && !quoteResult ? (
-            <Card className="rounded-2xl border-lime-200 dark:border-lime-900/40 bg-lime-50/50 dark:bg-lime-900/5 overflow-hidden">
-              <CardContent className="p-6 sm:p-8 text-center">
-                <div className="w-14 h-14 rounded-2xl bg-lime-100 dark:bg-lime-900/20 flex items-center justify-center mx-auto mb-4">
-                  <Lock className="h-7 w-7 text-lime-600 dark:text-lime-400" />
-                </div>
-                <h3 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white">
-                  Free Previews Used
-                </h3>
-                <p className="text-sm text-slate-600 dark:text-slate-400 mt-2 max-w-md mx-auto leading-relaxed">
-                  You&apos;ve used all {QUOTE_MAX_ATTEMPTS} free estimates. Sign up for a business account to get unlimited quotes and schedule deliveries.
-                </p>
-                <div className="flex flex-col sm:flex-row gap-3 mt-6 max-w-sm mx-auto">
-                  <a
-                    href="#dealers"
-                    className="flex-1 font-extrabold rounded-2xl py-3.5 text-center transition shadow-lg text-sm block bg-slate-900 dark:bg-white dark:text-slate-950 text-white hover:opacity-90"
-                  >
-                    Sign Up as Business
-                  </a>
-                  <a
-                    href="/driver-onboarding"
-                    className="flex-1 font-extrabold rounded-2xl py-3.5 text-center transition text-sm block border-2 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:border-slate-300 dark:hover:border-slate-600"
-                  >
-                    <Truck className="h-4 w-4 inline mr-1.5" />
-                    I&apos;m a Driver
-                  </a>
-                </div>
-                <a
-                  href="#"
-                  onClick={(e) => { e.preventDefault(); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
-                  className="mt-4 inline-block text-xs text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition font-semibold"
-                >
-                  Back to Home
-                </a>
-              </CardContent>
-            </Card>
-          ) : (
           <Card className="rounded-2xl border-slate-200/70 dark:border-slate-800 overflow-hidden">
             <CardContent className="p-5 sm:p-6">
               {!quoteResult ? (
@@ -1070,7 +1053,9 @@ export default function LandingPage() {
                   <div>
                     <p className="text-sm font-bold text-slate-900 dark:text-white">Service Price</p>
                     <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                      {advertisedRate.description} Enter pickup and drop-off to see your price.
+                      {deliveryType === "BUSINESS"
+                        ? `${advertisedRate.description} Enter pickup and drop-off to see your real price.`
+                        : "A-B-C distance-based pricing. Enter pickup and drop-off to see your real price — computed by our pricing engine, not an estimate."}
                     </p>
                   </div>
                 </div>
@@ -1088,14 +1073,12 @@ export default function LandingPage() {
                             {Math.round(quoteResult.distanceMiles)} miles
                           </span>
                         </Badge>
-                        {quoteResult.formula?.label && (
-                          <Badge variant="outline" className="gap-1.5 px-3 py-1.5 border-lime-300 dark:border-lime-700 text-lime-700 dark:text-lime-300">
-                            <Bolt className="h-3.5 w-3.5" />
-                            <span className="text-[11px] font-black uppercase tracking-widest">
-                              {quoteResult.formula.label}
-                            </span>
-                          </Badge>
-                        )}
+                        <Badge variant="outline" className="gap-1.5 px-3 py-1.5 border-lime-300 dark:border-lime-700 text-lime-700 dark:text-lime-300">
+                          <Bolt className="h-3.5 w-3.5" />
+                          <span className="text-[11px] font-black uppercase tracking-widest">
+                            {deliveryType === "BUSINESS" ? "Business · Flat Rate" : "Personal · A-B-C Rate"}
+                          </span>
+                        </Badge>
                       </div>
                     </div>
                     <div className="text-right shrink-0">
@@ -1103,59 +1086,66 @@ export default function LandingPage() {
                         ${quoteResult.estimatedPrice.toFixed(2)}
                       </p>
                       <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-0.5">
-                        flat rate
+                        {deliveryType === "BUSINESS" ? "flat rate · prepaid" : "A-B-C rate · prepaid"}
                       </p>
                     </div>
                   </div>
 
-                  {/* Flat-rate formula announcement */}
-                  {/* {quoteResult.formula && (
-                    <div className="p-3 sm:p-4 rounded-xl bg-lime-50 dark:bg-lime-900/10 border border-lime-200 dark:border-lime-900/30">
-                      <div className="flex items-start gap-2">
-                        <Bolt className="h-4 w-4 text-lime-600 dark:text-lime-400 shrink-0 mt-0.5" />
-                        <div className="min-w-0">
-                          <p className="text-[10px] font-black uppercase tracking-widest text-lime-700 dark:text-lime-300">
-                            Flat-Rate Formula
-                          </p>
-                          <p className="text-xs text-slate-700 dark:text-slate-300 mt-1 leading-relaxed font-medium">
-                            {quoteResult.formula.description}
-                          </p>
-                          <p className="text-xs text-slate-900 dark:text-white mt-2 font-mono font-bold break-words">
-                            {quoteResult.formula.expression}
-                          </p>
+                  {/* Real fee breakdown — straight from the server pricing
+                      engine's feesBreakdown (same engine that bills the
+                      delivery — no example framing). */}
+                  {quoteResult?.feesBreakdown && (
+                    <div className="space-y-1">
+                      {typeof quoteResult.feesBreakdown.baseFare === "number" && (
+                        <div className="flex justify-between items-center py-1.5 border-t border-slate-100 dark:border-slate-800">
+                          <span className="text-slate-600 dark:text-slate-400 text-sm font-semibold">
+                            Base transportation{quoteResult.feesBreakdown.flatMilesAllowance ? ` (covers first ${quoteResult.feesBreakdown.flatMilesAllowance} mi)` : ""}
+                          </span>
+                          <span className="font-black text-sm text-slate-900 dark:text-white">
+                            ${quoteResult.feesBreakdown.baseFare.toFixed(2)}
+                          </span>
                         </div>
+                      )}
+                      {typeof quoteResult.feesBreakdown.distanceCharge === "number" && quoteResult.feesBreakdown.distanceCharge > 0 && (
+                        <div className="flex justify-between items-center py-1.5">
+                          <span className="text-slate-600 dark:text-slate-400 text-sm font-semibold">
+                            Distance charge{quoteResult.feesBreakdown.billedMiles ? ` (${Number(quoteResult.feesBreakdown.billedMiles).toFixed(1)} mi)` : ""}
+                          </span>
+                          <span className="font-black text-sm text-slate-900 dark:text-white">
+                            ${quoteResult.feesBreakdown.distanceCharge.toFixed(2)}
+                          </span>
+                        </div>
+                      )}
+                      {typeof quoteResult.feesBreakdown.insuranceFee === "number" && quoteResult.feesBreakdown.insuranceFee > 0 && (
+                        <div className="flex justify-between items-center py-1.5">
+                          <span className="text-slate-600 dark:text-slate-400 text-sm font-semibold">
+                            Insurance
+                          </span>
+                          <span className="font-black text-sm text-slate-900 dark:text-white">
+                            ${quoteResult.feesBreakdown.insuranceFee.toFixed(2)}
+                          </span>
+                        </div>
+                      )}
+                      {typeof quoteResult.feesBreakdown.transactionFee === "number" && quoteResult.feesBreakdown.transactionFee > 0 && (
+                        <div className="flex justify-between items-center py-1.5">
+                          <span className="text-slate-600 dark:text-slate-400 text-sm font-semibold">
+                            Transaction fee
+                          </span>
+                          <span className="font-black text-sm text-slate-900 dark:text-white">
+                            ${quoteResult.feesBreakdown.transactionFee.toFixed(2)}
+                          </span>
+                        </div>
+                      )}
+                      <div className="flex justify-between items-center pt-2 mt-1 border-t border-slate-200 dark:border-slate-700">
+                        <span className="text-slate-900 dark:text-white text-sm font-extrabold">
+                          Total — prepaid
+                        </span>
+                        <span className="font-black text-base text-lime-600 dark:text-lime-400">
+                          ${quoteResult.estimatedPrice.toFixed(2)}
+                        </span>
                       </div>
                     </div>
                   )}
-
-                  {quoteResult?.feesBreakdown && (
-                    <>
-                      <div className="flex justify-between items-center py-2 border-t border-slate-100 dark:border-slate-800">
-                        <span className="text-slate-600 dark:text-slate-400 text-sm font-semibold">
-                          Base Fee (covers first {quoteResult.feesBreakdown.flatMilesAllowance} mi)
-                        </span>
-                        <span className="font-black text-sm text-slate-900 dark:text-white">
-                          ${quoteResult.feesBreakdown.baseFare.toFixed(2)}
-                        </span>
-                      </div>
-                      <div className="flex justify-between items-center py-2">
-                        <span className="text-slate-600 dark:text-slate-400 text-sm font-semibold">
-                          Extra miles ({quoteResult.feesBreakdown.billedMiles} mi × ${quoteResult.feesBreakdown.perMileRate.toFixed(2)}/mi)
-                        </span>
-                        <span className="font-black text-sm text-slate-900 dark:text-white">
-                          ${quoteResult.feesBreakdown.distanceCharge.toFixed(2)}
-                        </span>
-                      </div>
-                      <div className="flex justify-between items-center py-2 border-t border-slate-200 dark:border-slate-700">
-                        <span className="text-slate-900 dark:text-white text-sm font-extrabold">
-                          Total
-                        </span>
-                        <span className="font-black text-base text-lime-600 dark:text-lime-400">
-                          ${quoteResult.feesBreakdown.total.toFixed(2)}
-                        </span>
-                      </div>
-                    </>
-                  )} */}
 
                   {/* Disclaimer */}
                   <div className="flex gap-2 p-3 bg-amber-50 dark:bg-amber-900/10 rounded-xl border border-amber-100 dark:border-amber-900/30">
@@ -1179,17 +1169,17 @@ export default function LandingPage() {
 
                   {/* Action buttons */}
                   <div className="flex flex-col sm:flex-row gap-3">
-                    <a
-                      href="#dealers"
-                      onClick={(e) => { if (pickupInZone === false) e.preventDefault(); }}
+                    <button
+                      type="button"
+                      onClick={handleSignupAndRequest}
                       className={`flex-1 font-extrabold rounded-2xl py-3.5 text-center transition shadow-lg text-sm block ${
                         pickupInZone !== false
                           ? "bg-slate-900 dark:bg-white dark:text-slate-950 text-white hover:opacity-90"
                           : "bg-gray-400 text-gray-600 cursor-not-allowed pointer-events-none"
                       }`}
                     >
-                      Continue — Sign Up
-                    </a>
+                      Sign up and request a delivery
+                    </button>
                     {/* <Button variant="outline" className="flex-1 py-3.5 rounded-2xl font-extrabold text-sm">
                       Save Quote
                     </Button> */}
@@ -1205,7 +1195,6 @@ export default function LandingPage() {
               )}
             </CardContent>
           </Card>
-          )}
         </section>
 
         {/* ===== SECTION 4 — Create Your Account ===== */}

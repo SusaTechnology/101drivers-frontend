@@ -15,6 +15,7 @@ import {
   EnumAdminAuditLogActorType,
   EnumCustomerApprovalStatus,
   EnumCustomerCustomerType,
+  EnumCustomerPricingModeOverride,
   EnumDeliveryRequestCreatedByRole,
   EnumDeliveryRequestCustomerChose,
   EnumDeliveryRequestServiceType,
@@ -144,6 +145,14 @@ export type CreateQuotePreviewInput = {
   dropoffAddress: string;
   serviceType: EnumDeliveryRequestServiceType;
   customerId?: string | null;
+  /**
+   * Landing-page delivery type selector ("BUSINESS" | "PERSONAL"). Maps to
+   * a pricing-mode override (BUSINESS → PER_MILE flat, PERSONAL →
+   * CATEGORY_ABC bands) so the public landing price is computed by the SAME
+   * engine that will price the eventual delivery. The engine only honors
+   * this when the customer has no explicit admin-assigned pricing.
+   */
+  deliveryType?: "BUSINESS" | "PERSONAL" | null;
 };
 
 export type CreateDeliveryFromQuoteInput = {
@@ -1166,6 +1175,12 @@ export class DeliveryRequestOrchestratorService {
         input.serviceType
       ),
       customerId: input.customerId ?? null,
+      deliveryTypePricingOverride:
+        input.deliveryType === "BUSINESS"
+          ? EnumCustomerPricingModeOverride.PER_MILE
+          : input.deliveryType === "PERSONAL"
+          ? EnumCustomerPricingModeOverride.CATEGORY_ABC
+          : null,
     });
   }
 

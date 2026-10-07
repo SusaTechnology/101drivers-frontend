@@ -189,6 +189,46 @@ export default function DealerDashboard() {
   const user = getUser()
   const dealerId = user?.profileId
 
+  // ─── Landing-page quote handoff ("Sign up and request a delivery") ──
+  // A business customer who quoted on the public landing page and then
+  // signed in lands here with a quoteDraft in localStorage. Their account
+  // may still be PENDING admin approval (deliveries can't be submitted
+  // yet), so the quote is saved as a DRAFT delivery request via the
+  // existing drafts system — it surfaces in their Drafts and can be
+  // completed the moment the account is approved. Nothing is retyped.
+  const quoteDraftAttach = useDataMutation<
+    unknown,
+    { customerId: string; quoteId: string; serviceType: string }
+  >({
+    apiEndPoint: `${import.meta.env.VITE_API_URL}/api/deliveryRequests/create-draft-from-quote`,
+    onSuccess: () => {
+      try { localStorage.removeItem('quoteDraft') } catch { /* ignore */ }
+      toast.success('Your delivery request is saved', {
+        description: "It's waiting in your Drafts — submit it once your account is approved.",
+        duration: 8000,
+      })
+    },
+    onError: () => {
+      // Draft stays in localStorage — retried on the next login.
+    },
+  })
+
+  useEffect(() => {
+    if (!dealerId) return
+    let raw: string | null = null
+    try { raw = localStorage.getItem('quoteDraft') } catch { return }
+    if (!raw) return
+    let draft: { deliveryType?: string; quoteData?: { id?: string } } | null = null
+    try { draft = JSON.parse(raw) } catch { return }
+    if (draft?.deliveryType !== 'BUSINESS' || !draft?.quoteData?.id) return
+    quoteDraftAttach.mutate({
+      customerId: dealerId,
+      quoteId: draft.quoteData.id,
+      serviceType: 'BETWEEN_LOCATIONS',
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dealerId])
+
   const { isLoaded } = useJsApiLoader({
     id: GOOGLE_MAPS_SCRIPT_ID,
     googleMapsApiKey: import.meta.env.VITE_GOOGLE_MAPS_API_KEY,

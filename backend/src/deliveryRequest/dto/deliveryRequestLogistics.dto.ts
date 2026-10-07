@@ -16,6 +16,7 @@ import {
   IsDateString,
   IsEmail,
   IsEnum,
+  IsIn,
   IsNotEmpty,
   IsNumber,
   IsOptional,
@@ -37,6 +38,17 @@ export class IndividualQuotePreviewBody {
 
   @swagger.ApiPropertyOptional()
   customerId?: string;
+
+  /**
+   * Landing-page delivery type selector. BUSINESS prices the flat
+   * (PER_MILE) model, PERSONAL prices the A-B-C progressive bands — both
+   * via the real server pricing engine. Honored only for customers without
+   * explicit admin-assigned pricing.
+   */
+  @swagger.ApiPropertyOptional({ enum: ["BUSINESS", "PERSONAL"], nullable: true })
+  @IsOptional()
+  @IsIn(["BUSINESS", "PERSONAL"])
+  deliveryType?: "BUSINESS" | "PERSONAL" | null;
 }
 
 export class CreateIndividualDeliveryFromQuoteBody {
@@ -263,6 +275,16 @@ export class QuotePreviewBody {
 @IsOptional()
 @IsString()
 customerId?: string | null;
+
+  /**
+   * Landing-page delivery type selector (same contract as the public
+   * individual quote-preview). Honored only for customers without explicit
+   * admin-assigned pricing.
+   */
+  @swagger.ApiPropertyOptional({ enum: ["BUSINESS", "PERSONAL"], nullable: true })
+  @IsOptional()
+  @IsIn(["BUSINESS", "PERSONAL"])
+  deliveryType?: "BUSINESS" | "PERSONAL" | null;
 
 }
 

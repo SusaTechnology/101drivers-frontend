@@ -32,6 +32,7 @@ import {
   EnumNotificationEventChannel,
   EnumNotificationEventType,
   EnumCustomerApprovalStatus,
+  EnumCustomerPricingModeOverride,
   EnumAdminAuditLogAction,
   EnumAdminAuditLogActorType,
 } from "@prisma/client";
@@ -1211,6 +1212,15 @@ export class AuthService {
             businessAddress: dto.businessAddress ?? null,
             businessPhone: dto.businessPhone ?? null,
             businessWebsite: dto.businessWebsite ?? null,
+            // Business customers are advertised (and quoted on the public
+            // landing page) at the FLAT rate ($101 prepaid + per-mile beyond
+            // the included miles). The default active pricing config may be
+            // CATEGORY_ABC, so pin the flat model explicitly — every future
+            // quote for this customer (landing, dealer dashboard, delivery
+            // creation) prices identically. Admins can still re-assign a
+            // per-customer config or override at any time (an explicit
+            // admin assignment always takes precedence in the engine).
+            pricingModeOverride: EnumCustomerPricingModeOverride.PER_MILE,
             user: { connect: { id: createdUser.id } },
           },
           select: { id: true },

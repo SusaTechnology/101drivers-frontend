@@ -146,6 +146,7 @@ async createQuotePreview(input: CreateQuotePreviewInput): Promise<any> {
     dropoffAddress: this.trimRequiredString(input.dropoffAddress),
     serviceType: input.serviceType,
     customerId: input.customerId ?? null,
+    deliveryType: input.deliveryType ?? null,
   });
 }
 

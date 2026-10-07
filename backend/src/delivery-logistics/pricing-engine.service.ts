@@ -30,6 +30,18 @@ export type QuoteCalculationInput = {
   routePolyline?: string | null;
   serviceType: EnumQuoteServiceType;
   customerId?: string | null;
+
+  /**
+   * Landing-page delivery-type pricing override ("BUSINESS" → PER_MILE flat,
+   * "PERSONAL" → CATEGORY_ABC bands). Honored ONLY when the resolved pricing
+   * context has NO explicit admin assignment (no customer pricingConfigId and
+   * no stored customerPricingModeOverride) — admin-assigned pricing always
+   * wins. This keeps the public landing-page price EXACTLY equal to what
+   * delivery creation will later charge a new self-serve customer, while
+   * leaving every existing customer's pricing untouched. Null/absent = use
+   * the stored resolution (existing behavior for all existing callers).
+   */
+  deliveryTypePricingOverride?: EnumCustomerPricingModeOverride | null;
 };
 
 export type QuoteCalculationResult = {
@@ -73,6 +85,14 @@ type ResolvedPricingContext = {
     }>;
   };
   customerPricingModeOverride: EnumCustomerPricingModeOverride | null;
+
+  /**
+   * True when the pricing context came from an EXPLICIT admin assignment —
+   * a customer-specific pricingConfigId, or a stored customer-level
+   * pricingModeOverride. Delivery-type overrides from the public landing
+   * page must never clobber these.
+   */
+  pricingExplicitlyAssigned: boolean;
 };
 
 @Injectable()
@@ -90,11 +110,19 @@ export class PricingEngineService {
       input.customerId ?? null
     );
 
+    // Landing-page delivery-type override: honored ONLY when the resolved
+    // context carries no explicit admin assignment. Existing callers never
+    // pass deliveryTypePricingOverride, so their behavior is unchanged.
+    const effectiveOverride =
+      input.deliveryTypePricingOverride && !pricingContext.pricingExplicitlyAssigned
+        ? input.deliveryTypePricingOverride
+        : pricingContext.customerPricingModeOverride;
+
     return this.computeQuoteFromConfig({
       config: pricingContext.config,
       distanceMiles: input.distanceMiles,
       serviceType: input.serviceType,
-      customerPricingModeOverride: pricingContext.customerPricingModeOverride,
+      customerPricingModeOverride: effectiveOverride,
     });
   }
 
@@ -513,6 +541,7 @@ export class PricingEngineService {
             })),
           },
           customerPricingModeOverride: customer.pricingModeOverride ?? null,
+          pricingExplicitlyAssigned: true,
         };
       }
 
@@ -521,6 +550,9 @@ export class PricingEngineService {
       return {
         config: activeConfig,
         customerPricingModeOverride: customer.pricingModeOverride ?? null,
+        // Admin-set customer-level override counts as an explicit assignment
+        // even without a dedicated config row.
+        pricingExplicitlyAssigned: customer.pricingModeOverride != null,
       };
     }
 
@@ -529,6 +561,7 @@ export class PricingEngineService {
     return {
       config: activeConfig,
       customerPricingModeOverride: null,
+      pricingExplicitlyAssigned: false,
     };
   }
 

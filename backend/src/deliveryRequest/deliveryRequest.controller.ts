@@ -539,6 +539,7 @@ async createQuotePreview(
     dropoffAddress: body.dropoffAddress,
     serviceType: body.serviceType,
     customerId: body.customerId ?? null,
+    deliveryType: body.deliveryType ?? null,
   });
 }
 
