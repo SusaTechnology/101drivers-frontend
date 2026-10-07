@@ -68,7 +68,7 @@ import { usePickupZones } from "@/hooks/usePickupZones";
 import { isInPickupZone } from "@/lib/geo-utils";
 import { getAdvertisedRateSummary } from "@/lib/pricing/home-quote";
 import { WhatsAppIcon } from "@/components/shared/WhatsAppSupportButton";
-import { PublicFooter } from "@/components/shared/PublicFooter";
+import { SiteFooter } from "@/components/shared/SiteFooter";
 import { usePublicDefaultPricing } from "@/hooks/pricing/usePublicDefaultPricing";
 import { SEOHead } from "../shared/SEOHead";
 
@@ -633,11 +633,12 @@ export default function LandingPage() {
 
   // Footer — the shared public footer (Customers / Drivers / Company
   // + social + legal). Single source of truth:
-  // src/components/shared/PublicFooter.tsx
-  const Footer = () => <PublicFooter />;
+  // src/components/shared/SiteFooter.tsx
+  const Footer = () => <SiteFooter />;
+
 
   return (
-    <div className="min-h-screen bg-[#F8F9FA] dark:bg-slate-950">
+    <div className="min-h-screen bg-[#F8F9FA] dark:bg-slate-950" style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}>
       <SEOHead
         title="101 Drivers — Car Pickup & Delivery Service in California | Flat Rate"
         description="California's flat-rate car pickup & delivery service. Dealers & individuals get instant quotes, real-time GPS tracking, and insured vehicle transport across Southern California."
@@ -657,7 +658,7 @@ export default function LandingPage() {
                 "California's premier vehicle delivery service. Flat-rate car pickup & delivery across Southern California with real-time GPS tracking and full insurance.",
               url: "https://101drivers.com/",
               image: "https://101drivers.com/assets/101drivers-logo.jpg",
-              telephone: "+1-310-962-8402",
+              telephone: "+1-424-313-2168",
               email: "support@101drivers.com",
               priceRange: "$$",
               address: {
@@ -704,7 +705,7 @@ export default function LandingPage() {
               provider: {
                 "@type": "DeliveryService",
                 name: "101 Drivers",
-                telephone: "+1-310-962-8402",
+                telephone: "+1-424-313-2168",
                 url: "https://101drivers.com/",
               },
               areaServed: {
@@ -784,9 +785,9 @@ export default function LandingPage() {
                     type="button"
                     onClick={() => handleDeliveryTypeChange("BUSINESS")}
                     aria-pressed={deliveryType === "BUSINESS"}
-                    className={`relative text-left p-4 sm:p-5 rounded-2xl bg-slate-900 text-white transition-all duration-150 ${
+                    className={`relative text-left p-4 sm:p-5 rounded-2xl  bg-white dark:bg-slate-900 transition-all duration-150 ${
                       deliveryType === "BUSINESS"
-                        ? "ring-2 ring-lime-400 ring-offset-2 ring-offset-white dark:ring-offset-slate-950 shadow-lg"
+                        ? "ring-2 ring-lime-400 bg-slate-900 ring-offset-2 ring-offset-white dark:ring-offset-slate-950 shadow-lg"
                         : "opacity-80 hover:opacity-100"
                     }`}
                   >
@@ -816,7 +817,7 @@ export default function LandingPage() {
                     aria-pressed={deliveryType === "PERSONAL"}
                     className={`relative text-left p-4 sm:p-5 rounded-2xl bg-white dark:bg-slate-900 text-slate-900 dark:text-white border border-slate-200 dark:border-slate-700 transition-all duration-150 ${
                       deliveryType === "PERSONAL"
-                        ? "ring-2 ring-lime-500 ring-offset-2 ring-offset-white dark:ring-offset-slate-950 shadow-lg"
+                        ? "ring-2 ring-lime-500 ring-offset-2 bg-slate-900 ring-offset-white dark:ring-offset-slate-950 shadow-lg"
                         : "opacity-80 hover:opacity-100"
                     }`}
                   >
@@ -1096,7 +1097,7 @@ export default function LandingPage() {
                       delivery — no example framing). */}
                   {quoteResult?.feesBreakdown && (
                     <div className="space-y-1">
-                      {typeof quoteResult.feesBreakdown.baseFare === "number" && (
+                      {/* {typeof quoteResult.feesBreakdown.baseFare === "number" && (
                         <div className="flex justify-between items-center py-1.5 border-t border-slate-100 dark:border-slate-800">
                           <span className="text-slate-600 dark:text-slate-400 text-sm font-semibold">
                             Base transportation{quoteResult.feesBreakdown.flatMilesAllowance ? ` (covers first ${quoteResult.feesBreakdown.flatMilesAllowance} mi)` : ""}
@@ -1135,7 +1136,7 @@ export default function LandingPage() {
                             ${quoteResult.feesBreakdown.transactionFee.toFixed(2)}
                           </span>
                         </div>
-                      )}
+                      )} */}
                       <div className="flex justify-between items-center pt-2 mt-1 border-t border-slate-200 dark:border-slate-700">
                         <span className="text-slate-900 dark:text-white text-sm font-extrabold">
                           Total — prepaid
@@ -1316,9 +1317,9 @@ export default function LandingPage() {
                 className="flex-1 group relative cursor-pointer rounded-2xl bg-slate-900 dark:bg-slate-800 border-2 border-slate-900 dark:border-slate-700 shadow-lg shadow-slate-900/20 hover:shadow-xl hover:shadow-slate-900/25 hover:-translate-y-0.5 transition-all duration-200 overflow-hidden"
               >
                 {/* Checkmark badge — shows this is the recommended/default option */}
-                <div className="absolute top-3 right-3 w-6 h-6 rounded-full bg-lime-400 flex items-center justify-center shadow-md">
+                {/* <div className="absolute top-3 right-3 w-6 h-6 rounded-full bg-lime-400 flex items-center justify-center shadow-md">
                   <CheckCircle className="w-4 h-4 text-slate-900" strokeWidth={3} />
-                </div>
+                </div> */}
                 <div className="p-5 sm:p-6 text-left">
                   <div className="flex items-center gap-3 mb-2">
                     <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center shrink-0">
@@ -1329,7 +1330,7 @@ export default function LandingPage() {
                     </span>
                   </div>
                   <p className="text-sm text-slate-300 dark:text-slate-400 leading-relaxed">
-                    For dealerships and auto businesses. Get weekly invoiced billing, postpaid options, and volume delivery management.
+                    For dealerships, rental companies, and other business needing vehicle delivery services.    
                   </p>
                 </div>
               </Link>
@@ -1351,7 +1352,7 @@ export default function LandingPage() {
                     </span>
                   </div>
                   <p className="text-sm text-slate-600 dark:text-slate-400 leading-relaxed">
-                    For individuals who need a vehicle transported. Pay per delivery with upfront pricing and instant booking.
+                    For individuals who need their own car moved from point A to point B
                   </p>
                 </div>
               </Link>
@@ -1371,7 +1372,7 @@ export default function LandingPage() {
         </section>
 
         {/* ===== SECTION 7 — Driver Recruitment ===== */}
-        <section className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 py-10 lg:py-14">
+        <section id="jointhewaitlist" className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 py-10 lg:py-14">
           <div className="max-w-3xl mx-auto">
             <Card className="rounded-3xl border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
               <CardContent className="p-6 sm:p-8">
