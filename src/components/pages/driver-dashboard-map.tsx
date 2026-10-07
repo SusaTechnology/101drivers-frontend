@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { Link, useNavigate } from '@tanstack/react-router'
 import { cn } from '@/lib/utils'
+import { safeLocalStorage } from '@/lib/safeStorage'
 import { useTheme } from '@/lib/theme'
 import { toast } from 'sonner'
 import {
@@ -243,7 +244,7 @@ export default function DriverMapPage() {
   // Respect the "Use My Location" toggle from dashboard-list
   const DEFAULT_CENTER = { lat: 33.94, lng: -118.40 }
   const [useMyLocation, setUseMyLocation] = useState(() =>
-    localStorage.getItem('driverUseMyLocation') === 'true'
+    safeLocalStorage.get('driverUseMyLocation') === 'true'
   )
   const [mapCenter, setMapCenter] = useState<{ lat: number; lng: number }>(DEFAULT_CENTER)
   const [driverLocation, setDriverLocation] = useState<{ lat: number; lng: number } | null>(null)
@@ -298,7 +299,7 @@ export default function DriverMapPage() {
         if (err.code === 1) {
           toast.error('Location permission denied.')
           setUseMyLocation(false)
-          localStorage.setItem('driverUseMyLocation', 'false')
+          safeLocalStorage.set('driverUseMyLocation', 'false')
         } else {
           toast.error('Could not get your location right now. Retrying...', { duration: 3000 })
         }

@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react'
 import { Link, useNavigate } from '@tanstack/react-router'
 import { useTheme } from '@/lib/theme'
+import { safeLocalStorage } from '@/lib/safeStorage'
 import { toast } from 'sonner'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -283,7 +284,7 @@ export default function DealerDashboard() {
 
   useEffect(() => {
     setMounted(true)
-    const savedSettings = localStorage.getItem('notificationSettings')
+    const savedSettings = safeLocalStorage.get('notificationSettings')
     if (savedSettings) {
       setNotificationSettings(JSON.parse(savedSettings))
     }
@@ -529,7 +530,7 @@ export default function DealerDashboard() {
   }
 
   const handleSaveNotificationSettings = () => {
-    localStorage.setItem('notificationSettings', JSON.stringify(notificationSettings))
+    safeLocalStorage.set('notificationSettings', JSON.stringify(notificationSettings))
     toast.success('Settings saved', { description: 'Your notification preferences have been updated.' })
     setNotificationSettingsOpen(false)
   }

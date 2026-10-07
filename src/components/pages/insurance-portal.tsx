@@ -1,6 +1,7 @@
 //@ts-nocheck
 import React, { useState, useEffect, useMemo } from 'react'
 import { cn } from '@/lib/utils'
+import { safeSessionStorage } from '@/lib/safeStorage'
 import { toast } from 'sonner'
 import {
   Shield, Lock, Eye, EyeOff, Loader2, Download, RefreshCw,
@@ -51,14 +52,14 @@ export default function InsurancePortalPage() {
   const [exportOpen, setExportOpen] = useState(false)
 
   useEffect(() => {
-    const saved = sessionStorage.getItem('insurancePortalPassword')
+    const saved = safeSessionStorage.get('insurancePortalPassword')
     if (saved) setAuthenticated(true)
   }, [])
 
   // Fetch driver + customer lists when authenticated
   useEffect(() => {
     if (!authenticated) return
-    const pwd = sessionStorage.getItem('insurancePortalPassword') || ''
+    const pwd = safeSessionStorage.get('insurancePortalPassword') || ''
     // Fetch drivers
     fetch(`${API_BASE}/api/insurance-portal/drivers`, { headers: { 'X-Portal-Password': pwd } })
       .then(r => r.ok ? r.json() : [])
@@ -94,7 +95,7 @@ export default function InsurancePortalPage() {
   }
 
   const handleLogout = () => {
-    sessionStorage.removeItem('insurancePortalPassword')
+    safeSessionStorage.remove('insurancePortalPassword')
     setAuthenticated(false)
     setPassword('')
   }
@@ -160,7 +161,7 @@ function ReportView(props: any) {
     driverList, customerList,
   } = props
 
-  const portalPassword = sessionStorage.getItem('insurancePortalPassword') || ''
+  const portalPassword = safeSessionStorage.get('insurancePortalPassword') || ''
   const [data, setData] = useState<any>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [isError, setIsError] = useState(false)

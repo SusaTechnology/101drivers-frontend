@@ -5,6 +5,7 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { cn } from '@/lib/utils'
+import { safeLocalStorage } from '@/lib/safeStorage'
 import { useTheme } from '@/lib/theme'
 import { toast } from 'sonner'
 import {
@@ -160,7 +161,7 @@ export default function DriverPreferencesPage() {
 
   // "Use My Current Location" toggle state — read from localStorage (same as dashboard-list.tsx)
   const [useCurrentLocation, setUseCurrentLocation] = useState(() =>
-    localStorage.getItem('driverUseMyLocation') === 'true'
+    safeLocalStorage.get('driverUseMyLocation') === 'true'
   )
 
   // CA Only toggle state
@@ -273,7 +274,7 @@ export default function DriverPreferencesPage() {
       }
 
       // Sync soundEnabled to localStorage for dashboard-list to read
-      localStorage.setItem('driverSoundEnabled', String(driverProfile.alerts?.soundEnabled ?? true))
+      safeLocalStorage.set('driverSoundEnabled', String(driverProfile.alerts?.soundEnabled ?? true))
     }
   }, [driverProfile, form]);
 
@@ -360,7 +361,7 @@ export default function DriverPreferencesPage() {
       () => {
         toast.error('Unable to get current location')
         setUseCurrentLocation(false)
-        localStorage.setItem('driverUseMyLocation', 'false')
+        safeLocalStorage.set('driverUseMyLocation', 'false')
         setLocating(false)
       },
       {
@@ -483,7 +484,7 @@ export default function DriverPreferencesPage() {
     updateProfile.mutate(payload)
 
     // Save soundEnabled to localStorage for instant access in dashboard-list
-    localStorage.setItem('driverSoundEnabled', String(data.soundEnabled))
+    safeLocalStorage.set('driverSoundEnabled', String(data.soundEnabled))
   }
 
   return (
@@ -738,7 +739,7 @@ export default function DriverPreferencesPage() {
                 checked={useCurrentLocation}
                 onCheckedChange={(checked) => {
                   setUseCurrentLocation(checked)
-                  localStorage.setItem('driverUseMyLocation', String(checked))
+                  safeLocalStorage.set('driverUseMyLocation', String(checked))
                   if (checked) {
                     handleUseCurrentLocation()
                   } else {

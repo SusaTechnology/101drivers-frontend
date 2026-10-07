@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react'
 import { Link, useNavigate } from '@tanstack/react-router'
 import { useJsApiLoader } from '@react-google-maps/api'
+import { safeLocalStorage } from '@/lib/safeStorage'
 import { GOOGLE_MAPS_LIBRARIES, GOOGLE_MAPS_SCRIPT_ID } from '@/lib/google-maps-config'
 import { ArrowLeft, MapPin, Navigation, ArrowRight, Clock, DollarSign, Car } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -172,7 +173,8 @@ export default function DriverStartingLocationPage() {
     if (selectedPlace?.formatted_address) {
       locationData.address = selectedPlace.formatted_address
     }
-    localStorage.setItem('driverStartingLocation', JSON.stringify(locationData))
+    // localStorage-safe write (iPhone private mode / blocked storage never crashes the save)
+    safeLocalStorage.set('driverStartingLocation', JSON.stringify(locationData))
     navigate({ to: '/driver/proof-cam' })
   }
 

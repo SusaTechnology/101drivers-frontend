@@ -5,6 +5,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { cn } from "@/lib/utils";
+import { safeSessionStorage } from "@/lib/safeStorage";
 import { useJsApiLoader } from "@react-google-maps/api";
 import { GOOGLE_MAPS_LIBRARIES, GOOGLE_MAPS_SCRIPT_ID } from "@/lib/google-maps-config";
 import {
@@ -566,7 +567,7 @@ export default function CreateDeliveryPage({ draftId }: CreateDeliveryPageProps)
   useEffect(() => {
     const loadData = async () => {
       // First check for session data (coming back from review page - highest priority)
-      const stored = sessionStorage.getItem("reviewDeliveryData");
+      const stored = safeSessionStorage.get("reviewDeliveryData");
       if (stored) {
         try {
           const data = JSON.parse(stored);
@@ -744,7 +745,7 @@ export default function CreateDeliveryPage({ draftId }: CreateDeliveryPageProps)
           }
           
           // Clear session storage after restoring
-          sessionStorage.removeItem("reviewDeliveryData");
+          safeSessionStorage.remove("reviewDeliveryData");
           setIsLoadingDraft(false);
 
           // Reset the flag after restoration is complete
@@ -1064,7 +1065,7 @@ export default function CreateDeliveryPage({ draftId }: CreateDeliveryPageProps)
     console.log('dropoffPlaceId being saved:', reviewData.dropoffPlaceId);
 
     // Store in sessionStorage
-    sessionStorage.setItem("reviewDeliveryData", JSON.stringify(reviewData));
+    safeSessionStorage.set("reviewDeliveryData", JSON.stringify(reviewData));
 
     // Navigate to review page
     navigate({ to: "/dealer-review-delivery" });

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { Link, useLocation, useNavigate } from "@tanstack/react-router";
+import { safeLocalStorage } from "@/lib/safeStorage";
 import { useForm, type SubmitHandler } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -145,7 +146,7 @@ export function QuoteDetails() {
   useEffect(() => {
     if (hasFreshQuoteData && !urlOtp) {
       // User is starting a new quote - clear any old draft
-      localStorage.removeItem(DRAFT_KEY);
+      safeLocalStorage.remove(DRAFT_KEY);
       console.log("Cleared stale draft - starting fresh quote");
     }
   }, [hasFreshQuoteData, urlOtp]);
@@ -236,7 +237,7 @@ export function QuoteDetails() {
   // Load draft from localStorage if OTP present in URL (new tab scenario)
   useEffect(() => {
     if (urlOtp) {
-      const draftStr = localStorage.getItem(DRAFT_KEY);
+      const draftStr = safeLocalStorage.get(DRAFT_KEY);
       if (draftStr) {
         try {
           const draft = JSON.parse(draftStr);
@@ -369,7 +370,7 @@ export function QuoteDetails() {
           quoteData: quote,
         };
         // Clear draft after successful creation
-        localStorage.removeItem(DRAFT_KEY);
+        safeLocalStorage.remove(DRAFT_KEY);
         // Navigate with delivery data
         navigate({ 
           to: "/quote-confirmation",
@@ -388,7 +389,7 @@ export function QuoteDetails() {
         const draft = { formData, quoteData: quote };
         console.log("Saving draft to localStorage:", draft);
         console.log("Vehicle color being saved:", formData.vehicleColor);
-        localStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
+        safeLocalStorage.set(DRAFT_KEY, JSON.stringify(draft));
       } else if (action === "LOGIN_REQUIRED") {
         navigate({ to: `/auth/dealer-signin` });
       }

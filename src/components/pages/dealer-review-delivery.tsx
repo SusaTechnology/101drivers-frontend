@@ -3,6 +3,7 @@ import React, { useState, useEffect } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { useJsApiLoader } from "@react-google-maps/api";
 import { GOOGLE_MAPS_LIBRARIES, GOOGLE_MAPS_SCRIPT_ID } from "@/lib/google-maps-config";
+import { safeSessionStorage } from "@/lib/safeStorage";
 import {
   Card,
   CardContent,
@@ -261,7 +262,7 @@ export default function ReviewDeliveryPage() {
 
   // Load review data from sessionStorage
   useEffect(() => {
-    const stored = sessionStorage.getItem("reviewDeliveryData");
+    const stored = safeSessionStorage.get("reviewDeliveryData");
     if (stored) {
       try {
         const data = JSON.parse(stored);
@@ -372,7 +373,7 @@ export default function ReviewDeliveryPage() {
           bufferMinutes: response.bufferMinutes ?? reviewData.bufferMinutes,
         };
         setReviewData(updatedData);
-        sessionStorage.setItem("reviewDeliveryData", JSON.stringify(updatedData));
+        safeSessionStorage.set("reviewDeliveryData", JSON.stringify(updatedData));
         setEditField(null);
         setAvailableSlots([]);
         toast.success("Schedule updated");
@@ -510,7 +511,7 @@ export default function ReviewDeliveryPage() {
     },
     onSuccess: (data: any) => {
       // Clear session storage
-      sessionStorage.removeItem("reviewDeliveryData");
+      safeSessionStorage.remove("reviewDeliveryData");
 
       // Close the payment failure dialog if it was open from a previous
       // failed attempt — this retry succeeded.
@@ -623,7 +624,7 @@ export default function ReviewDeliveryPage() {
 
     const updatedData = { ...reviewData, ...editedValues };
     setReviewData(updatedData);
-    sessionStorage.setItem("reviewDeliveryData", JSON.stringify(updatedData));
+    safeSessionStorage.set("reviewDeliveryData", JSON.stringify(updatedData));
     setEditField(null);
     setEditedValues({});
     toast.success("Field updated");
@@ -747,7 +748,7 @@ export default function ReviewDeliveryPage() {
   const handleGoBack = () => {
     // Save data back to session storage so user can continue editing
     if (reviewData) {
-      sessionStorage.setItem("reviewDeliveryData", JSON.stringify(reviewData));
+      safeSessionStorage.set("reviewDeliveryData", JSON.stringify(reviewData));
     }
     navigate({ to: "/dealer-create-delivery", search: { draftId: reviewData?.draftId } });
   };
@@ -831,7 +832,7 @@ export default function ReviewDeliveryPage() {
     },
     onSuccess: () => {
       // Clear session storage
-      sessionStorage.removeItem("reviewDeliveryData");
+      safeSessionStorage.remove("reviewDeliveryData");
       
       toast.success("Draft saved successfully", {
         description: "You can continue editing this draft later from the Drafts page.",

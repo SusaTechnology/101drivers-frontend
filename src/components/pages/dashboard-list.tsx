@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { Link, useNavigate } from '@tanstack/react-router'
 import { cn } from '@/lib/utils'
+import { safeLocalStorage } from '@/lib/safeStorage'
 import { useTheme } from '@/lib/theme'
 import { toast } from 'sonner'
 import {
@@ -559,7 +560,7 @@ export default function DriverGigBoardPage() {
 
   // Location toggle state
   const [useMyLocation, setUseMyLocation] = useState(() =>
-    localStorage.getItem('driverUseMyLocation') === 'true'
+    safeLocalStorage.get('driverUseMyLocation') === 'true'
   )
   const [locating, setLocating] = useState(false)
 
@@ -811,7 +812,7 @@ export default function DriverGigBoardPage() {
   const toggleMyLocation = () => {
     const next = !useMyLocation
     setUseMyLocation(next)
-    localStorage.setItem('driverUseMyLocation', String(next))
+    safeLocalStorage.set('driverUseMyLocation', String(next))
   }
 
   const handleRefresh = () => {

@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { Link, useLocation, useNavigate } from '@tanstack/react-router'
+import { safeLocalStorage } from '@/lib/safeStorage'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import {
@@ -41,7 +42,7 @@ export default function QuoteConfirmation() {
       setDeliveryData(state.delivery);
     } else {
       // Try to get from localStorage draft
-      const draftStr = localStorage.getItem(DRAFT_KEY);
+      const draftStr = safeLocalStorage.get(DRAFT_KEY);
       if (draftStr) {
         try {
           const draft = JSON.parse(draftStr);

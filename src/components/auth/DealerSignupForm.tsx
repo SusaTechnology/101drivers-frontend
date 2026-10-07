@@ -5,6 +5,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useJsApiLoader } from "@react-google-maps/api";
+import { safeLocalStorage } from "@/lib/safeStorage";
 import { GOOGLE_MAPS_LIBRARIES, GOOGLE_MAPS_SCRIPT_ID } from '@/lib/google-maps-config';
 import {
   Store,
@@ -356,10 +357,10 @@ export function DealerSignupForm({ isLoaded: isLoadedProp, embedded = false }: D
         description: "Your account is pending admin approval.",
       });
       // Clear draft from localStorage
-      localStorage.removeItem(DEALER_SIGNUP_DRAFT_KEY);
+      safeLocalStorage.remove(DEALER_SIGNUP_DRAFT_KEY);
       // Store dealer info in localStorage (excluding password)
       const { password, ...safeData } = variables;
-      localStorage.setItem("dealerSignupData", JSON.stringify(safeData));
+      safeLocalStorage.set("dealerSignupData", JSON.stringify(safeData));
       setRegistrationComplete(true);
     },
     onError: (error) => {
@@ -574,7 +575,7 @@ export function DealerSignupForm({ isLoaded: isLoadedProp, embedded = false }: D
     const urlOtp = urlParams.get('otp');
     
     if (urlOtp) {
-      const draftStr = localStorage.getItem(DEALER_SIGNUP_DRAFT_KEY);
+      const draftStr = safeLocalStorage.get(DEALER_SIGNUP_DRAFT_KEY);
       if (draftStr) {
         try {
           const draft = JSON.parse(draftStr);
@@ -705,7 +706,7 @@ export function DealerSignupForm({ isLoaded: isLoadedProp, embedded = false }: D
         formData: data,
         selectedBusiness: selectedBusiness,
       };
-      localStorage.setItem(DEALER_SIGNUP_DRAFT_KEY, JSON.stringify(draft));
+      safeLocalStorage.set(DEALER_SIGNUP_DRAFT_KEY, JSON.stringify(draft));
       sendOtpMutation.mutate(basePayload);
     } else {
       // Step 2: Verify OTP and complete registration

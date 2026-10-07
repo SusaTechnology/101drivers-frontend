@@ -15,6 +15,7 @@ import { Button } from '@/components/ui/button';
 import { InputOTP, InputOTPGroup, InputOTPSlot } from '@/components/ui/input-otp';
 import { toast } from 'sonner';
 import { ArrowRight, Mail, RefreshCw, Loader2, CheckCircle, Clock } from 'lucide-react';
+import { safeSessionStorage } from '@/lib/safeStorage';
 import { useDataMutation, setAccessToken, setRefreshToken, setUser, startSessionKeepAlive } from '@/lib/tanstack/dataQuery';
 import { cn } from '@/lib/utils';
 
@@ -140,7 +141,7 @@ export default function IndividualVerifyEmailPage() {
     apiEndPoint: `${import.meta.env.VITE_API_URL}/api/auth/signup/customer/private`,
     method: 'POST',
     onSuccess: (data) => {
-      sessionStorage.removeItem(INDIVIDUAL_PENDING_PAYLOAD_KEY);
+      safeSessionStorage.remove(INDIVIDUAL_PENDING_PAYLOAD_KEY);
 
       if (data?.customerApprovalStatus === 'APPROVED') {
         // ── Auto-approved private customer → auto-login ──

@@ -21,6 +21,7 @@
  */
 import React, { useState } from "react";
 import { useNavigate, Link } from "@tanstack/react-router";
+import { safeSessionStorage } from "@/lib/safeStorage";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -195,7 +196,7 @@ export function IndividualSignupForm() {
       // referralCode?} — referralCode is needed in step 2 because the
       // backend applies the customer referral AFTER creating the Customer
       // row (which only happens in step 2).
-      sessionStorage.setItem(
+      safeSessionStorage.set(
         INDIVIDUAL_PENDING_PAYLOAD_KEY,
         JSON.stringify({
           email: variables.email,
@@ -244,7 +245,7 @@ export function IndividualSignupForm() {
         description: data.message || "Please check your inbox.",
       });
       // Store just the email (not the payload — the backend already has it)
-      sessionStorage.setItem(
+      safeSessionStorage.set(
         INDIVIDUAL_PENDING_PAYLOAD_KEY,
         JSON.stringify({ email: data.email }),
       );

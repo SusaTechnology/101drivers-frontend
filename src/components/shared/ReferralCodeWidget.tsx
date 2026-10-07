@@ -44,6 +44,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { useDebouncedValue } from "@/hooks/useDebounce";
 import { useDataQuery } from "@/lib/tanstack/dataQuery";
 import { cn } from "@/lib/utils";
+import { safeSessionStorage } from "@/lib/safeStorage";
 
 const API_URL = import.meta.env.VITE_API_URL;
 
@@ -157,10 +158,10 @@ export function ReferralCodeWidget({
     // a) Deep link — ?ref= in the URL wins over everything.
     const urlRef = new URLSearchParams(window.location.search).get("ref");
     // b) Session code from a previous lock (e.g. deep link earlier in session).
-    const sessionCode = sessionStorage.getItem(REFERRAL_SESSION_KEYS.CODE);
+    const sessionCode = safeSessionStorage.get(REFERRAL_SESSION_KEYS.CODE);
     // c) Intent flag — the login card's "Have a referral code?" link.
     const intentOpen =
-      sessionStorage.getItem(REFERRAL_SESSION_KEYS.OPEN) === "1";
+      safeSessionStorage.get(REFERRAL_SESSION_KEYS.OPEN) === "1";
 
     const initial = (urlRef ?? sessionCode ?? "").trim();
     if (initial) {
@@ -168,10 +169,10 @@ export function ReferralCodeWidget({
       setInputValue(code);
       setMode("locked");
       // Persist so refreshes keep the chip until the user clears it.
-      sessionStorage.setItem(REFERRAL_SESSION_KEYS.CODE, code);
-      sessionStorage.removeItem(REFERRAL_SESSION_KEYS.OPEN);
+      safeSessionStorage.set(REFERRAL_SESSION_KEYS.CODE, code);
+      safeSessionStorage.remove(REFERRAL_SESSION_KEYS.OPEN);
     } else if (intentOpen) {
-      sessionStorage.removeItem(REFERRAL_SESSION_KEYS.OPEN);
+      safeSessionStorage.remove(REFERRAL_SESSION_KEYS.OPEN);
       setMode("typing");
     } else {
       setMode("closed");
@@ -232,7 +233,7 @@ export function ReferralCodeWidget({
   // TYPING → LOCKED: the code fully resolved (valid + active + allowed).
   useEffect(() => {
     if (mode === "typing" && state === "resolved" && debouncedCode) {
-      sessionStorage.setItem(REFERRAL_SESSION_KEYS.CODE, debouncedCode);
+      safeSessionStorage.set(REFERRAL_SESSION_KEYS.CODE, debouncedCode);
       setMode("locked");
     }
   }, [mode, state, debouncedCode]);
@@ -245,7 +246,7 @@ export function ReferralCodeWidget({
       mode === "locked" &&
       (state === "invalid" || state === "paused" || state === "not-allowed")
     ) {
-      sessionStorage.removeItem(REFERRAL_SESSION_KEYS.CODE);
+      safeSessionStorage.remove(REFERRAL_SESSION_KEYS.CODE);
       setMode("typing");
     }
   }, [mode, state]);
@@ -273,7 +274,7 @@ export function ReferralCodeWidget({
   /** State 3 X — back to state 1 and clear the session (spec). */
   const handleChipRemove = () => {
     if (disabled) return;
-    sessionStorage.removeItem(REFERRAL_SESSION_KEYS.CODE);
+    safeSessionStorage.remove(REFERRAL_SESSION_KEYS.CODE);
     stripRefFromUrl();
     setInputValue("");
     setMode("closed");
@@ -286,13 +287,13 @@ export function ReferralCodeWidget({
   const handleFieldClear = () => {
     if (disabled) return;
     if (!inputValue.trim()) {
-      sessionStorage.removeItem(REFERRAL_SESSION_KEYS.CODE);
+      safeSessionStorage.remove(REFERRAL_SESSION_KEYS.CODE);
       stripRefFromUrl();
       setMode("closed");
       return;
     }
     setInputValue("");
-    sessionStorage.removeItem(REFERRAL_SESSION_KEYS.CODE);
+    safeSessionStorage.remove(REFERRAL_SESSION_KEYS.CODE);
     stripRefFromUrl();
     inputRef.current?.focus();
   };

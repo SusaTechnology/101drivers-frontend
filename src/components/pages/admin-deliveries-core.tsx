@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { safeLocalStorage } from "@/lib/safeStorage";
 import {
   Card,
   CardContent,
@@ -205,7 +206,7 @@ const AdminDeliveries: React.FC = () => {
 
   // Theme handling
   useEffect(() => {
-    const savedTheme = localStorage.getItem("theme");
+    const savedTheme = safeLocalStorage.get("theme");
     const isDarkMode = savedTheme === "dark";
     setIsDark(isDarkMode);
     if (isDarkMode) {
@@ -220,10 +221,10 @@ const AdminDeliveries: React.FC = () => {
     setIsDark(newIsDark);
     if (newIsDark) {
       document.documentElement.classList.add("dark");
-      localStorage.setItem("theme", "dark");
+      safeLocalStorage.set("theme", "dark");
     } else {
       document.documentElement.classList.remove("dark");
-      localStorage.setItem("theme", "light");
+      safeLocalStorage.set("theme", "light");
     }
   };
 

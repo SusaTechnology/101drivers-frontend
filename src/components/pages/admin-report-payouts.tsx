@@ -1,6 +1,7 @@
 // components/pages/admin-report-payouts.tsx
 import React, { useState, useMemo, useCallback } from 'react';
 import { Link } from '@tanstack/react-router';
+import { safeLocalStorage, safeSessionStorage } from '@/lib/safeStorage';
 import {
   Card,
   CardContent,
@@ -260,7 +261,7 @@ export default function AdminPayoutsReportPage() {
               CSV
             </Button>
             <Button variant="outline" size="sm" className="rounded-xl" onClick={() => {
-              const token = localStorage.getItem('auth_token') || sessionStorage.getItem('auth_token');
+              const token = safeLocalStorage.get('auth_token') || safeSessionStorage.get('auth_token');
               const statusParam = status && status !== 'all' ? `?status=${status}` : '';
               const url = `${import.meta.env.VITE_API_URL}/api/driverPayouts/admin/export-wise-csv${statusParam}`;
               window.open(url, '_blank');
