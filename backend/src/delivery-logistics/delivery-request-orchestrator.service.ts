@@ -546,6 +546,78 @@ export class DeliveryRequestOrchestratorService {
     throw new BadRequestException(friendly);
   }
 
+  /**
+   * Instant-capture audit event for PRIVATE customers.
+   *
+   * attemptStripePrepaidCharge captures PRIVATE customers immediately
+   * (capture_method='automatic' → PI 'succeeded' → Payment.status=CAPTURED,
+   * capturedAt set). But the only PaymentEvent the callers write afterwards
+   * is the generic AUTHORIZE one ("Prepaid payment authorized via Stripe …"),
+   * so a private customer's payment showed status CAPTURED with an event
+   * trail that only said "authorized" — admins couldn't tell from the event
+   * log that the money was actually collected at creation (the CAPTURE event
+   * normally arrives via the payment_intent.succeeded webhook, which is not
+   * guaranteed to be processed).
+   *
+   * This writes the missing CAPTURE event at the three creation call sites
+   * (business create, individual create, draft promotion). Purely additive:
+   * existing events/rows are never modified, and the webhook's own CAPTURE
+   * event is respected — we skip when one already exists for the same
+   * PaymentIntent (matched by providerRef, which the webhook sets to pi.id).
+   */
+  private async recordInstantCapturePaymentEvent(params: {
+    paymentId: string;
+    deliveryId: string;
+    customerId: string;
+    paymentType: EnumPaymentPaymentType;
+    customerType?: EnumCustomerCustomerType;
+    paymentIntentId: string | null;
+    piStatus: string | null;
+    amount: number;
+    message: string;
+    source: string;
+  }): Promise<void> {
+    // Mirror attemptStripePrepaidCharge's isInstantCapture condition exactly:
+    // only PRIVATE customers with an immediately-succeeded PI are charged now.
+    // BUSINESS prepaid stays AUTHORIZED (manual capture at lock-in/completion)
+    // and POSTPAID never reaches the Stripe path.
+    if (params.piStatus !== 'succeeded') return;
+    if (params.customerType !== EnumCustomerCustomerType.PRIVATE) return;
+    if (!params.paymentIntentId) return;
+
+    // De-dup against the webhook path: handlePaymentIntentSucceeded writes a
+    // CAPTURE event with providerRef = PI id. If it beat us here (fast webhook
+    // or API retry after a response timeout), keep its event and skip ours.
+    const existing = await this.prisma.paymentEvent.findFirst({
+      where: {
+        paymentId: params.paymentId,
+        type: EnumPaymentEventType.CAPTURE,
+        providerRef: params.paymentIntentId,
+      },
+      select: { id: true },
+    });
+    if (existing) return;
+
+    await this.prisma.paymentEvent.create({
+      data: {
+        paymentId: params.paymentId,
+        type: EnumPaymentEventType.CAPTURE,
+        status: EnumPaymentEventStatus.CAPTURED,
+        amount: params.amount,
+        providerRef: params.paymentIntentId,
+        message: params.message,
+        raw: {
+          source: params.source,
+          deliveryId: params.deliveryId,
+          customerId: params.customerId,
+          paymentType: params.paymentType,
+          paymentIntentId: params.paymentIntentId,
+          piStatus: params.piStatus,
+        },
+      },
+    });
+  }
+
   // Persist a failure on the Payment row + create a FAILED PaymentEvent so
   // the dealer-facing UI can show "why did this delivery fail to charge?"
   private async markPaymentFailed(
@@ -1542,6 +1614,21 @@ private async createIndividualDeliveryForResolvedCustomer(
         piStatus,
       },
     },
+  });
+
+  // PRIVATE customers were charged immediately (instant capture) — record the
+  // missing CAPTURE event so the audit trail shows the money was collected.
+  await this.recordInstantCapturePaymentEvent({
+    paymentId: payment.id,
+    deliveryId: delivery.id,
+    customerId: customer.id,
+    paymentType: EnumPaymentPaymentType.PREPAID,
+    customerType: customer.customerType,
+    paymentIntentId,
+    piStatus,
+    amount: quote.estimatedPrice,
+    message: "Private customer payment captured immediately via Stripe at individual request creation",
+    source: "individual-create-from-quote",
   });
 
   await this.notificationEventEngine.notifyDeliveryReleased({
@@ -2575,6 +2662,21 @@ private async resolveIndividualCustomerForCreate(
           },
         },
       });
+
+      // PRIVATE customers were charged immediately (instant capture) — record
+      // the missing CAPTURE event so the audit trail shows money was collected.
+      await this.recordInstantCapturePaymentEvent({
+        paymentId: payment.id,
+        deliveryId: delivery.id,
+        customerId: customer.id,
+        paymentType,
+        customerType: customer.customerType,
+        paymentIntentId: chargeResult.paymentIntentId,
+        piStatus: chargeResult.status,
+        amount: quote.estimatedPrice,
+        message: "Private customer payment captured immediately via Stripe at delivery creation",
+        source: "business-create-from-quote",
+      });
     } else {
       // POSTPAID — no charge now. Leave as MANUAL/AUTHORIZED; the invoice
       // lifecycle flips to INVOICED then PAID when the dealer settles.
@@ -3085,6 +3187,21 @@ private async resolveIndividualCustomerForCreate(
             piStatus: chargeResult.status,
           },
         },
+      });
+
+      // PRIVATE customers were charged immediately (instant capture) — record
+      // the missing CAPTURE event so the audit trail shows money was collected.
+      await this.recordInstantCapturePaymentEvent({
+        paymentId: payment.id,
+        deliveryId: delivery.id,
+        customerId: customer.id,
+        paymentType,
+        customerType: customer.customerType,
+        paymentIntentId: chargeResult.paymentIntentId,
+        piStatus: chargeResult.status,
+        amount: quote.estimatedPrice,
+        message: "Private customer payment captured immediately via Stripe at draft promotion",
+        source: "business-promote-draft",
       });
     } else {
       // POSTPAID — no charge now.

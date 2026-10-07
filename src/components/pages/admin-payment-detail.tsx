@@ -525,7 +525,11 @@ export default function AdminPaymentDetailPage({ paymentId }: AdminPaymentDetail
                   <InfoRow
                     icon={FileText}
                     label="Type"
-                    value={getPaymentTypeLabel(payment.paymentType)}
+                    value={
+                      payment.paymentType === 'PREPAID' && customer?.customerType === 'PRIVATE'
+                        ? 'Prepaid (private customer — charged at creation)'
+                        : getPaymentTypeLabel(payment.paymentType)
+                    }
                   />
                   <InfoRow
                     icon={Wallet}
