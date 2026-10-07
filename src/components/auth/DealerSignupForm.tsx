@@ -46,6 +46,14 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
   Card,
   CardContent,
   CardDescription,
@@ -213,6 +221,11 @@ export function DealerSignupForm({ isLoaded: isLoadedProp, embedded = false }: D
   const [otpFocused, setOtpFocused] = useState(false);
   const [otpVerified, setOtpVerified] = useState(false);
   const [otpAttempted, setOtpAttempted] = useState(false);
+  // Verification code lives in a dialog (not an inline field): it opens
+  // automatically on every "Send Code" click and via the ?otp= email-link
+  // restore path. Closable (X / Esc / overlay click) — everything the dealer
+  // typed is preserved and the submit button reopens it.
+  const [otpDialogOpen, setOtpDialogOpen] = useState(false);
   const [pendingSignupData, setPendingSignupData] = useState<DealerSignupPayload | null>(null);
   const [registrationComplete, setRegistrationComplete] = useState(false);
   
@@ -305,6 +318,8 @@ export function DealerSignupForm({ isLoaded: isLoadedProp, embedded = false }: D
         description: data.message || "Please check your inbox.",
       });
       setOtpSent(true);
+      // Present the verification step as a dialog so it's impossible to miss.
+      setOtpDialogOpen(true);
       setPendingSignupData(variables); // Store data for second step
       // Reset OTP verification state for the new code
       setOtpVerified(false);
@@ -498,6 +513,14 @@ export function DealerSignupForm({ isLoaded: isLoadedProp, embedded = false }: D
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [otpValue, otpSent]);
 
+  // Registration complete → close the OTP dialog so the success panel
+  // (which replaces the form) is fully visible.
+  useEffect(() => {
+    if (registrationComplete) {
+      setOtpDialogOpen(false);
+    }
+  }, [registrationComplete]);
+
   const {
     register: registerSignup,
     handleSubmit: handleSignupSubmit,
@@ -588,6 +611,8 @@ export function DealerSignupForm({ isLoaded: isLoadedProp, embedded = false }: D
             // Set OTP and show verification step
             setOtpValue(urlOtp);
             setOtpSent(true);
+            // Arrived from an email link — open the dialog with the code prefilled.
+            setOtpDialogOpen(true);
             console.log("Draft restored from localStorage for OTP verification");
           }
         } catch (e) {
@@ -1433,88 +1458,11 @@ export function DealerSignupForm({ isLoaded: isLoadedProp, embedded = false }: D
                       </div>
                     </div>
 
-                    {/* Code Input Field - appears only after code sent */}
-                    {otpSent && (
-                      <div className="space-y-3 animate-in fade-in slide-in-from-top-2 duration-300">
-                        <div className="flex items-center justify-between">
-                          <Label htmlFor="otp" className="text-xs font-bold">
-                            Enter Verification Code
-                          </Label>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => {
-                              if (pendingSignupData) {
-                                resendCodeMutation.mutate(pendingSignupData);
-                              }
-                            }}
-                            disabled={resendCodeMutation.isPending}
-                            className="text-xs h-8 px-3 text-primary hover:text-primary/80 font-semibold"
-                          >
-                            {resendCodeMutation.isPending ? (
-                              <>
-                                <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-primary mr-2"></div>
-                                Sending...
-                              </>
-                            ) : (
-                              "Resend Code"
-                            )}
-                          </Button>
-                        </div>
-                        <div className="relative">
-                          <Input
-                            id="otp"
-                            value={otpValue}
-                            onChange={(e) => setOtpValue(e.target.value)}
-                            onFocus={() => setOtpFocused(true)}
-                            onBlur={() => setOtpFocused(false)}
-                            className={cn(
-                              "h-14 rounded-2xl text-center text-lg tracking-widest font-mono border-2 transition-colors outline-none",
-                              otpVerified
-                                ? "border-green-400 dark:border-green-500 bg-green-50 dark:bg-green-950/30 focus:border-green-500 focus:ring-2 focus:ring-green-200 pr-14"
-                                : otpAttempted && otpValue.length === 6
-                                ? "border-red-400 dark:border-red-500 bg-red-50 dark:bg-red-950/30 focus:border-red-500 focus:ring-2 focus:ring-red-200 pr-14"
-                                : otpFocused && !otpValue.trim()
-                                ? "border-red-400 dark:border-red-500 bg-red-50 dark:bg-red-950/30 focus:border-red-500 focus:ring-2 focus:ring-red-200"
-                                : "border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 focus:border-slate-400 dark:focus:border-slate-500 focus:ring-2 focus:ring-slate-200 dark:focus:ring-slate-700"
-                            )}
-                            placeholder="123456"
-                            maxLength={6}
-                            disabled={isPending}
-                          />
-                          {/* Status icon on the right */}
-                          {(otpVerified || (otpAttempted && otpValue.length === 6 && !verifyOtpCheckMutation.isPending)) && (
-                            <div className="absolute right-4 top-1/2 -translate-y-1/2 flex items-center">
-                              {otpVerified ? (
-                                <CheckCircle className="w-6 h-6 text-green-500" />
-                              ) : (
-                                <X className="w-6 h-6 text-red-500" />
-                              )}
-                            </div>
-                          )}
-                          {verifyOtpCheckMutation.isPending && otpValue.length === 6 && !otpVerified && (
-                            <div className="absolute right-4 top-1/2 -translate-y-1/2 flex items-center">
-                              <div className="animate-spin rounded-full h-5 w-5 border-2 border-slate-300 border-t-slate-600" />
-                            </div>
-                          )}
-                        </div>
-                        <p className={cn(
-                          "text-[11px] font-medium",
-                          otpVerified
-                            ? "text-green-600 dark:text-green-400"
-                            : otpAttempted && otpValue.length === 6
-                            ? "text-red-500"
-                            : "text-slate-500"
-                        )}>
-                          {otpVerified
-                            ? "Verified"
-                            : otpAttempted && otpValue.length === 6
-                            ? "Invalid code — please check and re-enter"
-                            : "Enter the 6-digit code sent to your email."}
-                        </p>
-                      </div>
-                    )}
+                    {/* Verification code lives in a dialog (rendered at the
+                        bottom of this component) that opens automatically on
+                        every "Send Code to Email" click — the inline OTP field
+                        was replaced by it. The submit button below reopens the
+                        dialog if the dealer closed it. */}
 
                     {/* Terms and Conditions */}
                     <div
@@ -1612,16 +1560,16 @@ export function DealerSignupForm({ isLoaded: isLoadedProp, embedded = false }: D
                     />
 
                     <Button
-                      type="submit"
-                      disabled={
-                        isPending ||
-                        !selectedBusiness ||
-                        !acceptTerms ||
-                        (otpSent && !otpVerified)
+                      type={otpSent && !otpVerified ? "button" : "submit"}
+                      onClick={
+                        otpSent && !otpVerified
+                          ? () => setOtpDialogOpen(true)
+                          : undefined
                       }
+                      disabled={isPending || !selectedBusiness || !acceptTerms}
                       className={cn(
                         "w-full py-4 rounded-2xl transition flex items-center justify-center gap-2 text-lg font-extrabold",
-                        !selectedBusiness || !acceptTerms || (otpSent && !otpVerified)
+                        !selectedBusiness || !acceptTerms
                           ? "bg-slate-300 dark:bg-slate-700 text-slate-500 dark:text-slate-400 cursor-not-allowed"
                           : "bg-primary text-slate-950 hover:shadow-xl hover:shadow-primary/20 hover:brightness-95",
                       )}
@@ -1635,9 +1583,14 @@ export function DealerSignupForm({ isLoaded: isLoadedProp, embedded = false }: D
                         "Select Business First"
                       ) : !acceptTerms ? (
                         "Accept Terms & Conditions"
+                      ) : otpSent && !otpVerified ? (
+                        <>
+                          Enter Verification Code
+                          <ArrowRight className="w-5 h-5" />
+                        </>
                       ) : otpSent ? (
                         <>
-                          {otpVerified ? "Verify & Submit" : "Enter Valid Code"}
+                          Verify & Submit
                           <ArrowRight className="w-5 h-5" />
                         </>
                       ) : (
@@ -1774,6 +1727,151 @@ export function DealerSignupForm({ isLoaded: isLoadedProp, embedded = false }: D
           type={openPolicySheet ?? "customer-agreement"}
           fromSignUp
         />
+
+        {/* ===== OTP verification dialog =====
+            The verification code step is presented as a modal instead of an
+            inline form field so it's impossible to miss after "Send Code to
+            Email". Purely presentational change — the send / live-check /
+            verify mutations and all their state (otpValue, otpVerified,
+            otpAttempted, pendingSignupData) are exactly the ones the inline
+            field used. Behavior:
+              • Opens automatically on every "Send Code to Email" click and
+                via the ?otp= email-link restore path (code prefilled).
+              • Closable via X / Esc / overlay click — the dealer keeps
+                everything they typed and the (now enabled) submit button
+                reopens it ("Enter Verification Code").
+              • "Verify & Submit" here submits the main signup form via the
+                form="dealerSignupForm" attribute, so it runs the exact same
+                validated onSignupSubmit path as the page's own button. */}
+        <Dialog
+          open={otpDialogOpen}
+          onOpenChange={(open) => {
+            // Don't allow closing while a send / verify / resend request is
+            // in flight — avoids confusing half-submitted states.
+            if (!open && isPending) return;
+            setOtpDialogOpen(open);
+            // Closing unmounts the input without a blur event, so reset the
+            // focus-tracking state — otherwise an empty input would reopen
+            // with the "focused empty" red border.
+            if (!open) setOtpFocused(false);
+          }}
+        >
+          <DialogContent className="sm:max-w-md rounded-2xl">
+            <DialogHeader>
+              <DialogTitle className="text-lg font-black text-slate-900 dark:text-white">
+                Enter Verification Code
+              </DialogTitle>
+              <DialogDescription className="text-sm text-slate-500 dark:text-slate-400">
+                We sent a 6-digit code to{" "}
+                <span className="font-bold text-slate-700 dark:text-slate-200 break-all">
+                  {pendingSignupData?.email || watchContactEmail || "your email"}
+                </span>
+                . Enter it below to verify and submit your sign-up.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-3">
+              <div className="relative">
+                <Input
+                  id="otp"
+                  value={otpValue}
+                  onChange={(e) => setOtpValue(e.target.value)}
+                  onFocus={() => setOtpFocused(true)}
+                  onBlur={() => setOtpFocused(false)}
+                  className={cn(
+                    "h-14 rounded-2xl text-center text-lg tracking-widest font-mono border-2 transition-colors outline-none",
+                    otpVerified
+                      ? "border-green-400 dark:border-green-500 bg-green-50 dark:bg-green-950/30 focus:border-green-500 focus:ring-2 focus:ring-green-200 pr-14"
+                      : otpAttempted && otpValue.length === 6
+                      ? "border-red-400 dark:border-red-500 bg-red-50 dark:bg-red-950/30 focus:border-red-500 focus:ring-2 focus:ring-red-200 pr-14"
+                      : otpFocused && !otpValue.trim()
+                      ? "border-red-400 dark:border-red-500 bg-red-50 dark:bg-red-950/30 focus:border-red-500 focus:ring-2 focus:ring-red-200"
+                      : "border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 focus:border-slate-400 dark:focus:border-slate-500 focus:ring-2 focus:ring-slate-200 dark:focus:ring-slate-700"
+                  )}
+                  placeholder="123456"
+                  maxLength={6}
+                  disabled={isPending}
+                  autoFocus
+                />
+                {/* Status icon on the right */}
+                {(otpVerified || (otpAttempted && otpValue.length === 6 && !verifyOtpCheckMutation.isPending)) && (
+                  <div className="absolute right-4 top-1/2 -translate-y-1/2 flex items-center">
+                    {otpVerified ? (
+                      <CheckCircle className="w-6 h-6 text-green-500" />
+                    ) : (
+                      <X className="w-6 h-6 text-red-500" />
+                    )}
+                  </div>
+                )}
+                {verifyOtpCheckMutation.isPending && otpValue.length === 6 && !otpVerified && (
+                  <div className="absolute right-4 top-1/2 -translate-y-1/2 flex items-center">
+                    <div className="animate-spin rounded-full h-5 w-5 border-2 border-slate-300 border-t-slate-600" />
+                  </div>
+                )}
+              </div>
+              <p className={cn(
+                "text-[11px] font-medium",
+                otpVerified
+                  ? "text-green-600 dark:text-green-400"
+                  : otpAttempted && otpValue.length === 6
+                  ? "text-red-500"
+                  : "text-slate-500"
+              )}>
+                {otpVerified
+                  ? "Verified"
+                  : otpAttempted && otpValue.length === 6
+                  ? "Invalid code — please check and re-enter"
+                  : "Enter the 6-digit code sent to your email."}
+              </p>
+            </div>
+
+            <DialogFooter className="mt-2 flex-row items-center justify-between gap-3 sm:justify-between">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  if (pendingSignupData) {
+                    resendCodeMutation.mutate(pendingSignupData);
+                  }
+                }}
+                disabled={resendCodeMutation.isPending}
+                className="text-xs h-9 px-3 text-primary hover:text-primary/80 font-semibold"
+              >
+                {resendCodeMutation.isPending ? (
+                  <>
+                    <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-primary mr-2"></div>
+                    Sending...
+                  </>
+                ) : (
+                  "Resend Code"
+                )}
+              </Button>
+              <Button
+                type="submit"
+                form="dealerSignupForm"
+                disabled={isPending || !otpVerified}
+                className={cn(
+                  "py-3 rounded-2xl font-extrabold min-w-[160px]",
+                  otpVerified
+                    ? "bg-primary text-slate-950 hover:brightness-95"
+                    : "bg-slate-300 dark:bg-slate-700 text-slate-500 dark:text-slate-400 cursor-not-allowed",
+                )}
+              >
+                {verifyOtpMutation.isPending ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-slate-950"></div>
+                    Submitting...
+                  </>
+                ) : otpVerified ? (
+                  "Verify & Submit"
+                ) : (
+                  "Enter Valid Code"
+                )}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
     </div>
   );
 }
