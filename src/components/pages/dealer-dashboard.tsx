@@ -208,7 +208,15 @@ export default function DealerDashboard() {
   >({
     apiEndPoint: `${import.meta.env.VITE_API_URL}/api/deliveryRequests/create-draft-from-quote`,
     onSuccess: (data) => {
-      try { localStorage.removeItem('quoteDraft') } catch { /* ignore */ }
+      // The handoff is complete — the request now lives server-side as a
+      // real draft. Clear BOTH keys: quoteDraft (signup handoff; also
+      // prevents a duplicate draft on next login) and homeQuotePrefill
+      // (the landing page's "remember my addresses" rule — otherwise the
+      // public From/To fields still show these addresses after sign-out).
+      try {
+        localStorage.removeItem('quoteDraft')
+        localStorage.removeItem('homeQuotePrefill')
+      } catch { /* ignore */ }
       if (attachIsPersonalRef.current) {
         toast.success('Your delivery request is ready', {
           description: 'We pre-filled the form from your quote — review the details and submit.',
