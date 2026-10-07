@@ -190,12 +190,18 @@ export default function DealerDashboard() {
   const dealerId = user?.profileId
 
   // ─── Landing-page quote handoff ("Sign up and request a delivery") ──
-  // A business customer who quoted on the public landing page and then
-  // signed in lands here with a quoteDraft in localStorage. Their account
-  // may still be PENDING admin approval (deliveries can't be submitted
-  // yet), so the quote is saved as a DRAFT delivery request via the
-  // existing drafts system — it surfaces in their Drafts and can be
-  // completed the moment the account is approved. Nothing is retyped.
+  // A customer who quoted on the public landing page and then signed in /
+  // finished signup lands here with a quoteDraft in localStorage. The quote
+  // is saved as a DRAFT delivery request via the existing drafts system and
+  // they are taken straight into the pre-filled delivery form — nothing is
+  // retyped.
+  //  • BUSINESS — the account may still be PENDING admin approval, so the
+  //    draft waits in their Drafts until the account is approved.
+  //  • PERSONAL — private customers are auto-approved at signup (they get
+  //    tokens at OTP and are treated exactly like any logged-in user), so
+  //    the same draft handoff drops them into the pre-filled form ready to
+  //    submit.
+  const attachIsPersonalRef = useRef(false)
   const quoteDraftAttach = useDataMutation<
     { id?: string },
     { customerId: string; quoteId: string; serviceType: string }
@@ -203,10 +209,17 @@ export default function DealerDashboard() {
     apiEndPoint: `${import.meta.env.VITE_API_URL}/api/deliveryRequests/create-draft-from-quote`,
     onSuccess: (data) => {
       try { localStorage.removeItem('quoteDraft') } catch { /* ignore */ }
-      toast.success('Your delivery request is saved', {
-        description: "It's waiting in your Drafts — submit it once your account is approved.",
-        duration: 8000,
-      })
+      if (attachIsPersonalRef.current) {
+        toast.success('Your delivery request is ready', {
+          description: 'We pre-filled the form from your quote — review the details and submit.',
+          duration: 8000,
+        })
+      } else {
+        toast.success('Your delivery request is saved', {
+          description: "It's waiting in your Drafts — submit it once your account is approved.",
+          duration: 8000,
+        })
+      }
       // The system already knows a request was started on the public page
       // — take them straight to it instead of making them hunt for it in
       // their Drafts list.
@@ -227,18 +240,25 @@ export default function DealerDashboard() {
     let raw: string | null = null
     try { raw = localStorage.getItem('quoteDraft') } catch { return }
     if (!raw) return
-    let draft: { deliveryType?: string; quoteData?: { id?: string } } | null = null
+    let draft: { deliveryType?: string; quoteData?: { id?: string; serviceType?: string } } | null = null
     try { draft = JSON.parse(raw) } catch { return }
-    // PERSONAL draft: private customers are auto-approved, so there is
-    // nothing to park server-side — take them straight to the pre-filled
-    // delivery form (QuoteDetails loads the draft from localStorage, so
-    // nothing is retyped). The draft is cleared after the delivery is
-    // created; if they leave midway, the next login lands here again.
+    // PERSONAL draft: private customers are auto-approved at signup and
+    // arrive here already logged in (tokens issued at OTP verification).
+    // Save the quote as a real server-side draft — same handoff as
+    // business — and take them straight into the pre-filled delivery form
+    // (addresses + price). If they leave midway the draft waits in their
+    // Drafts list, exactly like any other saved draft.
     if (draft?.deliveryType === 'PERSONAL' && draft?.quoteData?.id) {
-      navigate({ to: '/quote-details' })
+      attachIsPersonalRef.current = true
+      quoteDraftAttach.mutate({
+        customerId: dealerId,
+        quoteId: draft.quoteData.id,
+        serviceType: draft.quoteData.serviceType || 'HOME_DELIVERY',
+      })
       return
     }
     if (draft?.deliveryType !== 'BUSINESS' || !draft?.quoteData?.id) return
+    attachIsPersonalRef.current = false
     quoteDraftAttach.mutate({
       customerId: dealerId,
       quoteId: draft.quoteData.id,
