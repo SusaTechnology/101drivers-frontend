@@ -391,41 +391,24 @@ export class StripeWebhookController {
       });
     }
 
-    // ── De-dup vs in-process CAPTURE events (providerRef = PI id) ────────
-    // The creation path already writes its own CAPTURE event for private
-    // instant-capture payments (orchestrator recordInstantCapturePaymentEvent,
-    // providerRef = PI id, stripeEventId = null), and the payout engine writes
-    // one for the completion remainder captured on a new PI. Our
-    // stripeEventId idempotency below can't catch those (their stripeEventId
-    // is null), so without this check a processed webhook would add a second
-    // CAPTURE row saying "Payment succeeded via webhook" next to the more
-    // accurate in-process one. Only true duplicates are skipped: a PI
-    // captures exactly once, so a CAPTURE event already referencing THIS
-    // PaymentIntent means the audit row exists.
-    const existingCaptureForPi = await this.prisma.paymentEvent.findFirst({
-      where: {
-        paymentId: payment.id,
-        type: "CAPTURE",
-        providerRef: pi.id,
-      },
-      select: { id: true },
+    // Webhook CAPTURE event. De-dup is DB-enforced (see
+    // createPaymentEventIdempotent): stripeEventId unique handles Stripe
+    // replays, and the payment_event_capture_provider_unique partial index
+    // (migration 20261008120000) drops duplicates when an in-process path
+    // (private instant capture, lock-in fee, remainder capture) already
+    // recorded this capture. The write must STAY as the safety net for the
+    // paths where the webhook is the only confirmation (e.g. creation API
+    // timed out but the charge succeeded).
+    await this.createPaymentEventIdempotent({
+      paymentId: payment.id,
+      type: "CAPTURE",
+      status: "CAPTURED",
+      amount: pi.amount / 100,
+      message: "Payment succeeded via webhook",
+      providerRef: pi.id,
+      raw: pi as any,
+      stripeEventId,
     });
-    if (existingCaptureForPi) {
-      this.logger.log(
-        `CAPTURE event already recorded for payment ${payment.id} / PI ${pi.id} — skipping webhook duplicate`,
-      );
-    } else {
-      await this.createPaymentEventIdempotent({
-        paymentId: payment.id,
-        type: "CAPTURE",
-        status: "CAPTURED",
-        amount: pi.amount / 100,
-        message: "Payment succeeded via webhook",
-        providerRef: pi.id,
-        raw: pi as any,
-        stripeEventId,
-      });
-    }
 
     // Send "Payment Receipt" email (fire-and-forget, non-blocking)
     if (this.notificationEngine) {
@@ -1465,15 +1448,19 @@ export class StripeWebhookController {
         },
       });
     } catch (err: any) {
-      // Unique constraint violation means another concurrent handler
-      // already inserted this event — safe to ignore.
-      if (
-        err?.code === "P2002" &&
-        Array.isArray(err?.meta?.target) &&
-        err.meta.target.includes("stripeEventId")
-      ) {
+      // P2002 (unique violation) = duplicate — on this table every unique
+      // constraint is a legitimate duplicate signal, not an error:
+      //   • stripeEventId unique — the same Stripe event was already processed
+      //   • payment_event_capture_provider_unique (partial index, migration
+      //     20261008120000) — an in-process writer already recorded this
+      //     capture (providerRef = PI / charge ref). The DB decides, so
+      //     concurrent writers (creation path vs webhook on another worker)
+      //     can never both land — no check-then-insert race possible.
+      if (err?.code === "P2002") {
         this.logger.log(
-          `Webhook event ${input.stripeEventId} already processed (race condition caught by unique constraint) — skipping`,
+          `Duplicate PaymentEvent for payment ${input.paymentId} (unique target: ${JSON.stringify(
+            err?.meta?.target ?? [],
+          )}) — skipping insert`,
         );
         return;
       }
