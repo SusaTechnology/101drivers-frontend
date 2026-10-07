@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { AlertTriangle, RefreshCw, RotateCcw, WifiOff } from 'lucide-react'
 
 /**
@@ -17,9 +17,14 @@ import { AlertTriangle, RefreshCw, RotateCcw, WifiOff } from 'lucide-react'
  *   - Plain-language explanation of what happened.
  *   - "Try again" re-renders the route; "Reload page" hard-refreshes.
  *   - Stale-chunk errors (deploy replaced hashed files while a tab was
- *     open) auto-reload ONCE so the user lands on the new build without
- *     doing anything — with a sessionStorage guard so a genuinely broken
- *     deploy can't put the tab into an infinite reload loop.
+ *     open, or the first chunk fetch after waking from idle lost the race
+ *     against the reconnecting network) NEVER paint this card — they get
+ *     a quiet "Updating the app…" shell while the automatic one-shot
+ *     reload runs, so the user never sees a scary error screen for a
+ *     failure that fixes itself. If the reload is guard-blocked (a
+ *     reload already happened within the last 30s — possible sign of a
+ *     genuinely broken deploy), the full card below still appears so
+ *     the user can act manually.
  *   - The underlying error message is kept in a collapsible block so
  *     support can still see the real cause.
  */
@@ -79,12 +84,39 @@ export function RouteErrorScreen({
   const offline = typeof navigator !== 'undefined' && !navigator.onLine
   const staleChunk = isStaleChunkError(error)
 
-  // Auto-recover from stale-chunk crashes (deploy happened mid-session).
+  // True when the automatic one-shot reload could NOT run because the
+  // 30s reload guard blocked it — possible sign of a genuinely broken
+  // deploy. Fall back to the full actionable card in that case.
+  const [reloadBlocked, setReloadBlocked] = useState(false)
+
+  // Auto-recover from stale-chunk crashes (deploy happened mid-session,
+  // or the first chunk fetch after waking from idle lost the network
+  // race). The reload is the only reliable recovery — a failed module
+  // import stays failed inside the page's module map, so retrying the
+  // import in-document does not work; a fresh document does.
   useEffect(() => {
     if (staleChunk) {
-      reloadOnceForStaleBuild()
+      const reloaded = reloadOnceForStaleBuild()
+      if (!reloaded) setReloadBlocked(true)
     }
   }, [staleChunk])
+
+  // While the automatic reload is in flight, show a quiet update shell
+  // instead of the error card — a chunk failure recovers itself within
+  // seconds, and flashing "Something went wrong" for it is exactly what
+  // users reported as a recurring bug after leaving the app idle.
+  if (staleChunk && !reloadBlocked) {
+    return (
+      <div className="flex min-h-[60vh] w-full items-center justify-center bg-white px-4 py-16 text-slate-900 dark:bg-slate-950 dark:text-slate-100">
+        <div className="flex flex-col items-center gap-3 text-center">
+          <RefreshCw className="h-8 w-8 animate-spin text-lime-600 dark:text-lime-400" />
+          <p className="text-sm font-medium text-slate-600 dark:text-slate-400">
+            Updating the app…
+          </p>
+        </div>
+      </div>
+    )
+  }
 
   const message =
     error instanceof Error ? error.message : String(error ?? 'Unknown error')

@@ -100,11 +100,46 @@ function deleteFromAllCaches(request) {
   );
 }
 
+// Transient-network retry for asset fetches.
+//
+// WHY: after a device sits idle (screen lock, app switch, tab suspension),
+// the OS drops the network connection. The FIRST request after resume races
+// the reconnecting radio and often fails outright — and because route chunks
+// are code-split and fetched exactly on first navigation, that failing
+// request was typically a lazy route chunk. The page then crashed onto the
+// router error screen (which auto-reloads), so every wake-up produced a
+// visible "Something went wrong" flash. A short retry window bridges the
+// reconnect: the re-attempt lands once the radio is back and the navigation
+// completes invisibly.
+//
+// Only fetch REJECTIONS (network errors — no response at all) are retried.
+// HTTP error statuses (404/500, the SPA-fallback HTML for a missing chunk)
+// are answers from the server and are returned untouched — retrying those
+// would just delay the correct stale-build recovery.
+const NETWORK_RETRY_DELAYS_MS = [400, 1200];
+
+async function fetchWithRetry(request) {
+  try {
+    return await fetch(request);
+  } catch (firstError) {
+    let lastError = firstError;
+    for (const delay of NETWORK_RETRY_DELAYS_MS) {
+      await new Promise((resolve) => setTimeout(resolve, delay));
+      try {
+        return await fetch(request);
+      } catch (retryError) {
+        lastError = retryError;
+      }
+    }
+    throw lastError;
+  }
+}
+
 // Network fetch that only stores clean, successful responses in the
 // current deploy's dynamic bucket. The response is always returned to
 // the page exactly as the server delivered it.
 function fetchAndCache(request) {
-  return fetch(request).then((response) => {
+  return fetchWithRetry(request).then((response) => {
     if (
       response &&
       response.ok &&
