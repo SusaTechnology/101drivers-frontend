@@ -616,6 +616,22 @@ async completeTrip(input: {
     this.normalizeUpdateRelationField(normalized, "quoteId", "quote", true);
     this.normalizeUpdateRelationField(normalized, "resubmittedFromId", "resubmittedFrom", true);
 
+    // Strip form-only fields that have NO DeliveryRequest column. If any of
+    // these reach prisma.deliveryRequest.update() the query engine throws
+    // PrismaClientValidationError → unhandled → HTTP 500 "Internal server
+    // error" (the update-draft bug from the dealer-review-delivery page).
+    // The REST controller's updateDeliveryRequest already destructures these
+    // out — this is DEFENSE-IN-DEPTH so the base controller, GraphQL
+    // resolver, and any internal caller that forwards a raw form payload
+    // can never reproduce that 500. Verified against prisma/schema.prisma:
+    // none of these exist on the DeliveryRequest model; payment choice lives
+    // on the Payment row (paymentType), transmission/recipientBusinessName
+    // are frontend-only UX fields.
+    delete (normalized as any).paymentType;
+    delete (normalized as any).transmission;
+    delete (normalized as any).transmissionOther;
+    delete (normalized as any).recipientBusinessName;
+
     return normalized;
   }
 
