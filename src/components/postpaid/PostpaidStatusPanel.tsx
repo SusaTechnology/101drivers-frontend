@@ -534,7 +534,7 @@ export default function PostpaidStatusPanel({
               onClick={toggleCollapsed}
               aria-expanded={false}
               title="Expand postpaid billing details"
-              className="w-full flex items-center gap-2 text-left group cursor-pointer"
+              className="w-full flex flex-wrap items-center gap-x-2 gap-y-1 text-left group cursor-pointer"
             >
               <CreditCard className="w-4 h-4 text-blue-500 shrink-0" />
               <span className="text-sm font-bold text-slate-900 dark:text-white shrink-0">
@@ -751,14 +751,18 @@ export default function PostpaidStatusPanel({
         {/* ── Status panel (always shown) ── */}
         <Card className="border-slate-200 dark:border-slate-800 rounded-2xl">
           <CardContent className="p-4">
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center gap-2">
+            {/* flex-wrap: on phones the status badges are wide enough to
+                squeeze the right-hand buttons to zero width — the collapse
+                chevron literally vanished on iPhones. Wrapping lets the
+                Refresh + chevron group drop to its own row instead. */}
+            <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-2 mb-3">
+              <div className="flex flex-wrap items-center gap-2 min-w-0">
                 <Badge className="bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
                   Weekly Postpaid
                 </Badge>
                 {statusBadges}
               </div>
-              <div className="flex items-center gap-1">
+              <div className="flex items-center gap-1 shrink-0">
                 <Button
                   variant="ghost"
                   size="sm"

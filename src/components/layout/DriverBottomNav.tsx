@@ -50,7 +50,7 @@ export default function DriverBottomNav({ activeTab }: DriverBottomNavProps) {
   const newFeedCount = useNewFeedCount()
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-50 bg-white/95 dark:bg-background-dark/95 backdrop-blur-md border-t border-slate-200/80 dark:border-slate-800 safe-bottom">
+    <nav className="fixed bottom-0 left-0 right-0 z-50 bg-white dark:bg-background-dark border-t border-slate-200/80 dark:border-slate-800 safe-bottom">
       <div className="max-w-[480px] mx-auto">
         <div className="grid grid-cols-4 gap-0">
           {tabs.map((tab) => {

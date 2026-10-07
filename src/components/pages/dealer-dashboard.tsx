@@ -152,9 +152,18 @@ export default function DealerDashboard() {
   const [showAll, setShowAll] = useState(true)
   const [mounted, setMounted] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
-  const [touchStart, setTouchStart] = useState<number | null>(null)
-  const [pullDistance, setPullDistance] = useState(0)
+  // Pull-to-refresh uses REFS, not state: every setState during a touch
+  // gesture re-renders this ~1000-line component (and the whole delivery
+  // list) on the main thread — on iPhones that made every tap on the FAB,
+  // bottom nav and other buttons feel sluggish, because touchstart on ANY
+  // element at scroll-top pumped a state update through the entire page
+  // before the click even fired. The indicator element is now driven by
+  // direct style writes; React state is touched only when a real refresh
+  // starts/stops.
   const containerRef = useRef<HTMLDivElement>(null)
+  const touchStartY = useRef<number | null>(null)
+  const pullDistanceRef = useRef(0)
+  const pullIndicatorRef = useRef<HTMLDivElement>(null)
   // Photo dialog state for driver avatar
   const [photoDialogOpen, setPhotoDialogOpen] = useState(false)
   const [photoDialogSrc, setPhotoDialogSrc] = useState('')
@@ -535,9 +544,25 @@ export default function DealerDashboard() {
     setNotificationSettingsOpen(false)
   }
 
-  const handleTouchStart = (e: React.TouchEvent) => { if (containerRef.current?.scrollTop === 0) setTouchStart(e.touches[0].clientY) }
-  const handleTouchMove = (e: React.TouchEvent) => { if (touchStart !== null && containerRef.current?.scrollTop === 0) { const distance = e.touches[0].clientY - touchStart; if (distance > 0 && distance < 150) setPullDistance(distance) } }
-  const handleTouchEnd = async () => { if (pullDistance > 80) { setRefreshing(true); await refetch(); setRefreshing(false) }; setTouchStart(null); setPullDistance(0) }
+  const handleTouchStart = (e: React.TouchEvent) => { touchStartY.current = containerRef.current?.scrollTop === 0 ? e.touches[0].clientY : null }
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (touchStartY.current === null || containerRef.current?.scrollTop !== 0) return
+    const distance = e.touches[0].clientY - touchStartY.current
+    if (distance > 0 && distance < 150) {
+      pullDistanceRef.current = distance
+      // Drive the indicator via the DOM — no re-render per finger move.
+      const el = pullIndicatorRef.current
+      if (el) { el.style.opacity = '1'; el.style.top = `${distance * 0.5}px` }
+    }
+  }
+  const handleTouchEnd = async () => {
+    const pulled = pullDistanceRef.current
+    pullDistanceRef.current = 0
+    touchStartY.current = null
+    const el = pullIndicatorRef.current
+    if (el) { el.style.opacity = '0'; el.style.top = '0px' }
+    if (pulled > 80) { setRefreshing(true); await refetch(); setRefreshing(false) }
+  }
   const clearDateFilters = () => { setDateFrom(undefined); setDateTo(undefined) }
 
   if (isLoading) return <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex items-center justify-center"><div className="text-center"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-lime-500 mx-auto"></div><p className="mt-4 text-slate-600 dark:text-slate-400">Loading deliveries...</p></div></div>
@@ -551,12 +576,14 @@ export default function DealerDashboard() {
 
   return (
     <div ref={containerRef} className="min-h-screen bg-slate-50 dark:bg-slate-950 pb-[calc(6rem+env(safe-area-inset-bottom,0px))] overflow-x-hidden" onTouchStart={handleTouchStart} onTouchMove={handleTouchMove} onTouchEnd={handleTouchEnd}>
-      {/* Pull to refresh indicator */}
-      <div className={cn("absolute left-0 right-0 flex justify-center pt-4 transition-all duration-200 z-50", pullDistance > 0 ? "opacity-100" : "opacity-0")} style={{ top: pullDistance * 0.5 }}><RefreshCw className={cn("h-6 w-6 text-lime-500", refreshing && "animate-spin")} /></div>
+      {/* Pull to refresh indicator — position/opacity written directly by
+          the touch handlers (see refs above); React never re-renders while
+          the finger is down. */}
+      <div ref={pullIndicatorRef} className="absolute left-0 right-0 flex justify-center pt-4 transition-all duration-200 z-50 opacity-0" style={{ top: 0 }}><RefreshCw className={cn("h-6 w-6 text-lime-500", refreshing && "animate-spin")} /></div>
 
       {/* Header */}
       <header
-        className="sticky top-0 z-50 w-full bg-white/90 dark:bg-slate-950/90 backdrop-blur-md border-b border-slate-200 dark:border-slate-800"
+        className="sticky top-0 z-50 w-full bg-white dark:bg-slate-950 border-b border-slate-200 dark:border-slate-800"
         style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}
       >
         <div className="max-w-[980px] mx-auto px-4 h-16 flex items-center justify-between gap-2">
@@ -660,54 +687,55 @@ export default function DealerDashboard() {
       {/* Stats Summary */}
       <div className="px-4 py-3 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800">
         <div className="max-w-[980px] mx-auto">
-          {/* 2x2 on phones (4-across was unreadable on iPhone), 4-across from sm up */}
+          {/* 2x2 on phones (4-across was unreadable on iPhone), 4-across from sm up.
+              p-2/text-xl on phones keeps each card compact; full size from sm up. */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-            <button 
-              onClick={() => setActiveFilter('ACTIVE')} 
+            <button
+              onClick={() => setActiveFilter('ACTIVE')}
               className={cn(
-                "text-center p-3 rounded-2xl border transition-all hover:scale-105 hover:shadow-md cursor-pointer", 
-                activeFilter === 'ACTIVE' 
-                  ? "bg-lime-100 dark:bg-lime-950/50 border-lime-400 dark:border-lime-600 ring-2 ring-lime-500" 
+                "text-center p-2 sm:p-3 rounded-xl sm:rounded-2xl border transition-all hover:scale-105 hover:shadow-md cursor-pointer",
+                activeFilter === 'ACTIVE'
+                  ? "bg-lime-100 dark:bg-lime-950/50 border-lime-400 dark:border-lime-600 ring-2 ring-lime-500"
                   : "bg-lime-50 dark:bg-lime-950/30 border-lime-200 dark:border-lime-800"
               )}
             >
-              <div className="text-2xl font-black text-lime-600 dark:text-lime-400">{stats.active}</div>
+              <div className="text-xl sm:text-2xl font-black text-lime-600 dark:text-lime-400">{stats.active}</div>
               <div className="text-[10px] font-bold uppercase tracking-wider text-lime-700 dark:text-lime-500">Active</div>
             </button>
-            <button 
-              onClick={() => setActiveFilter('BOOKED')} 
+            <button
+              onClick={() => setActiveFilter('BOOKED')}
               className={cn(
-                "text-center p-3 rounded-2xl border transition-all hover:scale-105 hover:shadow-md cursor-pointer", 
-                activeFilter === 'BOOKED' 
-                  ? "bg-blue-100 dark:bg-blue-950/50 border-blue-400 dark:border-blue-600 ring-2 ring-blue-500" 
+                "text-center p-2 sm:p-3 rounded-xl sm:rounded-2xl border transition-all hover:scale-105 hover:shadow-md cursor-pointer",
+                activeFilter === 'BOOKED'
+                  ? "bg-blue-100 dark:bg-blue-950/50 border-blue-400 dark:border-blue-600 ring-2 ring-blue-500"
                   : "bg-blue-50 dark:bg-blue-950/30 border-blue-200 dark:border-blue-800"
               )}
             >
-              <div className="text-2xl font-black text-blue-600 dark:text-blue-400">{stats.booked}</div>
+              <div className="text-xl sm:text-2xl font-black text-blue-600 dark:text-blue-400">{stats.booked}</div>
               <div className="text-[10px] font-bold uppercase tracking-wider text-blue-700 dark:text-blue-500">Booked</div>
             </button>
-            <button 
-              onClick={() => setActiveFilter('LISTED')} 
+            <button
+              onClick={() => setActiveFilter('LISTED')}
               className={cn(
-                "text-center p-3 rounded-2xl border transition-all hover:scale-105 hover:shadow-md cursor-pointer", 
-                activeFilter === 'LISTED' 
-                  ? "bg-slate-200 dark:bg-slate-700 border-slate-400 dark:border-slate-500 ring-2 ring-slate-500" 
+                "text-center p-2 sm:p-3 rounded-xl sm:rounded-2xl border transition-all hover:scale-105 hover:shadow-md cursor-pointer",
+                activeFilter === 'LISTED'
+                  ? "bg-slate-200 dark:bg-slate-700 border-slate-400 dark:border-slate-500 ring-2 ring-slate-500"
                   : "bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700"
               )}
             >
-              <div className="text-2xl font-black text-slate-600 dark:text-slate-400">{stats.listed}</div>
+              <div className="text-xl sm:text-2xl font-black text-slate-600 dark:text-slate-400">{stats.listed}</div>
               <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Listed</div>
             </button>
-            <button 
-              onClick={() => setActiveFilter('HISTORY')} 
+            <button
+              onClick={() => setActiveFilter('HISTORY')}
               className={cn(
-                "text-center p-3 rounded-2xl border transition-all hover:scale-105 hover:shadow-md cursor-pointer", 
-                activeFilter === 'HISTORY' 
-                  ? "bg-green-100 dark:bg-green-950/50 border-green-400 dark:border-green-600 ring-2 ring-green-500" 
+                "text-center p-2 sm:p-3 rounded-xl sm:rounded-2xl border transition-all hover:scale-105 hover:shadow-md cursor-pointer",
+                activeFilter === 'HISTORY'
+                  ? "bg-green-100 dark:bg-green-950/50 border-green-400 dark:border-green-600 ring-2 ring-green-500"
                   : "bg-green-50 dark:bg-green-950/30 border-green-200 dark:border-green-800"
               )}
             >
-              <div className="text-lg font-black text-green-600 dark:text-green-400">{formatCurrency(stats.todayRevenue)}</div>
+              <div className="text-base sm:text-lg font-black text-green-600 dark:text-green-400">{formatCurrency(stats.todayRevenue)}</div>
               <div className="text-[10px] font-bold uppercase tracking-wider text-green-700 dark:text-green-500">Today</div>
             </button>
           </div>
@@ -719,13 +747,13 @@ export default function DealerDashboard() {
         <div className="max-w-[980px] mx-auto space-y-3">
           <div className="flex gap-2">
             <div className="relative flex-1">
-              <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
-              <Input className="w-full h-12 pl-12 pr-12 rounded-2xl bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700" placeholder="Search by #order, VIN, plate, driver name..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
-              {isFetching && <RefreshCw className="absolute right-4 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400 animate-spin" />}
+              <Search className="absolute left-3.5 sm:left-4 top-1/2 -translate-y-1/2 h-4 w-4 sm:h-5 sm:w-5 text-slate-400" />
+              <Input className="w-full h-10 sm:h-12 pl-10 sm:pl-12 pr-12 rounded-2xl bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-sm sm:text-base" placeholder="Search by #order, VIN, plate, driver name..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
+              {isFetching && <RefreshCw className="absolute right-4 top-1/2 -translate-y-1/2 h-4 w-4 sm:h-5 sm:w-5 text-slate-400 animate-spin" />}
             </div>
             <Popover open={showFilters} onOpenChange={setShowFilters}>
               <PopoverTrigger asChild>
-                <Button variant="outline" className={cn("h-12 px-4 rounded-2xl", (dateFrom || dateTo) && "border-lime-500 bg-lime-50 dark:bg-lime-950/30")}><Filter className="h-5 w-5" />{(dateFrom || dateTo) && <Badge className="ml-2 bg-lime-500 text-slate-950">Filtered</Badge>}</Button>
+                <Button variant="outline" className={cn("h-10 sm:h-12 px-3 sm:px-4 rounded-2xl", (dateFrom || dateTo) && "border-lime-500 bg-lime-50 dark:bg-lime-950/30")}><Filter className="h-4 w-4 sm:h-5 sm:w-5" />{(dateFrom || dateTo) && <Badge className="ml-2 bg-lime-500 text-slate-950">Filtered</Badge>}</Button>
               </PopoverTrigger>
               <PopoverContent
                 className="w-80 p-4 rounded-2xl"
@@ -840,9 +868,9 @@ export default function DealerDashboard() {
       <div className="px-4 py-3">
         <div className="max-w-[980px] mx-auto">
           <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
-            {[{ id: 'LISTED', label: 'Listed', icon: <Package className="h-4 w-4" />, count: stats.listed }, { id: 'BOOKED', label: 'Booked', icon: <CheckCircle className="h-4 w-4" />, count: stats.booked }, { id: 'ACTIVE', label: 'Active', icon: <Navigation className="h-4 w-4" />, count: stats.active }, { id: 'EXPIRED', label: 'Expired', icon: <Timer className="h-4 w-4" />, count: stats.expired }, { id: 'HISTORY', label: 'History', icon: <History className="h-4 w-4" />, count: deliveries.filter(d => ['COMPLETED', 'CLOSED', 'CANCELLED'].includes(d.status)).length }].map((tab) => (
-              <Button key={tab.id} variant={activeFilter === tab.id ? "default" : "outline"} className={cn("flex items-center gap-2 px-4 py-2 rounded-full h-auto shrink-0", activeFilter === tab.id ? "bg-slate-900 text-white dark:bg-white dark:text-slate-900" : "bg-white dark:bg-slate-900")} onClick={() => setActiveFilter(tab.id)}>
-                {tab.icon}<span className="font-bold">{tab.label}</span>{tab.count > 0 && <Badge variant="secondary" className="ml-1 px-2 py-0.5 text-xs rounded-full">{tab.count}</Badge>}
+            {[{ id: 'LISTED', label: 'Listed', icon: <Package className="h-3.5 w-3.5 sm:h-4 sm:w-4" />, count: stats.listed }, { id: 'BOOKED', label: 'Booked', icon: <CheckCircle className="h-3.5 w-3.5 sm:h-4 sm:w-4" />, count: stats.booked }, { id: 'ACTIVE', label: 'Active', icon: <Navigation className="h-3.5 w-3.5 sm:h-4 sm:w-4" />, count: stats.active }, { id: 'EXPIRED', label: 'Expired', icon: <Timer className="h-3.5 w-3.5 sm:h-4 sm:w-4" />, count: stats.expired }, { id: 'HISTORY', label: 'History', icon: <History className="h-3.5 w-3.5 sm:h-4 sm:w-4" />, count: deliveries.filter(d => ['COMPLETED', 'CLOSED', 'CANCELLED'].includes(d.status)).length }].map((tab) => (
+              <Button key={tab.id} variant={activeFilter === tab.id ? "default" : "outline"} className={cn("flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 rounded-full h-auto shrink-0", activeFilter === tab.id ? "bg-slate-900 text-white dark:bg-white dark:text-slate-900" : "bg-white dark:bg-slate-900")} onClick={() => setActiveFilter(tab.id)}>
+                {tab.icon}<span className="font-bold text-xs sm:text-sm">{tab.label}</span>{tab.count > 0 && <Badge variant="secondary" className="ml-1 px-1.5 sm:px-2 py-0.5 text-[10px] sm:text-xs rounded-full">{tab.count}</Badge>}
               </Button>
             ))}
           </div>
@@ -1007,7 +1035,7 @@ export default function DealerDashboard() {
       </Dialog>
 
       {/* Bottom Navigation */}
-      <nav className="fixed bottom-0 left-0 right-0 z-50 bg-white/95 dark:bg-slate-950/95 backdrop-blur-md border-t border-slate-200 dark:border-slate-800 safe-bottom">
+      <nav className="fixed bottom-0 left-0 right-0 z-50 bg-white dark:bg-slate-950 border-t border-slate-200 dark:border-slate-800 safe-bottom">
         <div className="max-w-[980px] mx-auto px-4">
           <div className="flex items-center justify-around h-16">
             <Link to="/dealer-create-delivery" className="flex flex-col items-center gap-1 py-2 px-4 text-slate-500 dark:text-slate-400 hover:text-lime-600 dark:hover:text-lime-400 transition"><Plus className="h-6 w-6" /><span className="text-[10px] font-bold uppercase tracking-wider">Create</span></Link>

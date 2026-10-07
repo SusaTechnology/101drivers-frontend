@@ -199,6 +199,15 @@
   padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 
+/* Fast taps on iOS (Safari + installed PWA).
+   touch-action: manipulation opts every interactive element out of the
+   double-tap-to-zoom gesture, which removes iOS's waiting period before
+   it decides whether a tap is a zoom. Pairs with the viewport meta
+   (width=device-width) for a consistently snappy tap response. */
+a, button, [role="button"], input, select, textarea, label, summary {
+  touch-action: manipulation;
+}
+
 /* Custom utility classes for admin deliveries */
 .hover-lift {
   transition:
