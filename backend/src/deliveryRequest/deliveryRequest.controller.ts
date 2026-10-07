@@ -3,6 +3,7 @@ import * as swagger from "@nestjs/swagger";
 import * as nestAccessControl from "nest-access-control";
 import { DeliveryRequestService } from "./deliveryRequest.service";
 import { DeliveryRequestControllerBase } from "./base/deliveryRequest.controller.base";
+import { QuoteUsageLimitService } from "./quote-usage-limit.service";
 import { isRecordNotFoundError } from "../prisma.util";
 import { EnumDeliveryRequestCreatedByRole } from "./base/EnumDeliveryRequestCreatedByRole";
 import * as errors from "../errors";
@@ -96,6 +97,7 @@ export class DeliveryRequestController extends DeliveryRequestControllerBase {
   constructor(
     protected readonly service: DeliveryRequestService,
     private readonly pricingEditEngine: DeliveryPricingEditEngine,
+    private readonly quoteUsageLimit: QuoteUsageLimitService,
     private readonly prisma: PrismaService,
     @nestAccessControl.InjectRolesBuilder()
     protected readonly rolesBuilder: nestAccessControl.RolesBuilder
@@ -532,8 +534,19 @@ async adminReassignDelivery(
   possession: "any",
 })
 async createQuotePreview(
-  @common.Body() body: QuotePreviewBody
+  @common.Body() body: QuotePreviewBody,
+  @common.Req() request: Request
 ): Promise<any> {
+  // Daily quote budget (billed Google Maps calls happen inside the
+  // pricing engine). Admins/drivers are exempt; customers are budgeted
+  // per user by role. Throws 429 QUOTE_DAILY_LIMIT_REACHED when over.
+  const limitUser = request.user as any;
+  await this.quoteUsageLimit.assertQuotePreviewAllowed({
+    userId: limitUser?.id ?? null,
+    roles: limitUser?.roles ?? [],
+    ip: null,
+  });
+
   return this.service.createQuotePreview({
     pickupAddress: body.pickupAddress,
     dropoffAddress: body.dropoffAddress,

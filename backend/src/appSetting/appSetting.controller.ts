@@ -28,6 +28,8 @@ import {
   UpdateWhatsappSupportSettingsBody,
   PayoutSettingsResponseDto,
   UpdatePayoutSettingsBody,
+  QuoteUsageLimitsResponseDto,
+  UpdateQuoteUsageLimitsBody,
 } from "./dto/appSetting.dto";
 
 @swagger.ApiTags("appSettings")
@@ -202,6 +204,40 @@ export class AppSettingController extends AppSettingControllerBase {
     // rotating the support link must never be reachable by other roles
     // (AppSetting update:any is granted broadly by the generated ACL).
     return this.service.updateWhatsappSupportSettings(body);
+  }
+
+  // ============================================================
+  // QUOTE USAGE LIMITS (admin-only). The single live source for the
+  // daily quote-calculation budget — see quote-usage-limits.ts for
+  // the field semantics. Changes apply on the NEXT request; a limit
+  // of 0 blocks that class entirely (handy for testing the blocked
+  // UX) and enabled:false is the instant kill switch.
+  // ============================================================
+  @common.Get("quote-usage-limits")
+  @swagger.ApiOkResponse({ type: QuoteUsageLimitsResponseDto })
+  @nestAccessControl.UseRoles({
+    resource: "AppSetting",
+    action: "read",
+    possession: "any",
+  })
+  async getQuoteUsageLimits(): Promise<QuoteUsageLimitsResponseDto> {
+    return this.service.getQuoteUsageLimits();
+  }
+
+  @common.Patch("quote-usage-limits")
+  @swagger.ApiOkResponse({ type: QuoteUsageLimitsResponseDto })
+  @common.UseGuards(AdminGuard)
+  @nestAccessControl.UseRoles({
+    resource: "AppSetting",
+    action: "update",
+    possession: "any",
+  })
+  async updateQuoteUsageLimits(
+    @common.Body() body: UpdateQuoteUsageLimitsBody
+  ): Promise<QuoteUsageLimitsResponseDto> {
+    // AdminGuard enforces the ADMIN role on top of the ACL grant —
+    // moving the money damper must be an admin-only operation.
+    return this.service.updateQuoteUsageLimits(body);
   }
 
  @common.UseInterceptors(AclValidateRequestInterceptor)

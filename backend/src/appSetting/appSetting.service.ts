@@ -26,6 +26,8 @@ import {
   ReferralRoleMatrix,
   WhatsappSupportSettingsResponseDto,
   UpdateWhatsappSupportSettingsBody,
+  QuoteUsageLimitsResponseDto,
+  UpdateQuoteUsageLimitsBody,
 } from "./dto/appSetting.dto";
 // Default policy lives in a standalone module so the DB seed shares the
 // EXACT same values — service fallback and seeded row can never drift.
@@ -37,6 +39,10 @@ import {
   normalizePayoutSettings,
   notifyPayoutSettingsChanged,
 } from "./payout-settings";
+import {
+  QUOTE_USAGE_LIMITS_KEY,
+  normalizeQuoteUsageLimits,
+} from "./quote-usage-limits";
 
 const LANDING_PAGE_SETTINGS_KEY = "LANDING_PAGE_SETTINGS";
 const DELIVERY_SETTINGS_KEY = "DELIVERY_SETTINGS";
@@ -841,5 +847,44 @@ export class AppSettingService extends AppSettingServiceBase {
     });
 
     return { supportUrl };
+  }
+
+  // ============================================================
+  // QUOTE USAGE LIMITS — the daily budget for quote calculations
+  // (the endpoints that trigger billed Google Maps API calls).
+  // Read per request by QuoteUsageLimitService, so admin changes
+  // take effect on the NEXT request — no restart, no redeploy.
+  // Semantics + how to change the numbers: quote-usage-limits.ts
+  // ============================================================
+  async getQuoteUsageLimits(): Promise<QuoteUsageLimitsResponseDto> {
+    const row = await this.prisma.appSetting.findUnique({
+      where: { key: QUOTE_USAGE_LIMITS_KEY },
+      select: { value: true },
+    });
+
+    // Missing/malformed row → code defaults. The damper works out of
+    // the box and a broken row can never disable or tighten it silently.
+    return normalizeQuoteUsageLimits(row?.value);
+  }
+
+  async updateQuoteUsageLimits(
+    input: UpdateQuoteUsageLimitsBody,
+  ): Promise<QuoteUsageLimitsResponseDto> {
+    // Normalize the incoming body through the same validator used on
+    // reads, so the stored row is always in the canonical shape.
+    const value = normalizeQuoteUsageLimits(input);
+
+    await this.prisma.appSetting.upsert({
+      where: { key: QUOTE_USAGE_LIMITS_KEY },
+      create: {
+        key: QUOTE_USAGE_LIMITS_KEY,
+        value: value as any,
+      },
+      update: {
+        value: value as any,
+      },
+    });
+
+    return value;
   }
 }

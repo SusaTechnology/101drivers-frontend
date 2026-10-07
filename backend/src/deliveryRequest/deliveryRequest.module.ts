@@ -14,6 +14,8 @@ import { PaymentPayoutEngine } from "src/domain/deliveryRequest/paymentPayout.en
 import { DeliveryPricingEditEngine } from "src/domain/deliveryRequest/deliveryPricingEdit.engine";
 import { DeliveryRequestPublicController } from "./deliveryRequest.public.controller";
 import { SchedulingPolicyEngineModule } from "../domain/schedulingPolicy/schedulingPolicy.module";
+import { QuoteUsageLimitService } from "./quote-usage-limit.service";
+import { AppSettingModule } from "../appSetting/appSetting.module";
 
 @Module({
   imports: [
@@ -22,6 +24,7 @@ import { SchedulingPolicyEngineModule } from "../domain/schedulingPolicy/schedul
     DeliveryLogisticsModule,
     forwardRef(() => GatewayModule),
     SchedulingPolicyEngineModule,
+    AppSettingModule,
   ],
   controllers: [DeliveryRequestController, DeliveryRequestPublicController],
   providers: [
@@ -33,6 +36,7 @@ import { SchedulingPolicyEngineModule } from "../domain/schedulingPolicy/schedul
     AdminDeliveryEngine,
     PaymentPayoutEngine,
     DeliveryPricingEditEngine,
+    QuoteUsageLimitService,
   ],
   exports: [DeliveryRequestService, DeliveryPricingEditEngine],
 })

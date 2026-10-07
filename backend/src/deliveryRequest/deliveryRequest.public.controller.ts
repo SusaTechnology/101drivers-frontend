@@ -1,7 +1,9 @@
 import * as common from "@nestjs/common";
 import * as swagger from "@nestjs/swagger";
+import { Request } from "express";
 
 import { DeliveryRequestService } from "./deliveryRequest.service";
+import { QuoteUsageLimitService } from "./quote-usage-limit.service";
 import {
   CreateIndividualDeliveryFromQuoteBody,
   CreateIndividualDeliveryDraftFromQuoteBody,
@@ -14,7 +16,10 @@ import {
 @swagger.ApiTags("deliveryRequests-public")
 @common.Controller("deliveryRequests")
 export class DeliveryRequestPublicController {
-  constructor(protected readonly service: DeliveryRequestService) {}
+  constructor(
+    protected readonly service: DeliveryRequestService,
+    private readonly quoteUsageLimit: QuoteUsageLimitService,
+  ) {}
 @common.Post("individual/create-draft-from-quote")
 @swagger.ApiOperation({
   summary: "Public save draft delivery from quote for individual flow",
@@ -60,8 +65,26 @@ async createIndividualDeliveryDraftFromQuote(
   })
   @swagger.ApiOkResponse({ type: Object })
   async createIndividualQuotePreview(
-    @common.Body() body: IndividualQuotePreviewBody
+    @common.Body() body: IndividualQuotePreviewBody,
+    @common.Req() request: Request
   ): Promise<any> {
+    // Daily quote budget for the PUBLIC surface. The landing page is
+    // reachable with no account at all, so a grinding bot costs billed
+    // Google Maps calls (Geocoding + Routes) with zero friction — this
+    // is exactly the surface the budget exists for. Guests are budgeted
+    // per client IP (nginx sets x-forwarded-for). Throws 429
+    // QUOTE_DAILY_LIMIT_REACHED when over; fails open on internal error.
+    const forwarded = request?.headers?.["x-forwarded-for"];
+    const ip =
+      (typeof forwarded === "string" && forwarded.split(",")[0]?.trim()) ||
+      request?.ip ||
+      null;
+    await this.quoteUsageLimit.assertQuotePreviewAllowed({
+      userId: null,
+      roles: [],
+      ip,
+    });
+
     return this.service.createQuotePreview({
       pickupAddress: body.pickupAddress,
       dropoffAddress: body.dropoffAddress,

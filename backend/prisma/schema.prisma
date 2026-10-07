@@ -1196,6 +1196,25 @@ model AppSetting {
   value     Json
 }
 
+// DailyUsageCounter: per-identity per-day usage counters for metered
+// operations. Today the only scope is "quote_preview" — the quote
+// calculation endpoints that trigger billed Google Maps API calls
+// (Geocoding + Routes). One row per (scope, identity, UTC day); the
+// identity is "user:<id>" for authenticated callers or "ip:<address>"
+// for guests. Rows for past days are opportunistically deleted.
+model DailyUsageCounter {
+  createdAt DateTime @default(now())
+  day       String
+  id        String   @id @default(cuid())
+  identity  String
+  scope     String
+  count     Int      @default(0)
+  updatedAt DateTime @updatedAt
+
+  @@unique([scope, identity, day])
+  @@index([scope, day])
+}
+
 model DealerLead {
   businessName String
   createdAt    DateTime @default(now())

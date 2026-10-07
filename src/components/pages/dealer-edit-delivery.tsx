@@ -915,7 +915,10 @@ export default function EditDeliveryPage() {
       },
       onError: (error: any) => {
         const errorMessage = error?.message || "Failed to calculate quote";
-        toast.error("Quote calculation failed", {
+        // 429 = daily quote budget reached (server-side damper on billed
+        // Google Maps calls) — say so plainly instead of a generic failure.
+        const isLimit = error?.status === 429 || error?.code === "QUOTE_DAILY_LIMIT_REACHED";
+        toast.error(isLimit ? "Daily quote limit reached" : "Quote calculation failed", {
           description: errorMessage,
         });
         console.error('Quote preview failed:', error);

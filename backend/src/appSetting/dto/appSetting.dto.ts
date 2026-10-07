@@ -597,6 +597,52 @@ export class UpdateWhatsappSupportSettingsBody {
 }
 
 // ============================================================
+// QUOTE USAGE LIMITS (daily budget for quote calculations)
+// ============================================================
+// The single source for the numbers and their semantics is
+// src/appSetting/quote-usage-limits.ts — these DTOs only shape the
+// admin API. A limit of 0 blocks that class entirely; `enabled:false`
+// is the kill switch that turns limiting fully off. Drivers and admins
+// are always exempt regardless of these values.
+export class QuoteUsageLimitsResponseDto {
+  @ApiProperty({ example: true })
+  enabled!: boolean;
+
+  @ApiProperty({ example: 3 })
+  guestDailyLimit!: number;
+
+  @ApiProperty({ example: 10 })
+  privateCustomerDailyLimit!: number;
+
+  @ApiProperty({ example: 40 })
+  businessCustomerDailyLimit!: number;
+}
+
+export class UpdateQuoteUsageLimitsBody {
+  @ApiProperty({ example: true })
+  @IsBoolean()
+  enabled!: boolean;
+
+  @ApiProperty({ example: 3 })
+  @IsInt()
+  @Min(0)
+  @Max(100000)
+  guestDailyLimit!: number;
+
+  @ApiProperty({ example: 10 })
+  @IsInt()
+  @Min(0)
+  @Max(100000)
+  privateCustomerDailyLimit!: number;
+
+  @ApiProperty({ example: 40 })
+  @IsInt()
+  @Min(0)
+  @Max(100000)
+  businessCustomerDailyLimit!: number;
+}
+
+// ============================================================
 // PAYOUT SETTINGS (admin-configurable driver payout cadence)
 // ============================================================
 // Weekly sweep is THE payout rail — drivers see their eligible balance

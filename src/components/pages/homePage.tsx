@@ -432,7 +432,12 @@ export default function LandingPage() {
           }
         } catch { /* non-JSON error body — keep the default message */ }
         setQuoteResult(null);
-        toast.error("Price unavailable", { description: message });
+        // 429 = daily quote budget (server-side damper on billed Google
+        // Maps calls). Say so plainly instead of a generic "unavailable".
+        toast.error(
+          response.status === 429 ? "Daily quote limit reached" : "Price unavailable",
+          { description: message, duration: response.status === 429 ? 8000 : undefined }
+        );
         return;
       }
 
