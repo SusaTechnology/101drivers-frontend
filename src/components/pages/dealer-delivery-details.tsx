@@ -1014,7 +1014,7 @@ export default function DealerDeliveryDetails({ deliveryId }: DealerDeliveryDeta
         <div className="flex items-center gap-4">
           <Link
             to="/dealer-dashboard"
-            className="inline-flex items-center gap-2 text-sm font-bold text-slate-700 dark:text-slate-200 hover:text-lime-500 transition-colors px-4 py-2 rounded-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900"
+            className="inline-flex items-center gap-2 text-sm font-bold text-slate-700 dark:text-slate-200 hover:text-lime-500 transition-colors px-3 sm:px-4 py-2 rounded-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900"
           >
             <ArrowLeft className="h-4 w-4" />
             Back to Deliveries
@@ -1022,7 +1022,7 @@ export default function DealerDeliveryDetails({ deliveryId }: DealerDeliveryDeta
 
           <Link
             to="/dealer-create-delivery"
-            className="inline-flex items-center gap-2 bg-lime-500 text-slate-950 hover:bg-lime-600 px-6 py-2.5 rounded-full text-sm hover:shadow-lg hover:shadow-lime-500/20 transition-all font-extrabold"
+            className="hidden md:inline-flex items-center gap-2 bg-lime-500 text-slate-950 hover:bg-lime-600 px-6 py-2.5 rounded-full text-sm hover:shadow-lg hover:shadow-lime-500/20 transition-all font-extrabold"
           >
             New Delivery
             <Plus className="h-4 w-4" />
@@ -1136,6 +1136,17 @@ export default function DealerDeliveryDetails({ deliveryId }: DealerDeliveryDeta
       <Header />
       
       <main className="w-full max-w-[1440px] mx-auto px-6 lg:px-8 py-10 lg:py-14">
+
+        {/* Back navigation — always-visible exit from the details page */}
+        <div className="mb-6">
+          <Link
+            to="/dealer-dashboard"
+            className="inline-flex items-center gap-2 text-sm font-bold text-slate-600 dark:text-slate-400 hover:text-lime-500 transition-colors"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            Back to Deliveries
+          </Link>
+        </div>
 
         {/* Lock-in fee retained banner — shown when a delivery was cancelled
             AFTER the driver started the trip. The base fee has been charged
