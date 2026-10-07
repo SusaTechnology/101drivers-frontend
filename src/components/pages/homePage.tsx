@@ -785,9 +785,9 @@ export default function LandingPage() {
                     type="button"
                     onClick={() => handleDeliveryTypeChange("BUSINESS")}
                     aria-pressed={deliveryType === "BUSINESS"}
-                    className={`relative text-left p-4 sm:p-5 rounded-2xl  bg-white dark:bg-slate-900 transition-all duration-150 ${
+                    className={`relative text-left p-4 sm:p-5 rounded-2xl bg-slate-900 text-white transition-all duration-150 ${
                       deliveryType === "BUSINESS"
-                        ? "ring-2 ring-lime-400 bg-slate-900 ring-offset-2 ring-offset-white dark:ring-offset-slate-950 shadow-lg"
+                        ? "ring-2 ring-lime-400 ring-offset-2 ring-offset-white dark:ring-offset-slate-950 shadow-lg"
                         : "opacity-80 hover:opacity-100"
                     }`}
                   >
@@ -817,7 +817,7 @@ export default function LandingPage() {
                     aria-pressed={deliveryType === "PERSONAL"}
                     className={`relative text-left p-4 sm:p-5 rounded-2xl bg-white dark:bg-slate-900 text-slate-900 dark:text-white border border-slate-200 dark:border-slate-700 transition-all duration-150 ${
                       deliveryType === "PERSONAL"
-                        ? "ring-2 ring-lime-500 ring-offset-2 bg-slate-900 ring-offset-white dark:ring-offset-slate-950 shadow-lg"
+                        ? "ring-2 ring-lime-500 ring-offset-2 ring-offset-white dark:ring-offset-slate-950 shadow-lg"
                         : "opacity-80 hover:opacity-100"
                     }`}
                   >
