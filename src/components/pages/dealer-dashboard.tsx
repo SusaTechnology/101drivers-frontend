@@ -575,7 +575,14 @@ export default function DealerDashboard() {
   const todayShort = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: BUSINESS_TZ });
 
   return (
-    <div ref={containerRef} className="min-h-screen bg-slate-50 dark:bg-slate-950 pb-[calc(6rem+env(safe-area-inset-bottom,0px))] overflow-x-hidden" onTouchStart={handleTouchStart} onTouchMove={handleTouchMove} onTouchEnd={handleTouchEnd}>
+    <div ref={containerRef} className="min-h-screen bg-slate-50 dark:bg-slate-950 pb-[calc(6rem+env(safe-area-inset-bottom,0px))]" onTouchStart={handleTouchStart} onTouchMove={handleTouchMove} onTouchEnd={handleTouchEnd}>
+      {/* NOTE: no overflow-x-hidden here. overflow-x:hidden turns this div into
+          a CSS scroll container (overflow-y computes to auto), and position:
+          sticky then sticks to THIS div instead of the viewport — since the
+          div grows with its content and never scrolls internally, the sticky
+          header scrolled away with the page ("nav bar is scrollable"). Any
+          stray horizontal overflow is now clipped once, globally, on <html>
+          (styles.css), which keeps sticky working. */}
       {/* Pull to refresh indicator — position/opacity written directly by
           the touch handlers (see refs above); React never re-renders while
           the finger is down. */}

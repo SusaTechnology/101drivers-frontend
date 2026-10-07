@@ -102,12 +102,13 @@ export function Providers({ children }: AppProvidersProps) {
           // strings per edge, and env() inside them resolves per-device: 0 on
           // desktop, notch height on iPhone (Safari + installed PWA).
           //
-          // The top offset ALSO scales the inset by 1.5x: on a notched iPhone
-          // the toast lands ~1/3 lower (~82px vs ~59px) so it clears the
-          // status bar comfortably ("a bit lower"), while on desktop/Android
-          // (inset = 0) the offset stays 12px exactly as before.
+          // The top offset ALSO scales the inset by 2x: on a notched iPhone
+          // the toast lands ~130px down — comfortably below the notch, the
+          // status bar AND the h-16/h-20 page headers (user asked for lower
+          // again), while on desktop/Android (inset = 0) the offset stays
+          // 12px exactly as before — the change is iPhone-only in effect.
           offset={{
-            top: 'calc(env(safe-area-inset-top, 0px) * 1.5 + 12px)',
+            top: 'calc(env(safe-area-inset-top, 0px) * 2 + 12px)',
             bottom: 'calc(env(safe-area-inset-bottom, 0px) + 12px)',
           }}
           toastOptions={{ className: 'font-sans' }}

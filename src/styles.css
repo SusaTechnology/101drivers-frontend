@@ -208,6 +208,21 @@ a, button, [role="button"], input, select, textarea, label, summary {
   touch-action: manipulation;
 }
 
+/* No horizontal page-pan, anywhere ("page swings sideways" on iPhones).
+   Declared on <html> so the value propagates to the viewport; per the CSS
+   overflow spec the element it is propagated FROM gets a used value of
+   `visible`, so <html> does NOT become a scroll container and sticky
+   headers keep sticking to the real viewport. overflow-x: clip (iOS 16+)
+   is even safer — it clips without creating any scroll context at all;
+   `hidden` remains as the fallback for older browsers. A single
+   intermediate div with overflow-x-hidden would break position:sticky
+   (that was the dealer dashboard header bug), so the guard lives here and
+   NOT on page-level wrapper divs. */
+html {
+  overflow-x: hidden;
+  overflow-x: clip;
+}
+
 /* Custom utility classes for admin deliveries */
 .hover-lift {
   transition:
