@@ -391,16 +391,41 @@ export class StripeWebhookController {
       });
     }
 
-    await this.createPaymentEventIdempotent({
-      paymentId: payment.id,
-      type: "CAPTURE",
-      status: "CAPTURED",
-      amount: pi.amount / 100,
-      message: "Payment succeeded via webhook",
-      providerRef: pi.id,
-      raw: pi as any,
-      stripeEventId,
+    // ── De-dup vs in-process CAPTURE events (providerRef = PI id) ────────
+    // The creation path already writes its own CAPTURE event for private
+    // instant-capture payments (orchestrator recordInstantCapturePaymentEvent,
+    // providerRef = PI id, stripeEventId = null), and the payout engine writes
+    // one for the completion remainder captured on a new PI. Our
+    // stripeEventId idempotency below can't catch those (their stripeEventId
+    // is null), so without this check a processed webhook would add a second
+    // CAPTURE row saying "Payment succeeded via webhook" next to the more
+    // accurate in-process one. Only true duplicates are skipped: a PI
+    // captures exactly once, so a CAPTURE event already referencing THIS
+    // PaymentIntent means the audit row exists.
+    const existingCaptureForPi = await this.prisma.paymentEvent.findFirst({
+      where: {
+        paymentId: payment.id,
+        type: "CAPTURE",
+        providerRef: pi.id,
+      },
+      select: { id: true },
     });
+    if (existingCaptureForPi) {
+      this.logger.log(
+        `CAPTURE event already recorded for payment ${payment.id} / PI ${pi.id} — skipping webhook duplicate`,
+      );
+    } else {
+      await this.createPaymentEventIdempotent({
+        paymentId: payment.id,
+        type: "CAPTURE",
+        status: "CAPTURED",
+        amount: pi.amount / 100,
+        message: "Payment succeeded via webhook",
+        providerRef: pi.id,
+        raw: pi as any,
+        stripeEventId,
+      });
+    }
 
     // Send "Payment Receipt" email (fire-and-forget, non-blocking)
     if (this.notificationEngine) {
