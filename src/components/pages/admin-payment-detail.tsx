@@ -10,7 +10,12 @@
 //     code+message, provider charge+intent IDs, lock-in amount
 //   - Customer + delivery: pickup/dropoff addresses, pickup window, pickup PIN,
 //     service type, customer contact info, current active driver
-//   - Payout (if any): status, net amount, paid-at
+//   - Payout (if any): status, net amount, paid-at + link to the full payout
+//     detail page (/admin-payout-detail?payoutId=...). When no payout exists,
+//     an edge-aware explanation card renders instead (failed payment,
+//     cancelled/expired delivery, or simply "not created yet" — payouts are
+//     created at trip start for business lock-in and at delivery completion
+//     for every payment type incl. postpaid).
 //   - All payment events (full audit trail, not just the latest 5)
 //
 // Backend: GET /api/payments/admin/:id (see PaymentController.getAdminPaymentDetail)
@@ -72,6 +77,7 @@ import {
   XCircle,
   Hash,
   Calendar,
+  Eye,
   Mail,
   MapPin,
   Route as RouteIcon,
@@ -249,6 +255,30 @@ export default function AdminPaymentDetailPage({ paymentId }: AdminPaymentDetail
   const activeAssignment = delivery?.assignments?.[0];
   const driverUser = activeAssignment?.driver?.user;
   const payout = delivery?.payout;
+
+  // Edge-aware explanation for when there is no driver payout to link to.
+  // The reason differs by payment/delivery state, so the info card tells the
+  // admin WHY instead of dead-ending or linking to a payout page that
+  // doesn't exist. DriverPayouts are delivery-linked (referral payouts have
+  // no deliveryId, so they never appear here); one per delivery (unique).
+  const noPayoutMessage = (() => {
+    if (payment.status === 'FAILED') {
+      return 'No driver payout — the payment failed, so no delivery money was collected.';
+    }
+    if (payment.status === 'VOIDED') {
+      return 'No driver payout — the payment was voided.';
+    }
+    if (delivery?.status === 'CANCELLED') {
+      return 'No driver payout — the delivery was cancelled.';
+    }
+    if (delivery?.status === 'EXPIRED') {
+      return 'No driver payout — the delivery expired before a driver could complete it.';
+    }
+    if (delivery?.status === 'COMPLETED' || delivery?.status === 'CLOSED') {
+      return 'No driver payout was recorded for this completed delivery — this may need attention.';
+    }
+    return 'No driver payout yet — it is created when the driver starts the trip (business lock-in fee) or completes the delivery.';
+  })();
 
   // Helpers
   const copyToClipboard = (text: string, label: string) => {
@@ -1022,6 +1052,34 @@ export default function AdminPaymentDetailPage({ paymentId }: AdminPaymentDetail
                       value={formatPaymentDate(payout.paidAt)}
                     />
                   )}
+                  <Link
+                    to="/admin-payout-detail"
+                    // `as any`: typed-search Links are broken repo-wide
+                    // (same excess-property error exists in the accepted
+                    // baseline for admin-report-payouts L210, dealer pages,
+                    // dashboard-list etc.); runtime handles search fine.
+                    search={{ payoutId: payout.id } as any}
+                    className="mt-3 inline-flex w-full items-center justify-center gap-1.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 px-3 py-2 text-xs font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-900 transition-colors"
+                  >
+                    <Eye className="w-3.5 h-3.5" />
+                    View Full Payout Details
+                  </Link>
+                </CardContent>
+              </Card>
+            )}
+
+            {!payout && (
+              <Card className="rounded-2xl border-dashed">
+                <CardHeader className="pb-2">
+                  <CardTitle className="flex items-center gap-2 text-base text-slate-500 dark:text-slate-400">
+                    <Banknote className="w-4 h-4 text-slate-400" />
+                    Driver Payout
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="pt-2">
+                  <p className="text-sm leading-relaxed text-slate-500 dark:text-slate-400">
+                    {noPayoutMessage}
+                  </p>
                 </CardContent>
               </Card>
             )}
