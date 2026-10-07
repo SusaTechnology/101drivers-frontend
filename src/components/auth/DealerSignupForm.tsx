@@ -218,7 +218,6 @@ export function DealerSignupForm({ isLoaded: isLoadedProp, embedded = false }: D
   // OTP flow states
   const [otpSent, setOtpSent] = useState(false);
   const [otpValue, setOtpValue] = useState("");
-  const [otpFocused, setOtpFocused] = useState(false);
   const [otpVerified, setOtpVerified] = useState(false);
   const [otpAttempted, setOtpAttempted] = useState(false);
   // Verification code lives in a dialog (not an inline field): it opens
@@ -609,7 +608,9 @@ export function DealerSignupForm({ isLoaded: isLoadedProp, embedded = false }: D
             setSelectedBusiness(draft.selectedBusiness);
             setSearchQuery(draft.selectedBusiness.name);
             // Set OTP and show verification step
-            setOtpValue(urlOtp);
+            // Digits only, hard-capped at 6 — the URL value must obey the
+            // same rules as typed input.
+            setOtpValue(urlOtp.replace(/\D/g, "").slice(0, 6));
             setOtpSent(true);
             // Arrived from an email link — open the dialog with the code prefilled.
             setOtpDialogOpen(true);
@@ -1750,10 +1751,6 @@ export function DealerSignupForm({ isLoaded: isLoadedProp, embedded = false }: D
             // in flight — avoids confusing half-submitted states.
             if (!open && isPending) return;
             setOtpDialogOpen(open);
-            // Closing unmounts the input without a blur event, so reset the
-            // focus-tracking state — otherwise an empty input would reopen
-            // with the "focused empty" red border.
-            if (!open) setOtpFocused(false);
           }}
         >
           <DialogContent className="sm:max-w-md rounded-2xl">
@@ -1775,17 +1772,20 @@ export function DealerSignupForm({ isLoaded: isLoadedProp, embedded = false }: D
                 <Input
                   id="otp"
                   value={otpValue}
-                  onChange={(e) => setOtpValue(e.target.value)}
-                  onFocus={() => setOtpFocused(true)}
-                  onBlur={() => setOtpFocused(false)}
+                  onChange={(e) => {
+                    // Digits only, hard-capped at 6 — applies to typing AND
+                    // paste, on every platform.
+                    setOtpValue(e.target.value.replace(/\D/g, "").slice(0, 6));
+                  }}
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  pattern="[0-9]*"
                   className={cn(
                     "h-14 rounded-2xl text-center text-lg tracking-widest font-mono border-2 transition-colors outline-none",
                     otpVerified
                       ? "border-green-400 dark:border-green-500 bg-green-50 dark:bg-green-950/30 focus:border-green-500 focus:ring-2 focus:ring-green-200 pr-14"
                       : otpAttempted && otpValue.length === 6
                       ? "border-red-400 dark:border-red-500 bg-red-50 dark:bg-red-950/30 focus:border-red-500 focus:ring-2 focus:ring-red-200 pr-14"
-                      : otpFocused && !otpValue.trim()
-                      ? "border-red-400 dark:border-red-500 bg-red-50 dark:bg-red-950/30 focus:border-red-500 focus:ring-2 focus:ring-red-200"
                       : "border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 focus:border-slate-400 dark:focus:border-slate-500 focus:ring-2 focus:ring-slate-200 dark:focus:ring-slate-700"
                   )}
                   placeholder="123456"
@@ -1825,7 +1825,9 @@ export function DealerSignupForm({ isLoaded: isLoadedProp, embedded = false }: D
               </p>
             </div>
 
-            <DialogFooter className="mt-2 flex-row items-center justify-between gap-3 sm:justify-between">
+            {/* Stack the actions on narrow screens (full-width buttons);
+                side-by-side with the resend link from sm up. */}
+            <DialogFooter className="mt-2 flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-between">
               <Button
                 type="button"
                 variant="ghost"
@@ -1836,7 +1838,7 @@ export function DealerSignupForm({ isLoaded: isLoadedProp, embedded = false }: D
                   }
                 }}
                 disabled={resendCodeMutation.isPending}
-                className="text-xs h-9 px-3 text-primary hover:text-primary/80 font-semibold"
+                className="text-xs h-10 sm:h-9 px-3 text-primary hover:text-primary/80 font-semibold"
               >
                 {resendCodeMutation.isPending ? (
                   <>
@@ -1852,7 +1854,7 @@ export function DealerSignupForm({ isLoaded: isLoadedProp, embedded = false }: D
                 form="dealerSignupForm"
                 disabled={isPending || !otpVerified}
                 className={cn(
-                  "py-3 rounded-2xl font-extrabold min-w-[160px]",
+                  "w-full sm:w-auto py-3 rounded-2xl font-extrabold sm:min-w-[160px]",
                   otpVerified
                     ? "bg-primary text-slate-950 hover:brightness-95"
                     : "bg-slate-300 dark:bg-slate-700 text-slate-500 dark:text-slate-400 cursor-not-allowed",
