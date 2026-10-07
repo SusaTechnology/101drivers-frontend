@@ -58,7 +58,6 @@ import { getStripeErrorInfo } from '@/lib/stripe-error-codes';
 import type {
   MarkInvoicedRequest,
   MarkPaidRequest,
-  MarkPayoutPaidRequest,
 } from '@/types/payment';
 import {
   ArrowLeft,
@@ -104,10 +103,13 @@ export default function AdminPaymentDetailPage({ paymentId }: AdminPaymentDetail
   // Local UI state for action dialogs
   const [markInvoicedOpen, setMarkInvoicedOpen] = useState(false);
   const [markPaidOpen, setMarkPaidOpen] = useState(false);
-  const [markPayoutPaidOpen, setMarkPayoutPaidOpen] = useState(false);
   const [invoicedForm, setInvoicedForm] = useState({ invoiceId: '', note: '' });
   const [markPaidForm, setMarkPaidForm] = useState({ note: '' });
-  const [markPayoutForm, setMarkPayoutForm] = useState({ providerTransferId: '', note: '' });
+
+  // NOTE: "Mark Payout Paid" lives on the payout detail page now
+  // (/admin-payout-detail) — payout actions belong next to the payout's
+  // full lifecycle view (batches, transfer ids). This page links there
+  // via "View Full Payout Details" in the Driver Payout card.
 
   // ── Refund state ──
   const [refundOpen, setRefundOpen] = useState(false);
@@ -329,29 +331,6 @@ export default function AdminPaymentDetailPage({ paymentId }: AdminPaymentDetail
     });
   };
 
-  const submitMarkPayoutPaid = () => {
-    if (!markPayoutForm.providerTransferId.trim()) {
-      toast.error('Provider transfer ID is required');
-      return;
-    }
-    const payload: MarkPayoutPaidRequest = {
-      actorUserId,
-      providerTransferId: markPayoutForm.providerTransferId,
-      note: markPayoutForm.note || undefined,
-    };
-    paymentActions.markPayoutPaid.mutate(payload, {
-      onSuccess: () => {
-        toast.success('Payout marked as paid');
-        setMarkPayoutPaidOpen(false);
-        setMarkPayoutForm({ providerTransferId: '', note: '' });
-        refetch();
-      },
-      onError: (err: Error) => {
-        toast.error('Failed to mark payout as paid', { description: err.message });
-      },
-    });
-  };
-
   const InfoRow = ({
     icon: Icon,
     label,
@@ -470,17 +449,8 @@ export default function AdminPaymentDetailPage({ paymentId }: AdminPaymentDetail
                 Mark Invoiced
               </Button>
             )}
-            {payout && payout.status !== 'PAID' && (
-              <Button
-                onClick={() => setMarkPayoutPaidOpen(true)}
-                size="sm"
-                className="rounded-xl bg-amber-600 hover:bg-amber-700 text-white"
-                disabled={paymentActions.markPayoutPaid.isPending}
-              >
-                <Banknote className="w-3.5 h-3.5 mr-1" />
-                Mark Payout Paid
-              </Button>
-            )}
+            {/* "Mark Payout Paid" moved to /admin-payout-detail (payout
+                actions live with the payout's lifecycle view). */}
             {/* ── Refund button ──
                 Shows when the payment is CAPTURED, PAID, or partially
                 REFUNDED (so the admin can issue additional partial
@@ -1177,59 +1147,6 @@ export default function AdminPaymentDetailPage({ paymentId }: AdminPaymentDetail
                   <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
                 )}
                 Mark Paid
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-
-        {/* ─── Mark Payout Paid dialog ─── */}
-        <Dialog open={markPayoutPaidOpen} onOpenChange={setMarkPayoutPaidOpen}>
-          <DialogContent className="sm:max-w-md">
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2">
-                <Banknote className="w-5 h-5 text-amber-600" />
-                Mark Payout as Paid
-              </DialogTitle>
-              <DialogDescription>
-                Record the provider transfer ID for the driver payout. Marks the
-                payout row as PAID so it stops appearing as eligible.
-              </DialogDescription>
-            </DialogHeader>
-            <div className="space-y-3">
-              <div>
-                <Label htmlFor="transferId" className="text-xs">Provider Transfer ID *</Label>
-                <Input
-                  id="transferId"
-                  value={markPayoutForm.providerTransferId}
-                  onChange={(e) => setMarkPayoutForm(prev => ({ ...prev, providerTransferId: e.target.value }))}
-                  placeholder="tr_..."
-                  className="rounded-xl mt-1 font-mono"
-                />
-              </div>
-              <div>
-                <Label htmlFor="payoutNote" className="text-xs">Note (optional)</Label>
-                <Input
-                  id="payoutNote"
-                  value={markPayoutForm.note}
-                  onChange={(e) => setMarkPayoutForm(prev => ({ ...prev, note: e.target.value }))}
-                  placeholder="Reason / reference"
-                  className="rounded-xl mt-1"
-                />
-              </div>
-            </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setMarkPayoutPaidOpen(false)} className="rounded-xl">
-                Cancel
-              </Button>
-              <Button
-                onClick={submitMarkPayoutPaid}
-                disabled={paymentActions.markPayoutPaid.isPending || !markPayoutForm.providerTransferId.trim()}
-                className="rounded-xl bg-amber-600 hover:bg-amber-700 text-white"
-              >
-                {paymentActions.markPayoutPaid.isPending && (
-                  <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
-                )}
-                Mark Payout Paid
               </Button>
             </DialogFooter>
           </DialogContent>

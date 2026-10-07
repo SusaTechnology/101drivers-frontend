@@ -505,7 +505,8 @@ export interface PayoutDetailResponse {
     status: string;
     paidAt: string | null;
     createdAt: string;
-    deliveryId: string;
+    deliveryId: string | null;
+    providerTransferId?: string | null;
   };
   driver: {
     id: string | null;
@@ -519,6 +520,11 @@ export interface PayoutDetailResponse {
     pickupAddress: string;
     dropoffAddress: string;
     createdAt: string;
+  } | null;
+  /** The customer payment that funded this payout (delivery-linked payouts only). */
+  payment: {
+    id: string;
+    status: string;
   } | null;
   batches: Array<{
     batchId: string;

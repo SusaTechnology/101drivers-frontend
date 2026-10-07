@@ -5,14 +5,21 @@
 //
 // Surfaces:
 //   - Payout core: gross/net amounts, driver share, insurance + platform
-//     fees, status, created/paid timestamps
+//     fees, status, created/paid timestamps, manual transfer id (if any)
 //   - Driver: name + email
 //   - Delivery: addresses, service type, current status (linked)
+//   - Payment: deep link to the customer payment that funded the payout
 //   - Payout batches the payout was settled through (type, status, Stripe
 //     transfer id, failure reason)
+//   - Action: "Mark Payout Paid" (manual out-of-band settlement) — shown
+//     ONLY while the payout is actually actionable: ELIGIBLE/FAILED, no
+//     in-flight batch, and delivery-linked (referral payouts settle via
+//     batches only). Once PAID the row is a fact, not a task — the button
+//     disappears and the page shows Paid at + transfer id instead.
 //
 // Backend: GET /api/driverPayouts/admin/payouts/:id
-import React from 'react';
+//          POST /api/deliveryRequests/:id/admin-payout-paid
+import React, { useState } from 'react';
 import { Link } from '@tanstack/react-router';
 import {
   Card,
@@ -22,19 +29,33 @@ import {
 } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Navbar } from '../shared/layout/testNavbar';
 import { navItems } from '@/lib/items/navItems';
 import { Brand } from '@/lib/items/brand';
 import { useAdminActions } from '@/hooks/useAdminActions';
 import { usePayoutDetail, formatReportCurrency, formatReportDateTime } from '@/hooks/useAdminReports';
+import { authFetch, getUser } from '@/lib/tanstack/dataQuery';
 import {
   AlertCircle,
   ArrowLeft,
+  Banknote,
+  CreditCard,
   Wallet,
   User,
   Truck,
   RefreshCw,
 } from 'lucide-react';
+import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 
 const PAYOUT_STATUS_COLORS: Record<string, string> = {
@@ -58,6 +79,60 @@ export default function AdminPayoutDetailPage({ payoutId }: { payoutId: string }
   const { actionItems, signOut } = useAdminActions();
   const { data, isLoading, isError, refetch } = usePayoutDetail(payoutId || null);
 
+  // ── Mark Payout Paid (manual out-of-band settlement) ────────────
+  const [markPaidOpen, setMarkPaidOpen] = useState(false);
+  const [markPaidForm, setMarkPaidForm] = useState({ providerTransferId: '', note: '' });
+  const [markingPaid, setMarkingPaid] = useState(false);
+
+  // Action gate — mirrors the payout lifecycle so the button only exists
+  // where a manual settlement actually makes sense:
+  //   • ELIGIBLE / FAILED = owed and not settled → actionable.
+  //     PAID and CANCELLED are terminal facts, not tasks.
+  //   • PENDING is a safety hold (dispute/validation) — resolve the hold,
+  //     don't override it.
+  //   • A PENDING/PROCESSING batch means the weekly sweep is mid-flight —
+  //     a manual settlement now would double-pay. If the batch fails or
+  //     auto-reverts, the payout returns to ELIGIBLE and this shows again.
+  //   • The backend override records against the delivery, so referral
+  //     payouts (deliveryId = null) are not actionable here.
+  const canMarkPaid =
+    !!data?.payout &&
+    !!data?.delivery &&
+    ['ELIGIBLE', 'FAILED'].includes(data.payout.status) &&
+    !data.batches.some((b) => b.status === 'PENDING' || b.status === 'PROCESSING');
+
+  const submitMarkPayoutPaid = async () => {
+    if (!data?.delivery) return;
+    if (!markPaidForm.providerTransferId.trim()) {
+      toast.error('Provider transfer ID is required');
+      return;
+    }
+    setMarkingPaid(true);
+    try {
+      await authFetch(
+        `${import.meta.env.VITE_API_URL}/api/deliveryRequests/${data.delivery.id}/admin-payout-paid`,
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            actorUserId: getUser()?.id || undefined,
+            providerTransferId: markPaidForm.providerTransferId,
+            note: markPaidForm.note || undefined,
+          }),
+        },
+      );
+      toast.success('Payout marked as paid');
+      setMarkPaidOpen(false);
+      setMarkPaidForm({ providerTransferId: '', note: '' });
+      refetch();
+    } catch (err: any) {
+      toast.error('Failed to mark payout as paid', {
+        description: err?.message || 'Please try again.',
+      });
+    } finally {
+      setMarkingPaid(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-background-light dark:bg-background-dark">
       <Navbar brand={<Brand />} items={navItems} actions={actionItems} onSignOut={signOut} title="Admin" />
@@ -70,6 +145,30 @@ export default function AdminPayoutDetailPage({ payoutId }: { payoutId: string }
                 <ArrowLeft className="w-3.5 h-3.5" />
                 Back to Payouts Report
               </Link>
+              {data?.payment && (
+                <Link
+                  to="/admin-payment-detail"
+                  // `as any`: typed-search Links are broken repo-wide (same
+                  // excess-property error exists in the accepted baseline for
+                  // admin-report-payouts L210, admin-payment-detail's payout
+                  // link, etc.); runtime handles search fine.
+                  search={{ paymentId: data.payment.id } as any}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[11px] font-bold border bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-900"
+                >
+                  <CreditCard className="w-3.5 h-3.5" />
+                  View Payment
+                </Link>
+              )}
+              {canMarkPaid && (
+                <button
+                  onClick={() => setMarkPaidOpen(true)}
+                  disabled={markingPaid}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[11px] font-bold border bg-amber-50 dark:bg-amber-950/30 border-amber-300 dark:border-amber-700 text-amber-700 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-950/60 disabled:opacity-50"
+                >
+                  <Banknote className="w-3.5 h-3.5" />
+                  Mark Payout Paid
+                </button>
+              )}
             </div>
             <h1 className="text-2xl lg:text-3xl font-black">Payout Detail</h1>
             {data?.payout && (
@@ -140,10 +239,18 @@ export default function AdminPayoutDetailPage({ payoutId }: { payoutId: string }
                   <div className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Created</div>
                   <div className="text-sm font-bold mt-1">{formatReportDateTime(data.payout.createdAt)}</div>
                 </div>
-                <div>
-                  <div className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Paid at</div>
-                  <div className="text-sm font-bold mt-1">{formatReportDateTime(data.payout.paidAt)}</div>
-                </div>
+                {data.payout.paidAt && (
+                  <div>
+                    <div className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Paid at</div>
+                    <div className="text-sm font-bold mt-1">{formatReportDateTime(data.payout.paidAt)}</div>
+                  </div>
+                )}
+                {data.payout.providerTransferId && (
+                  <div>
+                    <div className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Transfer ID</div>
+                    <div className="text-sm font-bold mt-1 font-mono break-all">{data.payout.providerTransferId}</div>
+                  </div>
+                )}
               </CardContent>
             </Card>
 
@@ -265,6 +372,62 @@ export default function AdminPayoutDetailPage({ payoutId }: { payoutId: string }
             </Card>
           </div>
         )}
+
+        {/* ── Mark Payout Paid dialog ── */}
+        <Dialog open={markPaidOpen} onOpenChange={setMarkPaidOpen}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Banknote className="w-5 h-5 text-amber-600" />
+                Mark Payout as Paid
+              </DialogTitle>
+              <DialogDescription>
+                Record the provider transfer ID for this payout. Marks it as PAID
+                so it stops counting toward the driver's withdrawable balance —
+                use only when the money has actually been transferred outside the
+                weekly sweep.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-3">
+              <div>
+                <Label htmlFor="payoutTransferId" className="text-xs">Provider Transfer ID *</Label>
+                <Input
+                  id="payoutTransferId"
+                  value={markPaidForm.providerTransferId}
+                  onChange={(e) => setMarkPaidForm((prev) => ({ ...prev, providerTransferId: e.target.value }))}
+                  placeholder="tr_..."
+                  className="rounded-xl mt-1 font-mono"
+                />
+              </div>
+              <div>
+                <Label htmlFor="payoutTransferNote" className="text-xs">Note (optional)</Label>
+                <Input
+                  id="payoutTransferNote"
+                  value={markPaidForm.note}
+                  onChange={(e) => setMarkPaidForm((prev) => ({ ...prev, note: e.target.value }))}
+                  placeholder="Reason / reference"
+                  className="rounded-xl mt-1"
+                />
+              </div>
+            </div>
+            <DialogFooter className="gap-2">
+              <button
+                onClick={() => setMarkPaidOpen(false)}
+                className="px-4 py-2 text-sm border rounded-xl hover:bg-slate-50 dark:hover:bg-slate-900"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={submitMarkPayoutPaid}
+                disabled={markingPaid || !markPaidForm.providerTransferId.trim()}
+                className="px-4 py-2 text-sm rounded-xl font-bold bg-amber-600 hover:bg-amber-700 text-white disabled:opacity-50 inline-flex items-center gap-1.5"
+              >
+                {markingPaid && <RefreshCw className="w-3.5 h-3.5 animate-spin" />}
+                Mark Payout Paid
+              </button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </main>
     </div>
   );

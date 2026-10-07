@@ -438,7 +438,9 @@ export class DriverPayoutController extends DriverPayoutControllerBase {
   /**
    * Admin detail for a single driver payout (the View action on the
    * payouts report table): payout amounts + status, the delivery it came
-   * from, and any payout batch the payout was settled through.
+   * from, the customer payment that funded it (for delivery-linked
+   * payouts — referral payouts have none), and any payout batch the
+   * payout was settled through.
    */
   @common.Get("admin/payouts/:id")
   @swagger.ApiOkResponse({ description: "Single driver payout detail for admins" })
@@ -468,6 +470,15 @@ export class DriverPayoutController extends DriverPayoutControllerBase {
     });
     if (!payout) throw new common.NotFoundException("Payout not found");
 
+    // One payment per delivery (Payment.deliveryId @unique) — resolved so
+    // the payout page can deep-link to the payment that funded it.
+    const payment = payout.deliveryId
+      ? await this.prisma.payment.findUnique({
+          where: { deliveryId: payout.deliveryId },
+          select: { id: true, status: true },
+        })
+      : null;
+
     const batchItems = await this.prisma.payoutBatchItem.findMany({
       where: { driverPayoutId: id },
       include: { batch: true },
@@ -482,6 +493,7 @@ export class DriverPayoutController extends DriverPayoutControllerBase {
         email: driver?.user?.email || null,
       },
       delivery,
+      payment,
       batches: batchItems.map((item: any) => ({
         batchId: item.batch?.id,
         type: item.batch?.type,
