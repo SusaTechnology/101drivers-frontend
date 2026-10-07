@@ -109,6 +109,78 @@ const formatDateTime = (dateString: string) => {
   return `${formatDate(dateString)} ${formatTime(dateString)}`
 }
 
+/**
+ * Stateful evidence-photo renderer for the proofs tab.
+ *
+ * Problem it fixes: evidence `<img>` tags previously failed silently — an
+ * expired/signed-out or slow image URL left an empty grey box, so dealers
+ * couldn't tell whether a photo existed at all ("the drop-off dashboard
+ * picture is empty"). This shows a loading indicator while fetching, the
+ * photo when it loads, and an explicit "photo couldn't load — tap to retry"
+ * state (cache-busted reload) when it fails, so an existing photo is never
+ * indistinguishable from a missing one.
+ *
+ * Must be rendered inside a `relative overflow-hidden` parent (the parent
+ * keeps its aspect ratio / rounding; the loading layer is absolutely
+ * positioned over it).
+ */
+const ProofImage = ({ src, alt, className }: { src: string; alt: string; className?: string }) => {
+  const [status, setStatus] = useState<'loading' | 'loaded' | 'error'>('loading')
+  const [attempt, setAttempt] = useState(0)
+
+  // Reset when a different photo is rendered in the same slot.
+  useEffect(() => {
+    setStatus('loading')
+    setAttempt(0)
+  }, [src])
+
+  // Cache-buster so a retry actually re-requests the image.
+  const bustSrc = attempt > 0 ? `${src}${src.includes('?') ? '&' : '?'}r=${attempt}` : src
+
+  if (status === 'error') {
+    return (
+      <button
+        type="button"
+        onClick={(e) => {
+          // Parent evidence tiles are <a target="_blank"> — don't navigate on retry.
+          e.preventDefault()
+          e.stopPropagation()
+          setStatus('loading')
+          setAttempt((a) => a + 1)
+        }}
+        className="absolute inset-0 w-full h-full flex flex-col items-center justify-center gap-1.5 bg-amber-50 dark:bg-amber-950/20 p-3 text-center"
+        aria-label={`${alt} — tap to retry loading`}
+      >
+        <AlertCircle className="h-6 w-6 text-amber-500 shrink-0" />
+        <span className="text-xs font-black text-amber-800 dark:text-amber-300 leading-tight">Photo couldn't load</span>
+        <span className="text-[11px] font-bold text-amber-600 dark:text-amber-400 underline underline-offset-2 inline-flex items-center gap-1">
+          <RefreshCw className="h-3 w-3" />
+          Tap to retry
+        </span>
+      </button>
+    )
+  }
+
+  return (
+    <>
+      {status === 'loading' && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-slate-100 dark:bg-slate-800">
+          <Camera className="h-6 w-6 text-slate-400 animate-pulse" />
+          <span className="text-[11px] font-bold uppercase tracking-widest text-slate-400">Loading photo…</span>
+        </div>
+      )}
+      <img
+        key={bustSrc}
+        src={bustSrc}
+        alt={alt}
+        onLoad={() => setStatus('loaded')}
+        onError={() => setStatus('error')}
+        className={cn(className, status === 'loading' && 'opacity-0')}
+      />
+    </>
+  )
+}
+
 // Payment status badge with friendly labels and color coding
 const PaymentStatusBadge = ({ status }: { status: string | undefined }) => {
   if (!status) {
@@ -1811,9 +1883,9 @@ export default function DealerDeliveryDetails({ deliveryId }: DealerDeliveryDeta
                                 href={photo.imageUrl}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="aspect-square rounded-2xl bg-slate-200 dark:bg-slate-800 border border-slate-300/50 dark:border-slate-700 overflow-hidden hover:opacity-90 transition"
+                                className="relative block aspect-square rounded-2xl bg-slate-200 dark:bg-slate-800 border border-slate-300/50 dark:border-slate-700 overflow-hidden hover:opacity-90 transition"
                               >
-                                <img
+                                <ProofImage
                                   src={photo.imageUrl}
                                   alt={`Pickup ${photo.slotIndex}`}
                                   className="w-full h-full object-cover"
@@ -1850,9 +1922,9 @@ export default function DealerDeliveryDetails({ deliveryId }: DealerDeliveryDeta
                                 href={dashboardPhoto.imageUrl}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="block max-w-md aspect-video rounded-2xl bg-slate-200 dark:bg-slate-800 border border-slate-300/50 dark:border-slate-700 overflow-hidden hover:opacity-90 transition"
+                                className="relative block max-w-md aspect-video rounded-2xl bg-slate-200 dark:bg-slate-800 border border-slate-300/50 dark:border-slate-700 overflow-hidden hover:opacity-90 transition"
                               >
-                                <img
+                                <ProofImage
                                   src={dashboardPhoto.imageUrl}
                                   alt="Dashboard at pickup"
                                   className="w-full h-full object-cover"
@@ -1889,9 +1961,9 @@ export default function DealerDeliveryDetails({ deliveryId }: DealerDeliveryDeta
                                 href={photo.imageUrl}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="aspect-square rounded-2xl bg-slate-200 dark:bg-slate-800 border border-slate-300/50 dark:border-slate-700 overflow-hidden hover:opacity-90 transition"
+                                className="relative block aspect-square rounded-2xl bg-slate-200 dark:bg-slate-800 border border-slate-300/50 dark:border-slate-700 overflow-hidden hover:opacity-90 transition"
                               >
-                                <img
+                                <ProofImage
                                   src={photo.imageUrl}
                                   alt={`Dropoff ${photo.slotIndex}`}
                                   className="w-full h-full object-cover"
@@ -1928,9 +2000,9 @@ export default function DealerDeliveryDetails({ deliveryId }: DealerDeliveryDeta
                                 href={dropoffDashboardPhoto.imageUrl}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="block max-w-md aspect-video rounded-2xl bg-slate-200 dark:bg-slate-800 border border-slate-300/50 dark:border-slate-700 overflow-hidden hover:opacity-90 transition"
+                                className="relative block max-w-md aspect-video rounded-2xl bg-slate-200 dark:bg-slate-800 border border-slate-300/50 dark:border-slate-700 overflow-hidden hover:opacity-90 transition"
                               >
-                                <img
+                                <ProofImage
                                   src={dropoffDashboardPhoto.imageUrl}
                                   alt="Dashboard at drop-off"
                                   className="w-full h-full object-cover"
