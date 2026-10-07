@@ -48,12 +48,14 @@ import {
 import { Checkbox } from "@/components/ui/checkbox";
 import { useJsApiLoader } from '@react-google-maps/api';
 import RouteMap from '@/components/map/RouteMap';
+// Shared Google Maps config — EVERY page must load the API with the SAME
+// options. A local libraries array here caused "Loader must not be called
+// again with different options" (the landing page had already initialized
+// the loader with the shared list, which includes 'drawing').
+import { GOOGLE_MAPS_LIBRARIES } from '@/lib/google-maps-config';
 import { useCreate } from "@/lib/tanstack/dataQuery";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { toast } from "sonner";
-
-// Define libraries outside component to prevent unnecessary reloads
-const GOOGLE_MAPS_LIBRARIES: ['geometry', 'places'] = ['geometry', 'places'];
 
 // Helper functions (unchanged)
 function parseWindowTimes(windowStr: string): { start: string; end: string } {
@@ -263,6 +265,32 @@ export function QuoteDetails() {
       }
     }
   }, [urlOtp, reset]);
+
+  // Arriving WITHOUT fresh quote state and WITHOUT an OTP in the URL —
+  // e.g. right after signup/login, when the dashboard routes personal
+  // customers here because a quoteDraft is waiting in localStorage. Load
+  // the saved draft so the form opens pre-filled (addresses + real price
+  // already on it) — the whole point of "no retyping".
+  useEffect(() => {
+    if (hasFreshQuoteData || urlOtp) return;
+    let raw: string | null = null;
+    try { raw = localStorage.getItem(DRAFT_KEY); } catch { return; }
+    if (!raw) return;
+    let draft: any = null;
+    try { draft = JSON.parse(raw); } catch { return; }
+    if (draft?.deliveryType !== "PERSONAL" || !draft?.quoteData?.id) return;
+    if (draft.formData) {
+      // A partially-completed attempt (saved before OTP) — restore it too.
+      reset(draft.formData, { keepDefaultValues: false });
+    }
+    setLoadedQuote(draft.quoteData || null);
+    setDraftLoaded(true);
+    if (draft.addressesConfirmed) {
+      // Already confirmed on the signup page — don't ask twice.
+      setAddressesConfirmed(true);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const watchTimeWindow = watch("timeWindow");
   const watchVehicleColor = watch("vehicleColor");

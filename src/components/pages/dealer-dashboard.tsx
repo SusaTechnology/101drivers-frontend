@@ -197,16 +197,25 @@ export default function DealerDashboard() {
   // existing drafts system — it surfaces in their Drafts and can be
   // completed the moment the account is approved. Nothing is retyped.
   const quoteDraftAttach = useDataMutation<
-    unknown,
+    { id?: string },
     { customerId: string; quoteId: string; serviceType: string }
   >({
     apiEndPoint: `${import.meta.env.VITE_API_URL}/api/deliveryRequests/create-draft-from-quote`,
-    onSuccess: () => {
+    onSuccess: (data) => {
       try { localStorage.removeItem('quoteDraft') } catch { /* ignore */ }
       toast.success('Your delivery request is saved', {
         description: "It's waiting in your Drafts — submit it once your account is approved.",
         duration: 8000,
       })
+      // The system already knows a request was started on the public page
+      // — take them straight to it instead of making them hunt for it in
+      // their Drafts list.
+      if (data?.id) {
+        navigate({
+          to: '/dealer-create-delivery',
+          search: { draftId: data.id },
+        })
+      }
     },
     onError: () => {
       // Draft stays in localStorage — retried on the next login.
@@ -220,6 +229,15 @@ export default function DealerDashboard() {
     if (!raw) return
     let draft: { deliveryType?: string; quoteData?: { id?: string } } | null = null
     try { draft = JSON.parse(raw) } catch { return }
+    // PERSONAL draft: private customers are auto-approved, so there is
+    // nothing to park server-side — take them straight to the pre-filled
+    // delivery form (QuoteDetails loads the draft from localStorage, so
+    // nothing is retyped). The draft is cleared after the delivery is
+    // created; if they leave midway, the next login lands here again.
+    if (draft?.deliveryType === 'PERSONAL' && draft?.quoteData?.id) {
+      navigate({ to: '/quote-details' })
+      return
+    }
     if (draft?.deliveryType !== 'BUSINESS' || !draft?.quoteData?.id) return
     quoteDraftAttach.mutate({
       customerId: dealerId,

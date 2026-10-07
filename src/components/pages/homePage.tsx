@@ -501,17 +501,13 @@ export default function LandingPage() {
     if (deliveryType === "BUSINESS") {
       navigate({ to: "/auth/dealer-signup" });
     } else {
-      navigate({
-        to: "/quote-details",
-        state: {
-          quote: quoteResult,
-          pickupCoords,
-          dropoffCoords,
-          pickupAddress,
-          dropoffAddress,
-          distance: quoteResult.distanceMiles != null ? Math.round(quoteResult.distanceMiles) : null,
-        },
-      });
+      // Personal: signup FIRST (same pattern as business — signup and
+      // delivery creation are NOT mixed on one page). The quoteDraft stays
+      // in localStorage: the signup page shows the saved request with the
+      // "Use the same addresses?" confirm, and after signup (private
+      // customers are auto-approved → logged in) they land on the
+      // pre-filled delivery form to complete the request.
+      navigate({ to: "/auth/individual-signup" });
     }
   }, [quoteResult, deliveryType, pickupAddress, dropoffAddress, pickupCoords, dropoffCoords, handleCalculateEstimate, navigate]);
 
