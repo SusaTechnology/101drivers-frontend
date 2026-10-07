@@ -80,9 +80,12 @@ const statusColors: Record<SupportRequestStatus, string> = {
 //   { href: '/driver-menu', label: 'Menu', icon: Menu },
 // ]
 
-export default function DriverSupportDetailPage() {
+export default function DriverSupportDetailPage({ supportRequestId }: { supportRequestId?: string }) {
   const { state } = useLocation()
-  const requestId = state?.id || ''
+  // URL search param wins (deep-linkable: notifications, refreshes, PWA
+  // restores); router history state is the fallback for in-app navigations
+  // that still pass state (support list pages).
+  const requestId = (supportRequestId ?? state?.id) || ''
   const navigate = useNavigate()
   const [mounted, setMounted] = useState(false)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)

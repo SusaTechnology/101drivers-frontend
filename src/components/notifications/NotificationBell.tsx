@@ -309,14 +309,15 @@ export default function NotificationBell({ className, userType }: NotificationBe
     }
 
     if (supportRequestId && notification.type.includes('SUPPORT')) {
-      // Support request notifications
+      // Support request notifications. All three detail pages read the id
+      // from the URL search param (router history state is only a legacy
+      // fallback), so a bare URL now carries the id and every role gets a
+      // working deep link.
       if (effectiveUserType === 'admin') {
         return `/admin-support-detail?id=${supportRequestId}`
       }
       if (effectiveUserType === 'driver') {
-        // Driver support detail reads its id from router STATE, not search
-        // params — a bare URL can't carry it, so no deep-link action yet.
-        return null
+        return `/driver-support-detail?id=${supportRequestId}`
       }
       return `/dealer-support-detail?id=${supportRequestId}`
     }

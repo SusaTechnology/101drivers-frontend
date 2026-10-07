@@ -107,9 +107,12 @@ const priorityColors: Record<SupportRequestPriority, string> = {
   URGENT: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300',
 }
 
-export default function AdminSupportDetailPage() {
+export default function AdminSupportDetailPage({ supportRequestId }: { supportRequestId?: string }) {
   const { state } = useLocation()
-  const requestId = state?.id || ''
+  // URL search param wins (deep-linkable: notifications, refreshes, PWA
+  // restores); router history state is the fallback for in-app navigations
+  // that still pass state (support list page).
+  const requestId = (supportRequestId ?? state?.id) || ''
   const navigate = useNavigate()
   const { actionItems, signOut } = useAdminActions()
   const user = getUser()

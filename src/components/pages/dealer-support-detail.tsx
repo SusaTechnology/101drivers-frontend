@@ -111,9 +111,16 @@ const roleColors: Record<string, string> = {
   ADMIN: 'bg-lime-50 text-lime-700 border-lime-200 dark:bg-lime-900/20 dark:text-lime-300 dark:border-lime-900/30',
 }
 
-export default function DealerSupportDetail() {
+interface DealerSupportDetailProps {
+  supportRequestId?: string
+}
+
+export default function DealerSupportDetail({ supportRequestId }: DealerSupportDetailProps) {
   const { state } = useLocation()
-  const id = state?.id
+  // URL search param wins (deep-linkable: notifications, refreshes, PWA
+  // restores); router history state is the fallback for in-app navigations
+  // that still pass state (support list / request pages).
+  const id = supportRequestId ?? state?.id
   const navigate = useNavigate()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [mounted, setMounted] = useState(false)
