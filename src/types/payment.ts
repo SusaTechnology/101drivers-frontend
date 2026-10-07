@@ -35,6 +35,16 @@ export interface PaymentPayout {
   status: PayoutStatus;
   netAmount: number;
   paidAt: string | null;
+  /** Failure facts — surfaced so the payment page can explain a failed transfer. */
+  failedAt?: string | null;
+  failureMessage?: string | null;
+  providerTransferId?: string | null;
+  /**
+   * Batch statuses the payout settled through (payment-detail endpoint only).
+   * A PENDING/PROCESSING batch means the sweep is mid-flight — the admin
+   * "Mark Payout Paid" override must hide to avoid double-paying.
+   */
+  batchItems?: Array<{ batch: { status: string } }>;
 }
 
 // Delivery info within payment

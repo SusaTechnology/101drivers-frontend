@@ -507,6 +507,9 @@ export interface PayoutDetailResponse {
     createdAt: string;
     deliveryId: string | null;
     providerTransferId?: string | null;
+    /** Failure facts for FAILED payouts (already returned by the API). */
+    failedAt?: string | null;
+    failureMessage?: string | null;
   };
   driver: {
     id: string | null;

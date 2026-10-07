@@ -463,6 +463,18 @@ async getAdminPaymentDetail(paymentId: string): Promise<any> {
               status: true,
               netAmount: true,
               paidAt: true,
+              // Failure facts — let the payment page show WHY a payout
+              // transfer failed and deep-link to the payout detail page.
+              failedAt: true,
+              failureMessage: true,
+              providerTransferId: true,
+              // Batch statuses — the "Mark Payout Paid" override button on
+              // the payment page must not appear while the weekly sweep /
+              // instant payout is mid-flight (double-pay guard, mirrors the
+              // gate on the payout detail page).
+              batchItems: {
+                select: { batch: { select: { status: true } } },
+              },
             },
           },
         },

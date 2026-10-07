@@ -10,12 +10,19 @@
 //     code+message, provider charge+intent IDs, lock-in amount
 //   - Customer + delivery: pickup/dropoff addresses, pickup window, pickup PIN,
 //     service type, customer contact info, current active driver
-//   - Payout (if any): status, net amount, paid-at + link to the full payout
-//     detail page (/admin-payout-detail?payoutId=...). When no payout exists,
-//     an edge-aware explanation card renders instead (failed payment,
-//     cancelled/expired delivery, or simply "not created yet" — payouts are
-//     created at trip start for business lock-in and at delivery completion
-//     for every payment type incl. postpaid).
+//   - Payout (if any): status, net amount, paid-at, transfer id, failure
+//     facts (failedAt + failureMessage banner when the transfer failed) and
+//     a link to the full payout detail page (/admin-payout-detail?payoutId=...
+//     — relabeled "View Why Transfer Failed" when the payout FAILED). When
+//     no payout exists, an edge-aware explanation card renders instead
+//     (failed payment, cancelled/expired delivery, or simply "not created
+//     yet" — payouts are created at trip start for business lock-in and at
+//     delivery completion for every payment type incl. postpaid).
+//   - Action: "Mark Payout Paid" (manual out-of-band settlement) — the
+//     button lives on BOTH this page and the payout detail page, with the
+//     identical gate: only while the payout is ELIGIBLE/FAILED and no
+//     payout batch is mid-flight (PENDING/PROCESSING), so the weekly sweep
+//     or an instant payout can never be double-paid by a manual override.
 //   - All payment events (full audit trail, not just the latest 5)
 //
 // Backend: GET /api/payments/admin/:id (see PaymentController.getAdminPaymentDetail)
@@ -53,7 +60,7 @@ import {
   getPaymentTypeLabel,
   getProviderLabel,
 } from '@/hooks/useAdminPayments';
-import { getUser } from '@/lib/tanstack/dataQuery';
+import { authFetch, getUser } from '@/lib/tanstack/dataQuery';
 import { getStripeErrorInfo } from '@/lib/stripe-error-codes';
 import type {
   MarkInvoicedRequest,
@@ -106,10 +113,13 @@ export default function AdminPaymentDetailPage({ paymentId }: AdminPaymentDetail
   const [invoicedForm, setInvoicedForm] = useState({ invoiceId: '', note: '' });
   const [markPaidForm, setMarkPaidForm] = useState({ note: '' });
 
-  // NOTE: "Mark Payout Paid" lives on the payout detail page now
-  // (/admin-payout-detail) — payout actions belong next to the payout's
-  // full lifecycle view (batches, transfer ids). This page links there
-  // via "View Full Payout Details" in the Driver Payout card.
+  // ── Mark Payout Paid (manual out-of-band settlement) ──
+  // Lives on BOTH pages: here (next to the payment that funded the payout)
+  // and on the payout detail page (next to the payout's lifecycle view).
+  // Same dialog, same endpoint, same gate.
+  const [payoutPaidOpen, setPayoutPaidOpen] = useState(false);
+  const [payoutPaidForm, setPayoutPaidForm] = useState({ providerTransferId: '', note: '' });
+  const [markingPayoutPaid, setMarkingPayoutPaid] = useState(false);
 
   // ── Refund state ──
   const [refundOpen, setRefundOpen] = useState(false);
@@ -257,6 +267,54 @@ export default function AdminPaymentDetailPage({ paymentId }: AdminPaymentDetail
   const activeAssignment = delivery?.assignments?.[0];
   const driverUser = activeAssignment?.driver?.user;
   const payout = delivery?.payout;
+
+  // ── Mark Payout Paid gate — mirrors the payout lifecycle so the button
+  // only exists where a manual settlement actually makes sense (identical
+  // rule to the payout detail page):
+  //   • ELIGIBLE / FAILED = owed and not settled → actionable.
+  //     PAID and CANCELLED are terminal facts, not tasks.
+  //   • A PENDING/PROCESSING batch means the weekly sweep or an instant
+  //     payout is mid-flight — a manual settlement now would double-pay.
+  //     If the batch fails, the payout auto-reverts to ELIGIBLE and the
+  //     button reappears.
+  const canMarkPayoutPaid =
+    !!payout &&
+    ['ELIGIBLE', 'FAILED'].includes(payout.status) &&
+    !(payout.batchItems ?? []).some(
+      (b) => b.batch?.status === 'PENDING' || b.batch?.status === 'PROCESSING',
+    );
+
+  const submitMarkPayoutPaid = async () => {
+    if (!delivery) return;
+    if (!payoutPaidForm.providerTransferId.trim()) {
+      toast.error('Provider transfer ID is required');
+      return;
+    }
+    setMarkingPayoutPaid(true);
+    try {
+      await authFetch(
+        `${import.meta.env.VITE_API_URL}/api/deliveryRequests/${delivery.id}/admin-payout-paid`,
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            actorUserId: user?.id || undefined,
+            providerTransferId: payoutPaidForm.providerTransferId,
+            note: payoutPaidForm.note || undefined,
+          }),
+        },
+      );
+      toast.success('Payout marked as paid');
+      setPayoutPaidOpen(false);
+      setPayoutPaidForm({ providerTransferId: '', note: '' });
+      refetch();
+    } catch (err: any) {
+      toast.error('Failed to mark payout as paid', {
+        description: err?.message || 'Please try again.',
+      });
+    } finally {
+      setMarkingPayoutPaid(false);
+    }
+  };
 
   // Edge-aware explanation for when there is no driver payout to link to.
   // The reason differs by payment/delivery state, so the info card tells the
@@ -449,8 +507,26 @@ export default function AdminPaymentDetailPage({ paymentId }: AdminPaymentDetail
                 Mark Invoiced
               </Button>
             )}
-            {/* "Mark Payout Paid" moved to /admin-payout-detail (payout
-                actions live with the payout's lifecycle view). */}
+            {/* ── Mark Payout Paid (manual settlement override) ──
+                Same gate as the payout detail page: only while the payout
+                is ELIGIBLE/FAILED and no batch is mid-flight. The full
+                lifecycle view (batches, failure history) lives at
+                /admin-payout-detail — linked from the Driver Payout card. */}
+            {canMarkPayoutPaid && (
+              <Button
+                onClick={() => setPayoutPaidOpen(true)}
+                size="sm"
+                className="rounded-xl bg-amber-600 hover:bg-amber-700 text-white"
+                disabled={markingPayoutPaid}
+              >
+                {markingPayoutPaid ? (
+                  <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" />
+                ) : (
+                  <Banknote className="w-3.5 h-3.5 mr-1" />
+                )}
+                Mark Payout Paid
+              </Button>
+            )}
             {/* ── Refund button ──
                 Shows when the payment is CAPTURED, PAID, or partially
                 REFUNDED (so the admin can issue additional partial
@@ -1022,6 +1098,28 @@ export default function AdminPaymentDetailPage({ paymentId }: AdminPaymentDetail
                       value={formatPaymentDate(payout.paidAt)}
                     />
                   )}
+                  {payout.providerTransferId && (
+                    <InfoRow
+                      icon={Hash}
+                      label="Transfer ID"
+                      value={payout.providerTransferId}
+                      copyable
+                      mono
+                    />
+                  )}
+                  {payout.status === 'FAILED' && (
+                    <div className="my-2 flex items-start gap-2 rounded-xl border border-rose-200 dark:border-rose-800/40 bg-rose-50 dark:bg-rose-900/10 p-3">
+                      <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-rose-500" />
+                      <div>
+                        <p className="text-xs font-bold text-rose-700 dark:text-rose-300">
+                          Transfer failed{payout.failedAt ? ` — ${formatPaymentDate(payout.failedAt)}` : ''}
+                        </p>
+                        <p className="mt-0.5 text-xs text-rose-600 dark:text-rose-400">
+                          {payout.failureMessage || 'The transfer could not be completed. Open the payout detail for the batch failure reason.'}
+                        </p>
+                      </div>
+                    </div>
+                  )}
                   <Link
                     to="/admin-payout-detail"
                     // `as any`: typed-search Links are broken repo-wide
@@ -1029,10 +1127,14 @@ export default function AdminPaymentDetailPage({ paymentId }: AdminPaymentDetail
                     // baseline for admin-report-payouts L210, dealer pages,
                     // dashboard-list etc.); runtime handles search fine.
                     search={{ payoutId: payout.id } as any}
-                    className="mt-3 inline-flex w-full items-center justify-center gap-1.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 px-3 py-2 text-xs font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-900 transition-colors"
+                    className={
+                      payout.status === 'FAILED'
+                        ? 'mt-3 inline-flex w-full items-center justify-center gap-1.5 rounded-xl border border-rose-300 dark:border-rose-800 bg-rose-50 dark:bg-rose-950/30 px-3 py-2 text-xs font-bold text-rose-700 dark:text-rose-300 hover:bg-rose-100 dark:hover:bg-rose-950/60 transition-colors'
+                        : 'mt-3 inline-flex w-full items-center justify-center gap-1.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 px-3 py-2 text-xs font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-900 transition-colors'
+                    }
                   >
                     <Eye className="w-3.5 h-3.5" />
-                    View Full Payout Details
+                    {payout.status === 'FAILED' ? 'View Why Transfer Failed' : 'View Full Payout Details'}
                   </Link>
                 </CardContent>
               </Card>
@@ -1055,6 +1157,64 @@ export default function AdminPaymentDetailPage({ paymentId }: AdminPaymentDetail
             )}
           </div>
         </div>
+
+        {/* ─── Mark Payout Paid dialog (manual settlement override —
+            same dialog as /admin-payout-detail; see the gate comment on
+            canMarkPayoutPaid above) ─── */}
+        <Dialog open={payoutPaidOpen} onOpenChange={setPayoutPaidOpen}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Banknote className="w-5 h-5 text-amber-600" />
+                Mark Payout as Paid
+              </DialogTitle>
+              <DialogDescription>
+                Record the provider transfer ID for this payout. Marks it as PAID
+                so it stops counting toward the driver's withdrawable balance —
+                use only when the money has actually been transferred outside the
+                weekly sweep.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-3">
+              <div>
+                <Label htmlFor="payoutTransferId" className="text-xs">Provider Transfer ID *</Label>
+                <Input
+                  id="payoutTransferId"
+                  value={payoutPaidForm.providerTransferId}
+                  onChange={(e) => setPayoutPaidForm((prev) => ({ ...prev, providerTransferId: e.target.value }))}
+                  placeholder="tr_..."
+                  className="rounded-xl mt-1 font-mono"
+                />
+              </div>
+              <div>
+                <Label htmlFor="payoutTransferNote" className="text-xs">Note (optional)</Label>
+                <Input
+                  id="payoutTransferNote"
+                  value={payoutPaidForm.note}
+                  onChange={(e) => setPayoutPaidForm((prev) => ({ ...prev, note: e.target.value }))}
+                  placeholder="Reason / reference"
+                  className="rounded-xl mt-1"
+                />
+              </div>
+            </div>
+            <DialogFooter className="gap-2">
+              <button
+                onClick={() => setPayoutPaidOpen(false)}
+                className="px-4 py-2 text-sm border rounded-xl hover:bg-slate-50 dark:hover:bg-slate-900"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={submitMarkPayoutPaid}
+                disabled={markingPayoutPaid || !payoutPaidForm.providerTransferId.trim()}
+                className="px-4 py-2 text-sm rounded-xl font-bold bg-amber-600 hover:bg-amber-700 text-white disabled:opacity-50 inline-flex items-center gap-1.5"
+              >
+                {markingPayoutPaid && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                Mark Payout Paid
+              </button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
         {/* ─── Mark Invoiced dialog ─── */}
         <Dialog open={markInvoicedOpen} onOpenChange={setMarkInvoicedOpen}>

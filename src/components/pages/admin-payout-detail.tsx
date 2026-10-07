@@ -214,6 +214,22 @@ export default function AdminPayoutDetailPage({ payoutId }: { payoutId: string }
                   </Badge>
                 </div>
               </CardHeader>
+              {/* Payout-level failure banner — WHY the money didn't reach the
+                  driver. Batch-level failures additionally show per-batch
+                  reasons in the Settlement Batches card below. */}
+              {data.payout.status === 'FAILED' && (
+                <div className="flex items-start gap-2 px-4 py-3 bg-rose-50 dark:bg-rose-900/10 border-b border-rose-200 dark:border-rose-800/40">
+                  <AlertCircle className="w-4 h-4 text-rose-500 flex-shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-xs font-bold text-rose-700 dark:text-rose-300">
+                      Transfer failed{data.payout.failedAt ? ` — ${formatReportDateTime(data.payout.failedAt)}` : ''}
+                    </p>
+                    <p className="text-xs text-rose-600 dark:text-rose-400 mt-0.5">
+                      {data.payout.failureMessage || 'The transfer could not be completed — see the batch failure details below. The driver\'s withdrawable balance was restored.'}
+                    </p>
+                  </div>
+                </div>
+              )}
               <CardContent className="p-4 grid grid-cols-2 md:grid-cols-4 gap-4">
                 <div>
                   <div className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Gross</div>
