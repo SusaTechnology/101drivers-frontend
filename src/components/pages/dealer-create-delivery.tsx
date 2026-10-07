@@ -1,10 +1,11 @@
 // app/pages/dealer/create-delivery.tsx
 import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
-import { useNavigate } from "@tanstack/react-router";
+import { useNavigate, Link } from "@tanstack/react-router";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { cn } from "@/lib/utils";
+import NotificationBell from "@/components/notifications/NotificationBell";
 import { safeSessionStorage } from "@/lib/safeStorage";
 import { useJsApiLoader } from "@react-google-maps/api";
 import { GOOGLE_MAPS_LIBRARIES, GOOGLE_MAPS_SCRIPT_ID } from "@/lib/google-maps-config";
@@ -2136,8 +2137,8 @@ const handleQuotePreview = () => {
     <header className="sticky top-0 z-50 w-full bg-white/85 dark:bg-slate-950/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-800" style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}>
       <div className="max-w-[1440px] mx-auto px-6 lg:px-8 h-20 flex items-center justify-between">
         <div className="flex items-center gap-10">
-          <a
-            href="/dealer-dashboard"
+          <Link
+            to="/dealer-dashboard"
             className="flex items-center"
             aria-label="101 Drivers"
           >
@@ -2148,31 +2149,35 @@ const handleQuotePreview = () => {
                 className="w-full h-full object-cover"
               />
             </div>
-          </a>
+          </Link>
 
           <nav className="hidden md:flex items-center gap-8">
-            <a
-              href="/dealer-dashboard"
+            <Link
+              to="/dealer-dashboard"
               className="text-sm font-semibold text-slate-600 dark:text-slate-400 hover:text-lime-500 transition-colors"
             >
               Dashboard
-            </a>
-            <a
-              href="/dealer-create-delivery"
+            </Link>
+            <Link
+              to="/dealer-create-delivery"
               className="text-sm font-semibold text-lime-500 hover:text-lime-600 transition-colors"
             >
               Create Delivery
-            </a>
-            <a
-              // href="/dealer/notifications"
-              className="text-sm font-semibold text-slate-600 dark:text-slate-400 hover:text-lime-500 transition-colors"
-            >
-              Notifications
-            </a>
+            </Link>
+            {/* Real notification inbox (same component as the dashboard header).
+                The old item was a dead <a> with its href commented out, so the
+                tap did literally nothing. */}
+            <NotificationBell userType="dealer" />
           </nav>
         </div>
 
         <div className="flex items-center gap-4">
+          {/* Bell lives in the header bar on phones (the mobile menu column is
+              a poor home for a popover); hidden on md+ where the desktop nav
+              already shows it. */}
+          <div className="md:hidden">
+            <NotificationBell userType="dealer" />
+          </div>
           <Button
             variant="outline"
             size="sm"
@@ -2209,24 +2214,18 @@ const handleQuotePreview = () => {
       {isMobileMenuOpen && (
         <div className="md:hidden border-t border-slate-200 dark:border-slate-800">
           <div className="max-w-[1440px] mx-auto px-6 py-4 flex flex-col gap-3">
-            <a
-              href="/dealer-dashboard"
+            <Link
+              to="/dealer-dashboard"
               className="text-sm font-semibold text-slate-700 dark:text-slate-300 hover:text-lime-500 transition-colors"
             >
               Dashboard
-            </a>
-            <a
-              href="/dealer-create-delivery"
+            </Link>
+            <Link
+              to="/dealer-create-delivery"
               className="text-sm font-semibold text-lime-500 hover:text-lime-600 transition-colors"
             >
               Create Delivery
-            </a>
-            <a
-              // href="/dealer/notifications"
-              className="text-sm font-semibold text-slate-700 dark:text-slate-300 hover:text-lime-500 transition-colors"
-            >
-              Notifications
-            </a>
+            </Link>
           </div>
         </div>
       )}
@@ -3606,13 +3605,13 @@ const handleQuotePreview = () => {
                 </p>
               </CardHeader>
               <CardContent>
-                <a
-                  href="/dealer-support-request"
+                <Link
+                  to="/dealer-support-request"
                   className="inline-flex items-center justify-center gap-2 w-full px-5 py-3 rounded-2xl bg-slate-900 dark:bg-white text-white dark:text-slate-900 font-extrabold hover:bg-slate-800 dark:hover:bg-slate-100 transition"
                 >
                   <HelpCircle className="h-4 w-4" />
                   Contact Support
-                </a>
+                </Link>
               </CardContent>
             </Card>
           </div>

@@ -2893,13 +2893,13 @@ export default function EditDeliveryPage() {
                   </p>
                 </CardHeader>
                 <CardContent>
-                  <a
-                    href="/dealer-support-request"
+                  <Link
+                    to="/dealer-support-request"
                     className="inline-flex items-center justify-center gap-2 w-full px-5 py-3 rounded-2xl bg-slate-900 dark:bg-white text-white dark:text-slate-900 font-extrabold hover:bg-slate-800 dark:hover:bg-slate-100 transition"
                   >
                     <HelpCircle className="h-4 w-4" />
                     Contact Support
-                  </a>
+                  </Link>
                 </CardContent>
               </Card>
             </div>

@@ -1,6 +1,6 @@
 // app/pages/dealer/review-delivery.tsx
 import React, { useState, useEffect } from "react";
-import { useNavigate } from "@tanstack/react-router";
+import { useNavigate, Link } from "@tanstack/react-router";
 import { useJsApiLoader } from "@react-google-maps/api";
 import { GOOGLE_MAPS_LIBRARIES, GOOGLE_MAPS_SCRIPT_ID } from "@/lib/google-maps-config";
 import { safeSessionStorage } from "@/lib/safeStorage";
@@ -1419,9 +1419,9 @@ export default function ReviewDeliveryPage() {
                         saved to your account, so future deliveries are charged
                         automatically with no card entry. Manage or replace it
                         anytime in{' '}
-                        <a href="/dealer-settings" className="underline font-bold hover:text-amber-800 dark:hover:text-amber-200">
+                        <Link to="/dealer-settings" className="underline font-bold hover:text-amber-800 dark:hover:text-amber-200">
                           Settings → Payment method
-                        </a>.
+                        </Link>.
                       </p>
                     </div>
                   </div>
