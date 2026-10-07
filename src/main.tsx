@@ -14,6 +14,7 @@ import {
   RouteErrorScreen,
   reloadOnceForStaleBuild,
 } from "./components/shared/RouteErrorScreen.tsx";
+import { NotFoundScreen } from "./components/shared/NotFoundScreen.tsx";
 // import { GoogleMapsProvider } from "./lib/map/GoogleMapsProvider.tsx";
 // Create a new router instance
 const router = createRouter({
@@ -28,6 +29,10 @@ const router = createRouter({
   // something") with a branded screen that offers recovery and auto-reloads
   // once when a deploy swaps out the JS chunks under an open tab.
   defaultErrorComponent: RouteErrorScreen,
+  // Branded 404 — used by any route that triggers notFound() without
+  // defining its own notFoundComponent (unmatched URLs render via the
+  // root route's notFoundComponent, also NotFoundScreen).
+  defaultNotFoundComponent: NotFoundScreen,
 });
 
 // Vite emits this event when a lazy chunk or its CSS preload fails — the

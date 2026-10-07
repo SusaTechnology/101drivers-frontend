@@ -3,6 +3,7 @@ import { TanStackRouterDevtoolsPanel } from '@tanstack/react-router-devtools'
 import { TanStackDevtools } from '@tanstack/react-devtools'
 import { useEffect } from 'react'
 import { PWAInstallPrompt } from '../components/pwa/PWAInstallPrompt'
+import { NotFoundScreen } from '../components/shared/NotFoundScreen'
 
 /**
  * Pathname prefixes that should NOT be indexed by search engines.
@@ -95,6 +96,9 @@ function useRobotsMeta() {
 }
 
 export const Route = createRootRoute({
+  // Branded 404 — TanStack Router renders this inside the root layout
+  // whenever the URL matches no route (the devtools + PWA prompt stay up).
+  notFoundComponent: NotFoundScreen,
   component: () => {
     useRobotsMeta()
     return (
