@@ -1049,15 +1049,20 @@ const confirmDelete = () => {
             the tall form grid, its natural position is just below the hero,
             so it pins under the header for the whole scroll and stays
             visible at every scroll depth. z-40 keeps it beneath the
-            header's z-50. */}
+            header's z-50. The container is a themed frosted strip — same
+            material as the header (85%-alpha background + backdrop-blur +
+            border) with its own soft shadow — and the lime pill button
+            sits inside it. pointer-events-none stays on the wrapper so
+            page content under the strip stays scrollable/clickable except
+            for the button. */}
         <div
-          className="sticky z-40 mb-2  flex justify-end pointer-events-none"
+          className="sticky z-40 mb-2 flex justify-end pointer-events-none rounded-2xl border border-slate-200/80 dark:border-slate-800 bg-white/85 dark:bg-slate-950/80 backdrop-blur-md shadow-lg shadow-slate-900/10 dark:shadow-black/40 px-3 py-2"
           style={{ top: 'calc(env(safe-area-inset-top, 0px) + 5rem)' }}
         >
           <Button
             onClick={handleSaveAll}
             disabled={updateCustomer.isPending}
-            className="pointer-events-auto gap-2 bg-lime-500 text-slate-950 hover:bg-lime-600 mt-5 rounded-full shadow-lg shadow-slate-900/25"
+            className="pointer-events-auto gap-2 bg-lime-500 text-slate-950 hover:bg-lime-600 rounded-full shadow-md shadow-slate-900/20"
           >
             <Save className="h-4 w-4" />
             {updateCustomer.isPending ? 'Saving...' : 'Save All Changes'}
