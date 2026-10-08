@@ -1,7 +1,21 @@
+/**
+ * SETTINGS-ONLY address autocomplete + hidden map.
+ *
+ * IMPORTANT: This file exists because the dealer settings page must NOT
+ * change the shared `LocationAutocomplete.tsx` — that component is used by
+ * the public page and dealer-create-delivery, and edits to it ripple into
+ * those pages. Everything here is self-contained.
+ *
+ * Why a hidden map? On this page the Google dropdown kept failing while the
+ * SAME component worked on pages that also render a <GoogleMap>. Rendering
+ * a real (invisible) map forces the Maps JS API to fully initialize on this
+ * page too, instead of only exposing the Places services.
+ */
 import { useEffect, useRef, useState, useCallback } from 'react';
+import { GoogleMap } from '@react-google-maps/api';
 import { useUserLocation } from '@/hooks/useUserLocation';
 
-interface LocationAutocompleteProps {
+interface SettingsAddressAutocompleteProps {
   value: string;
   onChange: (value: string) => void;
   onPlaceSelect: (place: google.maps.places.PlaceResult) => void;
@@ -10,82 +24,41 @@ interface LocationAutocompleteProps {
   isLoaded: boolean;
   icon?: React.ReactNode;
   className?: string;
-  types?: string[];
   label?: string;
   disabled?: boolean;
-  /** If true + bounds set, autocomplete only returns results inside bounds */
-  strictBounds?: boolean;
-  /** LatLngBoundsLiteral to bias or restrict autocomplete results */
-  bounds?: google.maps.LatLngBoundsLiteral;
-  /**
-   * Fired when the user selects an address that is rejected because it
-   * falls outside the configured `bounds` (when `strictBounds` is on).
-   *
-   * The component clears the input value and `onChange('')` is called
-   * — this callback lets the parent show the user WHY the value was
-   * cleared (e.g. "outside California, please enter a CA address").
-   *
-   * Optional. Existing callers that don't pass it behave exactly as
-   * before (silent rejection).
-   */
-  onReject?: (reason: 'out-of-bounds') => void;
 }
 
-// All US state abbreviations except CA
-const NON_CA_STATE_ABBR = new Set([
-  'AL','AK','AZ','AR','CO','CT','DE','FL','GA','HI','ID','IL','IN','IA','KS',
-  'KY','LA','ME','MD','MA','MI','MN','MS','MO','MT','NE','NV','NH','NJ','NM',
-  'NY','NC','ND','OH','OK','OR','PA','RI','SC','SD','TN','TX','UT','VT','VA',
-  'WA','WV','WI','WY','DC','AS','GU','MP','PR','VI',
-]);
-
-// Full state names (except California) — Google sometimes uses these in terms
-const NON_CA_STATE_NAMES = [
-  'Alabama','Alaska','Arizona','Arkansas','Colorado','Connecticut','Delaware',
-  'Florida','Georgia','Hawaii','Idaho','Illinois','Indiana','Iowa','Kansas',
-  'Kentucky','Louisiana','Maine','Maryland','Massachusetts','Michigan',
-  'Minnesota','Mississippi','Missouri','Montana','Nebraska','Nevada',
-  'New Hampshire','New Jersey','New Mexico','New York','North Carolina',
-  'North Dakota','Ohio','Oklahoma','Oregon','Pennsylvania','Rhode Island',
-  'South Carolina','South Dakota','Tennessee','Texas','Utah','Vermont',
-  'Virginia','Washington','West Virginia','Wisconsin','Wyoming',
-  'District of Columbia','American Samoa','Guam','Northern Mariana Islands',
-  'Puerto Rico','Virgin Islands',
-];
-
-// Build a single regex that matches any non-CA state (abbr followed by comma/space/end, or full name)
-const NON_CA_STATE_PATTERN = new RegExp(
-  ',\\s*(' +
-  [...NON_CA_STATE_ABBR].join('|') +
-  ')(?:\\s*,|\\s*$)',
-  'i'
-);
-const NON_CA_FULL_NAME_PATTERN = new RegExp(
-  ',\\s*(' +
-  NON_CA_STATE_NAMES.map(n => n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|') +
-  ')(?:\\s*,|\\s*$)',
-  'i'
-);
-
-function isNonCAPrediction(p: google.maps.places.AutocompletePrediction): boolean {
-  // Check each term for state abbreviation (e.g. "NY", "DC")
-  for (const term of p.terms) {
-    if (NON_CA_STATE_ABBR.has(term.value.toUpperCase())) return true;
-  }
-  // Also check the full description text for full state names
-  // (e.g. "Washington, District of Columbia, USA" won't have "DC" in terms)
-  if (NON_CA_FULL_NAME_PATTERN.test(p.description)) return true;
-  if (NON_CA_STATE_PATTERN.test(p.description)) return true;
-  return false;
+/**
+ * A 1×1 px, fully invisible GoogleMap. Rendered ONCE per page (place it
+ * anywhere inside the page body). It has no visual footprint and no
+ * interactivity — its only job is to make the Maps runtime fully initialize
+ * on pages that otherwise never mount a map.
+ */
+export function HiddenGoogleMap({ isLoaded }: { isLoaded: boolean }) {
+  if (!isLoaded) return null;
+  return (
+    <div
+      aria-hidden="true"
+      className="pointer-events-none fixed top-0 left-0 opacity-0"
+      style={{ width: 1, height: 1, overflow: 'hidden', zIndex: -1 }}
+    >
+      <GoogleMap
+        mapContainerStyle={{ width: 1, height: 1 }}
+        center={{ lat: 39.5, lng: -98.35 }}
+        zoom={4}
+        options={{
+          disableDefaultUI: true,
+          draggable: false,
+          keyboardShortcuts: false,
+          scrollwheel: false,
+          disableDoubleClickZoom: true,
+        }}
+      />
+    </div>
+  );
 }
 
-function filterToCA(
-  predictions: google.maps.places.AutocompletePrediction[]
-): google.maps.places.AutocompletePrediction[] {
-  return predictions.filter((p) => !isNonCAPrediction(p));
-}
-
-export default function LocationAutocomplete({
+export default function SettingsAddressAutocomplete({
   value,
   onChange,
   onPlaceSelect,
@@ -94,13 +67,9 @@ export default function LocationAutocomplete({
   isLoaded,
   icon,
   className = '',
-  types = ['address'],
   label,
   disabled = false,
-  strictBounds = false,
-  bounds,
-  onReject,
-}: LocationAutocompleteProps) {
+}: SettingsAddressAutocompleteProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
   const autocompleteServiceRef = useRef<google.maps.places.AutocompleteService | null>(null);
@@ -109,17 +78,23 @@ export default function LocationAutocomplete({
   const [predictions, setPredictions] = useState<google.maps.places.AutocompletePrediction[]>([]);
   const [showDropdown, setShowDropdown] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  // ReturnType<typeof setTimeout> instead of NodeJS.Timeout: the frontend
-  // type-check tsconfig has no NodeJS namespace. Pure type-level change,
-  // zero runtime behavior difference.
+  // True when a prediction request failed (timeout / REQUEST_DENIED /
+  // network error). The dropdown stays open with an explicit message and
+  // a Retry button instead of silently closing.
+  const [loadError, setLoadError] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Watchdog: the Google callback can simply never fire (flaky network /
+  // throttled key), which would leave the spinner spinning forever.
+  const watchdogRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Monotonic request id — responses from superseded requests are ignored.
+  const requestSeqRef = useRef(0);
+  // Last query actually sent to Google — powers the Retry button.
+  const lastQueryRef = useRef('');
   const userLocation = useUserLocation();
-  
-  // Use refs for callbacks
+
+  // Use refs for callbacks so re-renders don't stale-close over handlers
   const onChangeRef = useRef(onChange);
   const onPlaceSelectRef = useRef(onPlaceSelect);
-
-  // Keep refs updated
   useEffect(() => {
     onChangeRef.current = onChange;
     onPlaceSelectRef.current = onPlaceSelect;
@@ -128,12 +103,9 @@ export default function LocationAutocomplete({
   // Initialize services
   useEffect(() => {
     if (!isLoaded) return;
-    
     autocompleteServiceRef.current = new google.maps.places.AutocompleteService();
     const dummyDiv = document.createElement('div');
     placesServiceRef.current = new google.maps.places.PlacesService(dummyDiv);
-    
-    console.log('Places services initialized');
   }, [isLoaded]);
 
   // Sync external value changes
@@ -148,68 +120,111 @@ export default function LocationAutocomplete({
         setShowDropdown(false);
       }
     };
-
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Fetch predictions (US addresses only, no state restriction)
+  const clearWatchdog = useCallback(() => {
+    if (watchdogRef.current) {
+      clearTimeout(watchdogRef.current);
+      watchdogRef.current = null;
+    }
+  }, []);
+
+  // Abort any in-flight request (used by clear / unmount) so a late
+  // callback can't reopen or mutate the dropdown.
+  const cancelPendingRequest = useCallback(() => {
+    requestSeqRef.current += 1;
+    clearWatchdog();
+    setIsLoading(false);
+  }, [clearWatchdog]);
+
+  // Fetch predictions (US addresses)
   const fetchPredictions = useCallback((input: string) => {
     if (!autocompleteServiceRef.current || !input.trim()) {
+      cancelPendingRequest();
       setPredictions([]);
+      setLoadError(false);
       setShowDropdown(false);
       return;
     }
 
+    // Invalidate any in-flight request before issuing the new one.
+    const seq = ++requestSeqRef.current;
+    lastQueryRef.current = input;
     setIsLoading(true);
-    // Show the dropdown immediately so the user sees the loading spinner
-    // while Google is fetching predictions. Without this, the dropdown
-    // only appears AFTER results come back — which means if Google returns
-    // zero results (or is slow), the dropdown never shows and the user
-    // thinks autocomplete is broken, forcing them to type the full address
-    // manually. This was the original behavior before commit ed73911
-    // inadvertently removed it.
+    setLoadError(false);
+    // Open immediately so the user sees the spinner while Google works.
     setShowDropdown(true);
 
     const request: google.maps.places.AutocompletionRequest = {
-        input,
-        types: ['geocode', 'establishment'],
-        componentRestrictions: { country: 'us' },
-      };
-
-    // Apply bounds restriction when provided
-    if (bounds) {
-      request.bounds = bounds;
-      request.strictBounds = strictBounds;
-    }
+      input,
+      types: ['geocode', 'establishment'],
+      componentRestrictions: { country: 'us' },
+    };
 
     // Bias results toward the user's current GPS position (50 km radius).
-    // Uses location + radius (soft bias) instead of locationBias because
-    // the AutocompletionRequest.locationBias type does not support circles.
+    // new google.maps.LatLng (not a plain literal): the installed type defs
+    // type AutocompletionRequest.location as LatLng whose lat/lng are
+    // METHODS — a {lat, lng} literal is a type error here (the shared
+    // component carries that pre-existing error; this file must add none).
     if (userLocation) {
-      request.location = { lat: userLocation.lat, lng: userLocation.lng };
+      request.location = new google.maps.LatLng(userLocation.lat, userLocation.lng);
       request.radius = 50000;
     }
 
+    // Watchdog: if Google's callback hasn't fired within 8s, surface an
+    // explicit error row with Retry instead of an eternal spinner.
+    clearWatchdog();
+    watchdogRef.current = setTimeout(() => {
+      if (requestSeqRef.current !== seq) return; // superseded
+      setIsLoading(false);
+      setPredictions([]);
+      setLoadError(true);
+      setShowDropdown(true);
+    }, 8000);
+
     autocompleteServiceRef.current.getPlacePredictions(request,
       (results, status) => {
+        if (requestSeqRef.current !== seq) return; // stale response
+        clearWatchdog();
         setIsLoading(false);
-        
+
         if (status !== google.maps.places.PlacesServiceStatus.OK || !results) {
           setPredictions([]);
-          setShowDropdown(false);
+          // Genuinely no matches keep the neutral "No addresses found"
+          // row; anything else (denied, over quota, network) is a real
+          // failure and gets the error row with Retry.
+          if (status === google.maps.places.PlacesServiceStatus.ZERO_RESULTS) {
+            setLoadError(false);
+          } else {
+            setLoadError(true);
+          }
+          setShowDropdown(true);
           return;
         }
 
-        // Client-side filter: Google's API doesn't reliably enforce strictBounds
-        // on getPlacePredictions, so we double-check each prediction's state term.
-        const filtered = strictBounds ? filterToCA(results) : results;
-
-        setPredictions(filtered);
-        setShowDropdown(filtered.length > 0);
+        setPredictions(results);
+        setLoadError(false);
+        setShowDropdown(true);
       }
     );
-  }, [types, strictBounds, bounds, userLocation]);
+  }, [userLocation, cancelPendingRequest, clearWatchdog]);
+
+  const handleRetryPredictions = useCallback(() => {
+    if (lastQueryRef.current.trim()) {
+      fetchPredictions(lastQueryRef.current);
+    }
+  }, [fetchPredictions]);
+
+  // Cleanup on unmount: debounce timer + watchdog + in-flight request bump
+  useEffect(() => {
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+      requestSeqRef.current += 1;
+      if (watchdogRef.current) clearTimeout(watchdogRef.current);
+    };
+  }, []);
 
   // Handle input change with debounce
   const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
@@ -217,18 +232,16 @@ export default function LocationAutocomplete({
     setInputValue(newValue);
     onChangeRef.current(newValue);
 
-    // Clear previous debounce
     if (debounceRef.current) {
       clearTimeout(debounceRef.current);
     }
-
-    // Debounce the prediction fetch
     debounceRef.current = setTimeout(() => {
       fetchPredictions(newValue);
     }, 300);
   }, [fetchPredictions]);
 
-  // Handle prediction selection
+  // Handle prediction selection → fetch details → let the parent pre-fill
+  // city / state / country / postal code / coordinates from the place.
   const handleSelectPrediction = useCallback((prediction: google.maps.places.AutocompletePrediction) => {
     if (!placesServiceRef.current) return;
 
@@ -243,56 +256,39 @@ export default function LocationAutocomplete({
       },
       (place, status) => {
         setIsLoading(false);
-        
+
         if (status !== google.maps.places.PlacesServiceStatus.OK || !place) {
-          console.log('Failed to get place details');
           return;
         }
 
         const formattedAddress = place.formatted_address || prediction.description;
-
-        // Hard-block: reject places outside bounds when strictBounds is enabled
-        if (strictBounds && bounds && place.geometry?.location) {
-          const lat = place.geometry.location.lat();
-          const lng = place.geometry.location.lng();
-          if (lat < bounds.south || lat > bounds.north || lng < bounds.west || lng > bounds.east) {
-            console.log('Address rejected: outside allowed region', { lat, lng, bounds });
-            setInputValue('');
-            onChangeRef.current('');
-            onClear?.();
-            // Notify the parent so it can show the user WHY the address was
-            // cleared (e.g. "outside California — please enter a CA address").
-            onReject?.('out-of-bounds');
-            return;
-          }
-        }
-
-        console.log('Selected address:', formattedAddress);
-        
         setInputValue(formattedAddress);
         onChangeRef.current(formattedAddress);
         onPlaceSelectRef.current(place);
       }
     );
-  }, [strictBounds, bounds, onClear]);
+  }, []);
 
-  // Handle focus
+  // Reopen on refocus when there is something worth showing: results,
+  // or an error row (so Retry stays reachable after a tap elsewhere).
   const handleFocus = useCallback(() => {
-    if (inputValue.trim() && predictions.length > 0) {
+    if (inputValue.trim() && (predictions.length > 0 || loadError)) {
       setShowDropdown(true);
     }
-  }, [inputValue, predictions.length]);
+  }, [inputValue, predictions.length, loadError]);
 
   // Handle clear
   const handleClear = useCallback(() => {
+    cancelPendingRequest();
     setInputValue('');
     setPredictions([]);
+    setLoadError(false);
     setShowDropdown(false);
     onChangeRef.current('');
     if (onClear) {
       onClear();
     }
-  }, [onClear]);
+  }, [onClear, cancelPendingRequest]);
 
   return (
     <div ref={wrapperRef} className="relative">
@@ -308,7 +304,7 @@ export default function LocationAutocomplete({
         disabled={disabled}
         className={`h-14 pl-12 pr-10 rounded-2xl text-sm w-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 focus:outline-none focus:ring-2 focus:ring-lime-500 disabled:opacity-50 disabled:cursor-not-allowed ${className}`}
       />
-      
+
       {/* Clear button */}
       {inputValue && !disabled && (
         <button
@@ -326,13 +322,26 @@ export default function LocationAutocomplete({
           </svg>
         </button>
       )}
-      
+
       {/* Dropdown */}
       {showDropdown && (
         <div className="absolute z-50 w-full mt-2 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-xl max-h-64 overflow-y-auto">
           {isLoading ? (
             <div className="p-4 text-center text-sm text-slate-500">
               <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-lime-500 mx-auto"></div>
+            </div>
+          ) : loadError ? (
+            <div className="p-4 text-center">
+              <p className="text-sm font-semibold text-slate-600 dark:text-slate-300">
+                Couldn't load address suggestions
+              </p>
+              <button
+                type="button"
+                className="mt-2 text-sm font-bold text-lime-600 dark:text-lime-400 hover:underline"
+                onClick={handleRetryPredictions}
+              >
+                Retry
+              </button>
             </div>
           ) : predictions.length > 0 ? (
             predictions.map((prediction) => (

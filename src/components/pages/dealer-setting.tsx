@@ -57,8 +57,10 @@ import {
 } from '@/lib/tanstack/dataQuery'
 import { useQuery } from '@tanstack/react-query'
 
-// Import the location autocomplete component
-import LocationAutocomplete from '@/components/map/LocationAutocomplete'
+// Settings-local address autocomplete — deliberately NOT the shared
+// LocationAutocomplete, which other pages depend on (see file header of
+// SettingsAddressAutocomplete.tsx for the full rationale).
+import SettingsAddressAutocomplete, { HiddenGoogleMap } from '@/components/map/SettingsAddressAutocomplete'
 
 import {
   AlertDialog,
@@ -962,6 +964,10 @@ const confirmDelete = () => {
       </header>
 
       <main className="w-full max-w-[1440px] mx-auto px-6 lg:px-8 py-8 lg:py-10">
+        {/* Invisible 1×1 map: forces the full Google Maps runtime to initialize
+            on this page. Pages whose address dropdown worked all rendered a
+            real <GoogleMap>; this page never did. Zero visual footprint. */}
+        <HiddenGoogleMap isLoaded={googleMapsLoaded} />
         {/* Resume failed delivery banner — shown when sessionStorage has a
             pending reviewDeliveryData (set by the dealer-review-delivery page
             when a charge failed). The dealer updates their card below, then
@@ -1035,10 +1041,28 @@ const confirmDelete = () => {
           </div>
         </section>
 
-        {/* Save bar — see the sticky block at the END of <main>. It used
-            to sit here, BEFORE the tall form grid: a sticky-bottom element
-            only pins while its natural position is BELOW the viewport, so
-            in that spot it simply scrolled off-screen with the content. */}
+        {/* Save bar — sticky TOP, not bottom. The user's report was literal:
+            the button should scroll with the content and then STOP at the
+            BOTTOM EDGE OF THE HEADER ("nav bar"). Its top inset therefore
+            equals the header's total height: its own h-20 (5rem) inner row
+            plus the safe-area top padding the header adds. Placed BEFORE
+            the tall form grid, its natural position is just below the hero,
+            so it pins under the header for the whole scroll and stays
+            visible at every scroll depth. z-40 keeps it beneath the
+            header's z-50. */}
+        <div
+          className="sticky z-40 mb-2 flex justify-end pointer-events-none"
+          style={{ top: 'calc(env(safe-area-inset-top, 0px) + 5rem)' }}
+        >
+          <Button
+            onClick={handleSaveAll}
+            disabled={updateCustomer.isPending}
+            className="pointer-events-auto gap-2 bg-lime-500 text-slate-950 hover:bg-lime-600 rounded-full shadow-lg shadow-slate-900/25"
+          >
+            <Save className="h-4 w-4" />
+            {updateCustomer.isPending ? 'Saving...' : 'Save All Changes'}
+          </Button>
+        </div>
 
         {/* Main grid */}
         <section className="mt-8 grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_360px] gap-6 items-start">
@@ -1094,7 +1118,7 @@ const confirmDelete = () => {
                   </div>
                   <div className="md:col-span-2 space-y-2">
                     <Label className="text-xs font-bold">Address</Label>
-                    <LocationAutocomplete
+                    <SettingsAddressAutocomplete
                       value={businessProfile.address}
                       onChange={(value) => setBusinessProfile(prev => ({ ...prev, address: value }))}
                       onPlaceSelect={handleAddressSelect}
@@ -1313,7 +1337,7 @@ const confirmDelete = () => {
                     {/* Row 2: Address (required, full width) */}
                     <div className="md:col-span-2 space-y-2">
                       <Label className="text-xs font-bold">Address *</Label>
-                      <LocationAutocomplete
+                      <SettingsAddressAutocomplete
                         value={addressForm.address}
                         onChange={(value) => setAddressForm({ ...addressForm, address: value })}
                         onPlaceSelect={handleSavedAddressSelect}
@@ -1721,27 +1745,11 @@ const confirmDelete = () => {
           </aside>
         </section>
 
-        {/* Save bar — position:sticky with a bottom offset, deliberately
-            placed as the LAST block of <main>. A sticky-bottom element is
-            pinned to the viewport bottom only while its natural position
-            is BELOW the viewport; as the last block it is pulled up to the
-            bottom edge (clearing the home-indicator safe area) for the
-            whole scroll and settles back into its natural spot once the
-            page end is reached. Sitting here it can never scroll off the
-            top of the screen like it did when it lived above the grid. */}
-        <div
-          className="sticky z-40 mt-4 flex justify-end pointer-events-none"
-          style={{ bottom: 'calc(env(safe-area-inset-bottom, 0px) + 0.75rem)' }}
-        >
-          <Button
-            onClick={handleSaveAll}
-            disabled={updateCustomer.isPending}
-            className="pointer-events-auto gap-2 bg-lime-500 text-slate-950 hover:bg-lime-600 rounded-full shadow-lg shadow-slate-900/25"
-          >
-            <Save className="h-4 w-4" />
-            {updateCustomer.isPending ? 'Saving...' : 'Save All Changes'}
-          </Button>
-        </div>
+        {/* Save bar was moved to the TOP of <main> as a sticky-TOP element
+            pinned just below the header — see the block right before the
+            main grid. The requirement is that the button stops at the
+            header's bottom edge while scrolling, which is sticky-top
+            behavior, not sticky-bottom. */}
       </main>
 
       {/* Footer */}
