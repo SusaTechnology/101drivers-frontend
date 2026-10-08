@@ -27,6 +27,16 @@ import { getUser, authFetch } from '@/lib/tanstack/dataQuery';
 import { BUSINESS_TZ } from '@/lib/timezone';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 
 const formatDate = (dateString: string) => {
   if (!dateString) return '';
@@ -46,6 +56,12 @@ export default function DealerDrafts() {
   const queryClient = useQueryClient();
   const user = getUser();
   const customerId = user?.profileId;
+
+  // Draft pending deletion (in-app confirm). window.confirm is NOT an option:
+  // iOS suppresses JavaScript dialogs (alert/confirm/prompt) in standalone
+  // PWAs — confirm() returns false instantly, so the delete button silently
+  // did nothing on installed iPhones.
+  const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
 
   // Fetch draft deliveries
   const { data: drafts, isLoading, isError, error, refetch } = useQuery({
@@ -78,9 +94,14 @@ export default function DealerDrafts() {
   });
 
   const handleDelete = (draftId: string) => {
-    if (window.confirm('Are you sure you want to delete this draft?')) {
-      deleteMutation.mutate(draftId);
-    }
+    // Opens the in-app confirmation; the mutation runs from the dialog's
+    // confirm action (confirmDelete below).
+    setDeleteTarget(draftId);
+  };
+
+  const confirmDelete = () => {
+    if (deleteTarget) deleteMutation.mutate(deleteTarget);
+    setDeleteTarget(null);
   };
 
   const handleEdit = (draftId: string) => {
@@ -284,15 +305,16 @@ export default function DealerDrafts() {
                                 <Edit className="h-3 w-3" />
                                 Edit
                               </Button>
-                              {/* <Button
+                              <Button
                                 variant="outline"
                                 size="sm"
                                 onClick={() => handleDelete(draft.id)}
-                                className="text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950"
+                                className="gap-2 text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950"
                                 disabled={deleteMutation.isPending}
                               >
                                 <Trash2 className="h-3 w-3" />
-                              </Button> */}
+                                Delete
+                              </Button>
                             </div>
                           </TableCell>
                         </TableRow>
@@ -373,6 +395,30 @@ export default function DealerDrafts() {
           </Card>
         </section>
       </main>
+
+      {/* Delete confirmation — a real dialog instead of window.confirm, which
+          iOS standalone PWAs suppress (the old confirm() never appeared, so
+          delete silently no-op'd on installed iPhones). */}
+      <AlertDialog open={!!deleteTarget} onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}>
+        <AlertDialogContent className="max-w-sm rounded-3xl">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete this draft?</AlertDialogTitle>
+            <AlertDialogDescription>
+              The saved delivery request will be permanently removed. This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="rounded-xl">Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmDelete}
+              disabled={deleteMutation.isPending}
+              className="rounded-xl bg-red-500 text-white hover:bg-red-600"
+            >
+              {deleteMutation.isPending ? 'Deleting…' : 'Delete draft'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

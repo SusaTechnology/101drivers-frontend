@@ -223,6 +223,15 @@ html {
   overflow-x: clip;
 }
 
+/* iPhone toast position — CSS enforcement of the offset set via the sonner
+   `offset` prop in provider.tsx (inset*2 + 12px ≈ 130px on notched iPhones).
+   The prop IS supported by sonner 2.x, but !important CSS beats any inline
+   style sonner writes, so the position holds even if the prop path ever
+   regresses. env() resolves per device: 0 inset (desktop/Android) = 12px. */
+[data-sonner-toaster][data-y-position="top"] {
+  top: calc(env(safe-area-inset-top, 0px) * 2 + 12px) !important;
+}
+
 /* Custom utility classes for admin deliveries */
 .hover-lift {
   transition:

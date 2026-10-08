@@ -1,4 +1,6 @@
-import DealerEditDelivery from '@/components/pages/dealer-edit-delivery'
+import { lazy, Suspense } from 'react'
+import RoutePending from '@/components/shared/RoutePending'
+const DealerEditDelivery = lazy(() => import('@/components/pages/dealer-edit-delivery'))
 import { createFileRoute } from '@tanstack/react-router'
 
 export const Route = createFileRoute('/dealer-edit-delivery/')({
@@ -6,5 +8,9 @@ export const Route = createFileRoute('/dealer-edit-delivery/')({
 })
 
 function RouteComponent() {
-  return <DealerEditDelivery />
+  return (
+    <Suspense fallback={<RoutePending />}>
+      <DealerEditDelivery />
+    </Suspense>
+  )
 }

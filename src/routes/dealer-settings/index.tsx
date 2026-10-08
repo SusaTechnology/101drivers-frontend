@@ -1,4 +1,6 @@
-import DealerSettings from '@/components/pages/dealer-setting'
+import { lazy, Suspense } from 'react'
+import RoutePending from '@/components/shared/RoutePending'
+const DealerSettings = lazy(() => import('@/components/pages/dealer-setting'))
 import { createFileRoute } from '@tanstack/react-router'
 
 export const Route = createFileRoute('/dealer-settings/')({
@@ -6,5 +8,9 @@ export const Route = createFileRoute('/dealer-settings/')({
 })
 
 function RouteComponent() {
-  return <DealerSettings />
+  return (
+    <Suspense fallback={<RoutePending />}>
+      <DealerSettings />
+    </Suspense>
+  )
 }

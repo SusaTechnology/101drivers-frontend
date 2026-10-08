@@ -135,6 +135,11 @@ export default function DealerSupportDetail({ supportRequestId }: DealerSupportD
   const isPrivateCustomer = user?.roles?.includes('PRIVATE_CUSTOMER') ?? false
 
   // Fetch support request detail
+  // NOTE: the endpoint is the plain resource route /api/supportRequests/:id —
+  // the SAME one the admin and driver detail pages use. This page uniquely
+  // called /api/supportRequests/:id/detail, which the backend does not
+  // serve, so every dealer deep-link (incl. notification → View Support
+  // Request) landed on "Failed to load".
   const {
     data: supportData,
     isLoading,
@@ -142,7 +147,7 @@ export default function DealerSupportDetail({ supportRequestId }: DealerSupportD
     error,
     refetch,
   } = useDataQuery<SupportRequestDetail>({
-    apiEndPoint: `${import.meta.env.VITE_API_URL}/api/supportRequests/${id}/detail`,
+    apiEndPoint: `${import.meta.env.VITE_API_URL}/api/supportRequests/${id}`,
     noFilter: true,
     enabled: !!id,
   })
@@ -293,6 +298,28 @@ export default function DealerSupportDetail({ supportRequestId }: DealerSupportD
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-lime-500 mx-auto"></div>
             <p className="mt-4 text-slate-600 dark:text-slate-400">Loading support request...</p>
           </div>
+        </main>
+        <Footer />
+      </div>
+    )
+  }
+
+  // Missing reference — the URL carries no id at all (broken deep link).
+  // Deliberately DISTINCT from the failure card below so a data problem is
+  // never confused with a malformed link.
+  if (!id) {
+    return (
+      <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
+        <Header />
+        <main className="max-w-[1440px] mx-auto px-6 lg:px-8 py-10 flex items-center justify-center">
+          <Card className="max-w-md p-6 text-center">
+            <AlertCircle className="h-12 w-12 text-amber-500 mx-auto" />
+            <h2 className="mt-4 text-xl font-black text-slate-900 dark:text-white">Request reference missing</h2>
+            <p className="mt-2 text-slate-600 dark:text-slate-400">
+              This link doesn&apos;t include the support request id. Open the request from the Support page instead.
+            </p>
+            <Button onClick={() => navigate({ to: '/dealer-support-list' })} className="mt-6 bg-lime-500 text-slate-950">Go to Support</Button>
+          </Card>
         </main>
         <Footer />
       </div>

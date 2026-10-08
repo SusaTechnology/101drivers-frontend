@@ -1,4 +1,6 @@
-import DealerDeliveryDetails from '@/components/pages/dealer-delivery-details'
+import { lazy, Suspense } from 'react'
+import RoutePending from '@/components/shared/RoutePending'
+const DealerDeliveryDetails = lazy(() => import('@/components/pages/dealer-delivery-details'))
 import { createFileRoute, useSearch } from '@tanstack/react-router'
 import { z } from 'zod'
 
@@ -13,5 +15,9 @@ export const Route = createFileRoute('/dealer-delivery-details/')({
 
 function RouteComponent() {
   const search = useSearch({ from: '/dealer-delivery-details/' })
-  return <DealerDeliveryDetails deliveryId={search.id} />
+  return (
+    <Suspense fallback={<RoutePending />}>
+      <DealerDeliveryDetails deliveryId={search.id} />
+    </Suspense>
+  )
 }

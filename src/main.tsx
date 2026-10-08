@@ -15,6 +15,7 @@ import {
   reloadOnceForStaleBuild,
 } from "./components/shared/RouteErrorScreen.tsx";
 import { NotFoundScreen } from "./components/shared/NotFoundScreen.tsx";
+import RoutePending from "./components/shared/RoutePending.tsx";
 // import { GoogleMapsProvider } from "./lib/map/GoogleMapsProvider.tsx";
 // Create a new router instance
 const router = createRouter({
@@ -29,6 +30,12 @@ const router = createRouter({
   // something") with a branded screen that offers recovery and auto-reloads
   // once when a deploy swaps out the JS chunks under an open tab.
   defaultErrorComponent: RouteErrorScreen,
+  // While a route is pending (async work before it can render), show the
+  // branded loading screen instead of leaving the old page frozen. The
+  // 150ms grace avoids flashing the spinner for instant transitions.
+  defaultPendingMs: 150,
+  defaultPendingMinMs: 300,
+  defaultPendingComponent: RoutePending,
   // Branded 404 — used by any route that triggers notFound() without
   // defining its own notFoundComponent (unmatched URLs render via the
   // root route's notFoundComponent, also NotFoundScreen).

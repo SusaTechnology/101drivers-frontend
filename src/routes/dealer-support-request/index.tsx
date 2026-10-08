@@ -1,4 +1,6 @@
-import DealerSupportRequest from '@/components/pages/dealer-support-request'
+import { lazy, Suspense } from 'react'
+import RoutePending from '@/components/shared/RoutePending'
+const DealerSupportRequest = lazy(() => import('@/components/pages/dealer-support-request'))
 import { createFileRoute } from '@tanstack/react-router'
 
 export const Route = createFileRoute('/dealer-support-request/')({
@@ -6,5 +8,9 @@ export const Route = createFileRoute('/dealer-support-request/')({
 })
 
 function RouteComponent() {
-  return <DealerSupportRequest />
+  return (
+    <Suspense fallback={<RoutePending />}>
+      <DealerSupportRequest />
+    </Suspense>
+  )
 }
