@@ -307,51 +307,58 @@ export function ReferralCodeCard({ referrerType, className, collapsible = false 
         </CardHeader>
 
         <CardContent className="relative z-10 space-y-4">
-          {/* Referral code display + Copy CODE button (copies code only) */}
+          {/* Referral code display + Copy CODE button (copies code only).
+              MOBILE: the "Your referral code" label gets its OWN line
+              (whitespace-nowrap — it used to be squeezed into a wrapping
+              multi-item row), and code + Copy + Customize share one compact
+              row (text-base code, h-9 buttons, "Copy" instead of "Copy Code",
+              icon-only Customize). From sm up: original sizes and labels. */}
           {referralCode && isActive && (
-            <div className="flex items-center gap-3 p-4 rounded-2xl bg-white dark:bg-slate-950 border border-emerald-100 dark:border-emerald-900/30">
-              <div className="flex-1 min-w-0">
-                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">
-                  Your referral code
-                </p>
-                <p className="text-lg font-black text-slate-900 dark:text-white tracking-wider font-mono">
+            <div className="p-3 sm:p-4 rounded-2xl bg-white dark:bg-slate-950 border border-emerald-100 dark:border-emerald-900/30">
+              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 whitespace-nowrap">
+                Your referral code
+              </p>
+              <div className="flex items-center gap-2 sm:gap-3 mt-1.5">
+                <p className="flex-1 min-w-0 text-base sm:text-lg font-black text-slate-900 dark:text-white tracking-wider font-mono truncate">
                   {referralCode}
                 </p>
-              </div>
-              {/* Copy CODE button — copies just the code (e.g. "ABCD2345") */}
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-10 px-4 rounded-2xl border-emerald-200 dark:border-emerald-800/40 bg-emerald-50 dark:bg-emerald-900/10 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-900/20 font-extrabold transition inline-flex items-center gap-2"
-                onClick={handleCopyCode}
-              >
-                {copiedCode ? (
-                  <>
-                    <Check className="w-4 h-4" />
-                    Copied
-                  </>
-                ) : (
-                  <>
-                    <Copy className="w-4 h-4" />
-                    Copy Code
-                  </>
-                )}
-              </Button>
-              {/* Customize button — opens the CustomizeCodeDialog.
-                  Only shown if the code is NOT yet locked (referralCodeLocked=false).
-                  Once locked, the button is hidden — the code can't be changed again. */}
-              {codeData?.referralCodeLocked !== true && (
+                {/* Copy CODE button — copies just the code (e.g. "ABCD2345") */}
                 <Button
-                  variant="ghost"
+                  variant="outline"
                   size="sm"
-                  className="h-10 px-3 rounded-2xl text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-900/10 transition inline-flex items-center gap-1.5"
-                  onClick={() => setCustomizeDialogOpen(true)}
-                  title="Customize your code"
+                  className="h-9 sm:h-10 px-2.5 sm:px-4 rounded-2xl border-emerald-200 dark:border-emerald-800/40 bg-emerald-50 dark:bg-emerald-900/10 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-900/20 font-extrabold transition inline-flex items-center gap-1.5 sm:gap-2 shrink-0 text-xs sm:text-sm"
+                  onClick={handleCopyCode}
                 >
-                  <Settings2 className="w-4 h-4" />
-                  Customize
+                  {copiedCode ? (
+                    <>
+                      <Check className="w-4 h-4" />
+                      Copied
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="w-4 h-4" />
+                      <span className="sm:hidden">Copy</span>
+                      <span className="hidden sm:inline">Copy Code</span>
+                    </>
+                  )}
                 </Button>
-              )}
+                {/* Customize button — opens the CustomizeCodeDialog.
+                    Only shown if the code is NOT yet locked (referralCodeLocked=false).
+                    Once locked, the button is hidden — the code can't be changed again.
+                    On phones it is icon-only to keep the row on one line. */}
+                {codeData?.referralCodeLocked !== true && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-9 sm:h-10 px-2 sm:px-3 rounded-2xl text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-900/10 transition inline-flex items-center gap-1 sm:gap-1.5 shrink-0 text-xs sm:text-sm"
+                    onClick={() => setCustomizeDialogOpen(true)}
+                    title="Customize your code"
+                  >
+                    <Settings2 className="w-4 h-4" />
+                    <span className="sr-only sm:not-sr-only">Customize</span>
+                  </Button>
+                )}
+              </div>
             </div>
           )}
 
