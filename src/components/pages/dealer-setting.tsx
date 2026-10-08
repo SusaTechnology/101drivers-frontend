@@ -1051,13 +1051,13 @@ const confirmDelete = () => {
             visible at every scroll depth. z-40 keeps it beneath the
             header's z-50. */}
         <div
-          className="sticky z-40 mb-2 flex justify-end pointer-events-none"
+          className="sticky z-40 mb-2  flex justify-end pointer-events-none"
           style={{ top: 'calc(env(safe-area-inset-top, 0px) + 5rem)' }}
         >
           <Button
             onClick={handleSaveAll}
             disabled={updateCustomer.isPending}
-            className="pointer-events-auto gap-2 bg-lime-500 text-slate-950 hover:bg-lime-600 rounded-full shadow-lg shadow-slate-900/25"
+            className="pointer-events-auto gap-2 bg-lime-500 text-slate-950 hover:bg-lime-600 mt-5 rounded-full shadow-lg shadow-slate-900/25"
           >
             <Save className="h-4 w-4" />
             {updateCustomer.isPending ? 'Saving...' : 'Save All Changes'}
