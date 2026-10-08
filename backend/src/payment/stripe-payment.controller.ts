@@ -764,7 +764,8 @@ export class StripePaymentController {
         residentialState: true,
         residentialZip: true,
         agreementAcceptedAt: true,
-        user: { select: { email: true, fullName: true } },
+        phone: true,
+        user: { select: { email: true, fullName: true, phone: true } },
       },
     });
 
@@ -807,6 +808,32 @@ export class StripePaymentController {
         };
       }
 
+      // ── Normalize the driver's phone for Stripe (E.164) ───────────
+      // Driver.phone / User.phone are free-form in our DB. Stripe expects
+      // a callable number for `individual.phone` (the field its hosted
+      // onboarding prefills). We only push values we can normalize
+      // confidently — otherwise we push nothing and Stripe asks the
+      // driver, exactly like before. Pushing the CURRENT number on every
+      // onboarding start also SELF-HEALS accounts where Stripe stored a
+      // wrong number in an earlier partial attempt (Stripe persists what
+      // the driver typed and keeps prefilling it forever).
+      const rawPhone = (driver.phone || driver.user?.phone || '').trim();
+      const phoneDigits = rawPhone.replace(/\D/g, '');
+      let phoneForStripe: string | undefined;
+      if (
+        rawPhone.startsWith('+') &&
+        phoneDigits.length >= 8 &&
+        phoneDigits.length <= 15
+      ) {
+        // Already international — trust it.
+        phoneForStripe = `+${phoneDigits}`;
+      } else if (phoneDigits.length === 10) {
+        // US national format (area code + number) — our drivers are US-based.
+        phoneForStripe = `+1${phoneDigits}`;
+      } else if (phoneDigits.length === 11 && phoneDigits.startsWith('1')) {
+        phoneForStripe = `+${phoneDigits}`;
+      }
+
       // Get caller IP for TOS acceptance
       const clientIp = req?.headers?.['x-forwarded-for']?.split(',')[0]?.trim()
         || req?.ip
@@ -817,6 +844,8 @@ export class StripePaymentController {
           businessType: 'individual',
           firstName,
           lastName,
+          phone: phoneForStripe,
+          supportPhone: phoneForStripe,
           dob,
           ssnLast4: driver.ssnLastFour || undefined,
           businessUrl: process.env.FRONTEND_URL || 'https://101drivers.techbee.et',
@@ -835,7 +864,7 @@ export class StripePaymentController {
             },
           } : {}),
         });
-        this.logger.log(`Pre-filled Connect account ${accountId} for driver ${driverId} with SSN, name, address, DOB`);
+        this.logger.log(`Pre-filled Connect account ${accountId} for driver ${driverId} with SSN, name, phone, address, DOB`);
       } catch (prefillErr: any) {
         // Non-blocking: if pre-fill fails, onboarding still works (driver enters manually)
         this.logger.warn(`Connect pre-fill warning for driver ${driverId}: ${prefillErr.message}`);

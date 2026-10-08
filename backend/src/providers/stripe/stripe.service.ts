@@ -508,6 +508,20 @@ export class StripeService {
     businessType?: 'individual';
     firstName?: string;
     lastName?: string;
+    /**
+     * Driver's phone in E.164 form (e.g. +12145550123). Written to
+     * `individual.phone`, which is what Stripe's hosted onboarding prefills
+     * into the phone/SMS-verification step. Without it, Stripe shows
+     * whatever stale number it stored during a previous onboarding attempt,
+     * because OUR code never pushes a phone — that was the source of the
+     * "why is Stripe showing the wrong number" report.
+     */
+    phone?: string;
+    /**
+     * Optional separate support phone. If omitted, no support phone is
+     * pushed (Stripe may ask the driver during onboarding).
+     */
+    supportPhone?: string;
     dob?: { day: number; month: number; year: number };
     ssnLast4?: string;
     businessUrl?: string;
@@ -531,6 +545,16 @@ export class StripeService {
       updateData.individual = updateData.individual || {};
       if (params.firstName) updateData.individual.first_name = params.firstName;
       if (params.lastName) updateData.individual.last_name = params.lastName;
+    }
+
+    if (params.phone) {
+      updateData.individual = updateData.individual || {};
+      updateData.individual.phone = params.phone;
+    }
+
+    if (params.supportPhone) {
+      updateData.business_profile = updateData.business_profile || {};
+      updateData.business_profile.support_phone = params.supportPhone;
     }
 
     if (params.dob) {
