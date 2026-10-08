@@ -2,6 +2,8 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { Link, useNavigate } from '@tanstack/react-router'
 import { toast } from 'sonner'
+import { useJsApiLoader } from "@react-google-maps/api";
+import { GOOGLE_MAPS_LIBRARIES, GOOGLE_MAPS_SCRIPT_ID } from "@/lib/google-maps-config";
 import {
   Card,
   CardContent,
@@ -191,7 +193,18 @@ export default function DealerSettings() {
 
   // --- All hooks must be called unconditionally at the top ---
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
-  const [googleMapsLoaded, setGoogleMapsLoaded] = useState(false)
+  // Google Maps JS API — loaded via the SHARED @react-google-maps/api
+  // loader (same script id, key and libraries as the create-delivery
+  // page), replacing this page's old hand-rolled <script> injection. The
+  // manual loader used a different script tag + a narrower libraries set,
+  // so on devices where it failed or raced the other page's loader,
+  // googleMapsLoaded stayed false and the address dropdown silently
+  // never appeared while the SAME dropdown worked on create-delivery.
+  const { isLoaded: googleMapsLoaded } = useJsApiLoader({
+    id: GOOGLE_MAPS_SCRIPT_ID,
+    googleMapsApiKey: import.meta.env.VITE_GOOGLE_MAPS_API_KEY as string,
+    libraries: GOOGLE_MAPS_LIBRARIES,
+  })
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [deleteItemType, setDeleteItemType] = useState<'address' | 'vehicle' | null>(null)
   const [deleteItemId, setDeleteItemId] = useState<string | null>(null)
@@ -253,6 +266,15 @@ const confirmDelete = () => {
     email?: string | null
     phone?: string | null
   }>({})
+  // Red BORDER = live signal while typing/editing. Red helper TEXT under
+  // the field appears only after a save attempt with invalid values.
+  const [showContactHelpers, setShowContactHelpers] = useState(false)
+  // Business profile section (phone + website) follows the same contract.
+  const [businessErrors, setBusinessErrors] = useState<{
+    phone?: string | null
+    website?: string | null
+  }>({})
+  const [showBusinessHelpers, setShowBusinessHelpers] = useState(false)
 
   // ---- Contact field validators ----
   // Email: pragmatic pattern — exactly one @, no whitespace, and a dot
@@ -280,6 +302,16 @@ const confirmDelete = () => {
     }
     if (digits.length > 15) {
       return 'This number looks too long — please double-check it.'
+    }
+    return null
+  }
+  // Website: accepts values with or without protocol — the host must look
+  // like a domain (label + dot + TLD of 2+). Catches "my shop", "http://".
+  const validateBusinessWebsite = (value: string): string | null => {
+    const v = value.trim()
+    if (!v) return null
+    if (!/^(https?:\/\/)?([\w-]+\.)+[a-z]{2,}(:\d+)?(\/\S*)?$/i.test(v)) {
+      return 'Enter a valid website address, e.g. www.mycompany.com.'
     }
     return null
   }
@@ -581,22 +613,34 @@ const confirmDelete = () => {
     if (confirm('Delete this vehicle?')) deleteVehicle.mutate({ pathParams: { id } })
   }
 
-  // Live re-validation: once a field has shown an error, re-check on every
-  // keystroke so the error disappears the moment the value becomes valid.
+  // LIVE border logic (requested UX):
+  //   • phone  — validated on EVERY keystroke: typing a letter gets the
+  //              red border immediately, before any save attempt.
+  //   • email  — border appears on BLUR (unfocus) when the value is
+  //              wrong, then clears live as the user fixes it.
+  //   • helper text under a field only shows after a save attempt.
   const updateContactField = (field: 'email' | 'phone', value: string) => {
     setContactPerson(prev => ({ ...prev, [field]: value }))
-    setContactErrors(prev => {
-      if (!prev[field]) return prev
-      const err =
-        field === 'email'
-          ? value.trim()
-            ? validateContactEmail(value)
-            : null
-          : value.trim()
-            ? validateContactPhone(value)
-            : null
-      return { ...prev, [field]: err }
-    })
+    if (field === 'phone') {
+      setContactErrors(prev => ({
+        ...prev,
+        phone: value.trim() ? validateContactPhone(value) : null,
+      }))
+    } else if (contactErrors.email) {
+      setContactErrors(prev => ({
+        ...prev,
+        email: value.trim() ? validateContactEmail(value) : null,
+      }))
+    }
+  }
+
+  const handleContactEmailBlur = () => {
+    if (contactPerson.email.trim()) {
+      setContactErrors(prev => ({
+        ...prev,
+        email: validateContactEmail(contactPerson.email),
+      }))
+    }
   }
 
   // Returns true when every FILLED contact value is usable. Blocks the
@@ -610,9 +654,53 @@ const confirmDelete = () => {
       : null
     setContactErrors({ email: emailError, phone: phoneError })
     if (emailError || phoneError) {
+      setShowContactHelpers(true)
       toast.error('Please fix the highlighted contact fields')
       return false
     }
+    setShowContactHelpers(false)
+    return true
+  }
+
+  // ---- Business profile: same contract (phone live, website on blur) ----
+  const updateBusinessField = (field: 'phone' | 'website', value: string) => {
+    setBusinessProfile(prev => ({ ...prev, [field]: value }))
+    if (field === 'phone') {
+      setBusinessErrors(prev => ({
+        ...prev,
+        phone: value.trim() ? validateContactPhone(value) : null,
+      }))
+    } else if (businessErrors.website) {
+      setBusinessErrors(prev => ({
+        ...prev,
+        website: value.trim() ? validateBusinessWebsite(value) : null,
+      }))
+    }
+  }
+
+  const handleBusinessWebsiteBlur = () => {
+    if (businessProfile.website.trim()) {
+      setBusinessErrors(prev => ({
+        ...prev,
+        website: validateBusinessWebsite(businessProfile.website),
+      }))
+    }
+  }
+
+  const validateBusinessFields = (): boolean => {
+    const phoneError = businessProfile.phone.trim()
+      ? validateContactPhone(businessProfile.phone)
+      : null
+    const websiteError = businessProfile.website.trim()
+      ? validateBusinessWebsite(businessProfile.website)
+      : null
+    setBusinessErrors({ phone: phoneError, website: websiteError })
+    if (phoneError || websiteError) {
+      setShowBusinessHelpers(true)
+      toast.error('Please fix the highlighted profile fields')
+      return false
+    }
+    setShowBusinessHelpers(false)
     return true
   }
 
@@ -627,6 +715,7 @@ const confirmDelete = () => {
   }
 
   const handleSaveBusinessProfile = () => {
+    if (!validateBusinessFields()) return
     updateCustomer.mutate({
       pathParams: { id: customerId },
       businessName: businessProfile.name,
@@ -638,8 +727,8 @@ const confirmDelete = () => {
   }
 
   const handleSaveAll = () => {
-    // handleSaveAll sends the contact fields too, so the same validation
-    // gate applies (handleSaveBusinessProfile doesn't send them — no gate).
+    // Save All sends BOTH sections, so both validation gates apply.
+    if (!validateBusinessFields()) return
     if (!validateContactFields()) return
     updateCustomer.mutate({
       pathParams: { id: customerId },
@@ -718,20 +807,6 @@ const confirmDelete = () => {
       })
     }
   }, [customer])
-
-  useEffect(() => {
-    if (window.google && window.google.maps) {
-      setGoogleMapsLoaded(true)
-      return
-    }
-    const script = document.createElement('script')
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${import.meta.env.VITE_GOOGLE_MAPS_API_KEY}&libraries=places`
-    script.async = true
-    script.defer = true
-    script.onload = () => setGoogleMapsLoaded(true)
-    document.head.appendChild(script)
-    return () => {}
-  }, [])
 
   useEffect(() => {
     if (!googleMapsLoaded || !businessNameInputRef.current) return
@@ -948,17 +1023,28 @@ const confirmDelete = () => {
               </p>
             </div>
           </div>
-          <div className="flex flex-col sm:flex-row gap-3">
-            {/* <Button variant="outline" onClick={handleResetAll} className="gap-2 rounded-full">
-              <Settings className="h-4 w-4" />
-              Reset
-            </Button> */}
-            <Button onClick={handleSaveAll} className="gap-2 bg-lime-500 text-slate-950 hover:bg-lime-600 rounded-full">
-              <Save className="h-4 w-4" />
-              Save All Changes
-            </Button>
-          </div>
         </section>
+
+        {/* Save bar — position:sticky with a bottom offset. It scrolls
+            with the page content, but pins just above the bottom edge
+            (clearing the home-indicator safe area) instead of scrolling
+            off-screen, so "Save All Changes" stays visible and reachable
+            the whole way down. Its parent is the page-wide wrapper, so
+            the pin holds for the entire page; near the very bottom it
+            settles back into its natural spot — that is the "stop". */}
+        <div
+          className="sticky z-40 mt-4 flex justify-end pointer-events-none"
+          style={{ bottom: 'calc(env(safe-area-inset-bottom, 0px) + 0.75rem)' }}
+        >
+          <Button
+            onClick={handleSaveAll}
+            disabled={updateCustomer.isPending}
+            className="pointer-events-auto gap-2 bg-lime-500 text-slate-950 hover:bg-lime-600 rounded-full shadow-lg shadow-slate-900/25"
+          >
+            <Save className="h-4 w-4" />
+            {updateCustomer.isPending ? 'Saving...' : 'Save All Changes'}
+          </Button>
+        </div>
 
         {/* Main grid */}
         <section className="mt-8 grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_360px] gap-6 items-start">
@@ -1000,10 +1086,17 @@ const confirmDelete = () => {
                   <div className="space-y-2">
                     <Label className="text-xs font-bold">Website</Label>
                     <Input
+                      type="url"
+                      inputMode="url"
                       value={businessProfile.website}
-                      onChange={(e) => setBusinessProfile(prev => ({ ...prev, website: e.target.value }))}
-                      className="h-14 rounded-2xl"
+                      onChange={(e) => updateBusinessField('website', e.target.value)}
+                      onBlur={handleBusinessWebsiteBlur}
+                      aria-invalid={!!businessErrors.website}
+                      className={`h-14 rounded-2xl ${businessErrors.website ? 'border-red-400 focus-visible:ring-red-300' : ''}`}
                     />
+                    {showBusinessHelpers && businessErrors.website && (
+                      <p className="text-xs font-bold text-red-600 dark:text-red-400">{businessErrors.website}</p>
+                    )}
                   </div>
                   <div className="md:col-span-2 space-y-2">
                     <Label className="text-xs font-bold">Address</Label>
@@ -1019,10 +1112,17 @@ const confirmDelete = () => {
                   <div className="space-y-2">
                     <Label className="text-xs font-bold">Phone</Label>
                     <Input
+                      type="tel"
+                      inputMode="tel"
+                      autoComplete="tel"
                       value={businessProfile.phone}
-                      onChange={(e) => setBusinessProfile(prev => ({ ...prev, phone: e.target.value }))}
-                      className="h-14 rounded-2xl"
+                      onChange={(e) => updateBusinessField('phone', e.target.value)}
+                      aria-invalid={!!businessErrors.phone}
+                      className={`h-14 rounded-2xl ${businessErrors.phone ? 'border-red-400 focus-visible:ring-red-300' : ''}`}
                     />
+                    {showBusinessHelpers && businessErrors.phone && (
+                      <p className="text-xs font-bold text-red-600 dark:text-red-400">{businessErrors.phone}</p>
+                    )}
                   </div>
 
                 </div>
@@ -1068,10 +1168,11 @@ const confirmDelete = () => {
                       autoComplete="email"
                       value={contactPerson.email}
                       onChange={(e) => updateContactField('email', e.target.value)}
+                      onBlur={handleContactEmailBlur}
                       aria-invalid={!!contactErrors.email}
                       className={`h-14 rounded-2xl ${contactErrors.email ? 'border-red-400 focus-visible:ring-red-300' : ''}`}
                     />
-                    {contactErrors.email && (
+                    {showContactHelpers && contactErrors.email && (
                       <p className="text-xs font-bold text-red-600 dark:text-red-400">{contactErrors.email}</p>
                     )}
                   </div>
@@ -1086,7 +1187,7 @@ const confirmDelete = () => {
                       aria-invalid={!!contactErrors.phone}
                       className={`h-14 rounded-2xl ${contactErrors.phone ? 'border-red-400 focus-visible:ring-red-300' : ''}`}
                     />
-                    {contactErrors.phone && (
+                    {showContactHelpers && contactErrors.phone && (
                       <p className="text-xs font-bold text-red-600 dark:text-red-400">{contactErrors.phone}</p>
                     )}
                   </div>
