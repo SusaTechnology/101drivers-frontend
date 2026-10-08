@@ -651,11 +651,11 @@ export default function DealerDashboard() {
           as a customer). The card internally fetches its own data + adapts
           to the program being paused. `collapsible` adds a collapse
           toggle so the dealer can fold it to a one-line strip. */}
-      {dealerId && (
+      {/* {dealerId && (
         <div className="px-4 pt-4 max-w-[980px] mx-auto">
           <ReferralCodeCard referrerType="CUSTOMER" collapsible />
         </div>
-      )}
+      )} */}
 
       {/* Stats Summary */}
       <div className="px-4 py-3 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800">
@@ -944,7 +944,11 @@ export default function DealerDashboard() {
           )}
         </div>
       </main>
-
+      {dealerId && (
+        <div className="px-4 pt-4 max-w-[980px] mx-auto">
+          <ReferralCodeCard referrerType="CUSTOMER" collapsible />
+        </div>
+      )}
       {/* Quick Action Dialog — Manage / Close Delivery */}
       <AlertDialog open={!!actionDialogDeliveryId} onOpenChange={(open) => { if (!open) { setActionDialogDeliveryId(null); setActionDialogStatus(null) } }}>
         <AlertDialogContent>
