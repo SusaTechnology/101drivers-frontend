@@ -529,20 +529,30 @@ export default function PostpaidStatusPanel({
       <div className="px-4 py-3">
         <Card className="max-w-[980px] mx-auto border-slate-200 dark:border-slate-800 rounded-2xl">
           <CardContent className="p-3">
+            {/* One horizontal band: icon + title + badges + Show never
+                split into separate rows. The badges live in their own
+                shrinkable band (min-w-0 flex-1) and wrap among themselves,
+                so the Show control stays glued to the badges' line on
+                phones instead of dropping below them. The 'Show' label is
+                desktop-only — on phones the chevron alone marks the
+                expandable strip (title attribute names the action). */}
             <button
               type="button"
               onClick={toggleCollapsed}
               aria-expanded={false}
+              aria-label="Expand postpaid billing details"
               title="Expand postpaid billing details"
-              className="w-full flex flex-wrap items-center gap-x-2 gap-y-1 text-left group cursor-pointer"
+              className="w-full flex items-center gap-x-1.5 sm:gap-x-2 text-left group cursor-pointer min-w-0"
             >
               <CreditCard className="w-4 h-4 text-blue-500 shrink-0" />
-              <span className="text-sm font-bold text-slate-900 dark:text-white shrink-0">
+              <span className="text-xs sm:text-sm font-bold text-slate-900 dark:text-white shrink-0">
                 Weekly Postpaid
               </span>
-              {statusBadges}
-              <span className="ml-auto inline-flex items-center gap-1 text-xs font-bold text-slate-400 group-hover:text-slate-600 dark:group-hover:text-slate-300 shrink-0">
-                Show
+              <span className="flex min-w-0 flex-1 flex-wrap items-center gap-x-1.5 gap-y-1 overflow-hidden">
+                {statusBadges}
+              </span>
+              <span className="inline-flex items-center gap-1 text-xs font-bold text-slate-400 group-hover:text-slate-600 dark:group-hover:text-slate-300 shrink-0">
+                <span className="hidden sm:inline">Show</span>
                 <ChevronDown className="w-4 h-4" />
               </span>
             </button>
@@ -754,7 +764,11 @@ export default function PostpaidStatusPanel({
             {/* flex-wrap: on phones the status badges are wide enough to
                 squeeze the right-hand buttons to zero width — the collapse
                 chevron literally vanished on iPhones. Wrapping lets the
-                Refresh + chevron group drop to its own row instead. */}
+                Refresh + chevron group drop to its own row instead, and
+                ml-auto on that group pins the dropped row to the RIGHT
+                edge (justify-between alone would left-align a lone
+                wrapped item), keeping the controls in the corner where
+                desktop shows them. */}
             <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-2 mb-3">
               <div className="flex flex-wrap items-center gap-2 min-w-0">
                 <Badge className="bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
@@ -762,7 +776,7 @@ export default function PostpaidStatusPanel({
                 </Badge>
                 {statusBadges}
               </div>
-              <div className="flex items-center gap-1 shrink-0">
+              <div className="ml-auto flex items-center gap-1 shrink-0">
                 <Button
                   variant="ghost"
                   size="sm"
