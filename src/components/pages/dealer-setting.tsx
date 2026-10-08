@@ -316,6 +316,14 @@ const confirmDelete = () => {
     return null
   }
 
+  // Phone keys are restricted at the INPUT itself: any character that is
+  // not a digit or one of the allowed separators (+ ( ) - . space) is
+  // stripped before it can reach the field, so letters can no longer be
+  // typed at all. Pasted text and keyboard autofill go through the same
+  // path and are cleaned the same way.
+  const sanitizePhoneInput = (value: string): string =>
+    value.replace(/[^0-9+()\-.\s]/g, '')
+
   // Saved addresses - using useQuery directly to avoid pagination params
   const {
     data: addresses = [],
@@ -620,6 +628,7 @@ const confirmDelete = () => {
   //              wrong, then clears live as the user fixes it.
   //   • helper text under a field only shows after a save attempt.
   const updateContactField = (field: 'email' | 'phone', value: string) => {
+    if (field === 'phone') value = sanitizePhoneInput(value)
     setContactPerson(prev => ({ ...prev, [field]: value }))
     if (field === 'phone') {
       setContactErrors(prev => ({
@@ -664,6 +673,7 @@ const confirmDelete = () => {
 
   // ---- Business profile: same contract (phone live, website on blur) ----
   const updateBusinessField = (field: 'phone' | 'website', value: string) => {
+    if (field === 'phone') value = sanitizePhoneInput(value)
     setBusinessProfile(prev => ({ ...prev, [field]: value }))
     if (field === 'phone') {
       setBusinessErrors(prev => ({
@@ -1025,26 +1035,10 @@ const confirmDelete = () => {
           </div>
         </section>
 
-        {/* Save bar — position:sticky with a bottom offset. It scrolls
-            with the page content, but pins just above the bottom edge
-            (clearing the home-indicator safe area) instead of scrolling
-            off-screen, so "Save All Changes" stays visible and reachable
-            the whole way down. Its parent is the page-wide wrapper, so
-            the pin holds for the entire page; near the very bottom it
-            settles back into its natural spot — that is the "stop". */}
-        <div
-          className="sticky z-40 mt-4 flex justify-end pointer-events-none"
-          style={{ bottom: 'calc(env(safe-area-inset-bottom, 0px) + 0.75rem)' }}
-        >
-          <Button
-            onClick={handleSaveAll}
-            disabled={updateCustomer.isPending}
-            className="pointer-events-auto gap-2 bg-lime-500 text-slate-950 hover:bg-lime-600 rounded-full shadow-lg shadow-slate-900/25"
-          >
-            <Save className="h-4 w-4" />
-            {updateCustomer.isPending ? 'Saving...' : 'Save All Changes'}
-          </Button>
-        </div>
+        {/* Save bar — see the sticky block at the END of <main>. It used
+            to sit here, BEFORE the tall form grid: a sticky-bottom element
+            only pins while its natural position is BELOW the viewport, so
+            in that spot it simply scrolled off-screen with the content. */}
 
         {/* Main grid */}
         <section className="mt-8 grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_360px] gap-6 items-start">
@@ -1115,6 +1109,7 @@ const confirmDelete = () => {
                       type="tel"
                       inputMode="tel"
                       autoComplete="tel"
+                      maxLength={22}
                       value={businessProfile.phone}
                       onChange={(e) => updateBusinessField('phone', e.target.value)}
                       aria-invalid={!!businessErrors.phone}
@@ -1182,6 +1177,7 @@ const confirmDelete = () => {
                       type="tel"
                       inputMode="tel"
                       autoComplete="tel"
+                      maxLength={22}
                       value={contactPerson.phone}
                       onChange={(e) => updateContactField('phone', e.target.value)}
                       aria-invalid={!!contactErrors.phone}
@@ -1724,6 +1720,28 @@ const confirmDelete = () => {
             </Card>
           </aside>
         </section>
+
+        {/* Save bar — position:sticky with a bottom offset, deliberately
+            placed as the LAST block of <main>. A sticky-bottom element is
+            pinned to the viewport bottom only while its natural position
+            is BELOW the viewport; as the last block it is pulled up to the
+            bottom edge (clearing the home-indicator safe area) for the
+            whole scroll and settles back into its natural spot once the
+            page end is reached. Sitting here it can never scroll off the
+            top of the screen like it did when it lived above the grid. */}
+        <div
+          className="sticky z-40 mt-4 flex justify-end pointer-events-none"
+          style={{ bottom: 'calc(env(safe-area-inset-bottom, 0px) + 0.75rem)' }}
+        >
+          <Button
+            onClick={handleSaveAll}
+            disabled={updateCustomer.isPending}
+            className="pointer-events-auto gap-2 bg-lime-500 text-slate-950 hover:bg-lime-600 rounded-full shadow-lg shadow-slate-900/25"
+          >
+            <Save className="h-4 w-4" />
+            {updateCustomer.isPending ? 'Saving...' : 'Save All Changes'}
+          </Button>
+        </div>
       </main>
 
       {/* Footer */}

@@ -109,7 +109,22 @@ export default function LocationAutocomplete({
   const [predictions, setPredictions] = useState<google.maps.places.AutocompletePrediction[]>([]);
   const [showDropdown, setShowDropdown] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const debounceRef = useRef<NodeJS.Timeout | null>(null);
+  // True when a prediction request failed (timeout / REQUEST_DENIED /
+  // network error). The dropdown stays open with an explicit message and
+  // a Retry button instead of silently closing — a vanishing dropdown
+  // made users believe autocomplete was broken.
+  const [loadError, setLoadError] = useState(false);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Watchdog for getPlacePredictions: the Google callback can simply never
+  // fire ( flaky network / throttled key ), which used to leave the loading
+  // spinner spinning forever with no way out.
+  const watchdogRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Monotonic request id — responses from superseded requests are ignored,
+  // so a slow stale reply can never overwrite a newer result (or unblock a
+  // watchdog that no longer applies).
+  const requestSeqRef = useRef(0);
+  // Last query actually sent to Google — powers the Retry button.
+  const lastQueryRef = useRef('');
   const userLocation = useUserLocation();
   
   // Use refs for callbacks
@@ -150,15 +165,36 @@ export default function LocationAutocomplete({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  const clearWatchdog = useCallback(() => {
+    if (watchdogRef.current) {
+      clearTimeout(watchdogRef.current);
+      watchdogRef.current = null;
+    }
+  }, []);
+
+  // Abort any in-flight request (used by clear / unmount) so a late
+  // callback can't reopen or mutate the dropdown.
+  const cancelPendingRequest = useCallback(() => {
+    requestSeqRef.current += 1;
+    clearWatchdog();
+    setIsLoading(false);
+  }, [clearWatchdog]);
+
   // Fetch predictions (US addresses only, no state restriction)
   const fetchPredictions = useCallback((input: string) => {
     if (!autocompleteServiceRef.current || !input.trim()) {
+      cancelPendingRequest();
       setPredictions([]);
+      setLoadError(false);
       setShowDropdown(false);
       return;
     }
 
+    // Invalidate any in-flight request before issuing the new one.
+    const seq = ++requestSeqRef.current;
+    lastQueryRef.current = input;
     setIsLoading(true);
+    setLoadError(false);
     // Show the dropdown immediately so the user sees the loading spinner
     // while Google is fetching predictions. Without this, the dropdown
     // only appears AFTER results come back — which means if Google returns
@@ -188,13 +224,36 @@ export default function LocationAutocomplete({
       request.radius = 50000;
     }
 
+    // Watchdog: if Google's callback hasn't fired within 8s, give up on
+    // this request and surface an explicit error row with Retry. Without
+    // this the spinner spun forever on flaky connections.
+    clearWatchdog();
+    watchdogRef.current = setTimeout(() => {
+      if (requestSeqRef.current !== seq) return; // superseded
+      setIsLoading(false);
+      setPredictions([]);
+      setLoadError(true);
+      setShowDropdown(true);
+    }, 8000);
+
     autocompleteServiceRef.current.getPlacePredictions(request,
       (results, status) => {
+        if (requestSeqRef.current !== seq) return; // stale response
+        clearWatchdog();
         setIsLoading(false);
-        
+
         if (status !== google.maps.places.PlacesServiceStatus.OK || !results) {
           setPredictions([]);
-          setShowDropdown(false);
+          // Genuinely no matches keep the neutral "No addresses found"
+          // row; anything else (denied, over quota, network) is a real
+          // failure and gets the error row with Retry.
+          if (status === google.maps.places.PlacesServiceStatus.ZERO_RESULTS) {
+            setLoadError(false);
+            setShowDropdown(true);
+          } else {
+            setLoadError(true);
+            setShowDropdown(true);
+          }
           return;
         }
 
@@ -203,10 +262,29 @@ export default function LocationAutocomplete({
         const filtered = strictBounds ? filterToCA(results) : results;
 
         setPredictions(filtered);
-        setShowDropdown(filtered.length > 0);
+        setLoadError(false);
+        // Keep the dropdown open even when filtering empties the list so
+        // the user sees "No addresses found" instead of a silent vanish.
+        setShowDropdown(true);
       }
     );
-  }, [types, strictBounds, bounds, userLocation]);
+  }, [types, strictBounds, bounds, userLocation, cancelPendingRequest, clearWatchdog]);
+
+  const handleRetryPredictions = useCallback(() => {
+    if (lastQueryRef.current.trim()) {
+      fetchPredictions(lastQueryRef.current);
+    }
+  }, [fetchPredictions]);
+
+  // Clear pending network state on unmount (debounce timer + watchdog +
+  // in-flight request id bump so late callbacks can't touch state).
+  useEffect(() => {
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+      requestSeqRef.current += 1;
+      if (watchdogRef.current) clearTimeout(watchdogRef.current);
+    };
+  }, []);
 
   // Handle input change with debounce
   const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
@@ -275,21 +353,25 @@ export default function LocationAutocomplete({
 
   // Handle focus
   const handleFocus = useCallback(() => {
-    if (inputValue.trim() && predictions.length > 0) {
+    // Reopen on refocus when there is something worth showing: results,
+    // or an error row (so Retry stays reachable after a tap elsewhere).
+    if (inputValue.trim() && (predictions.length > 0 || loadError)) {
       setShowDropdown(true);
     }
-  }, [inputValue, predictions.length]);
+  }, [inputValue, predictions.length, loadError]);
 
   // Handle clear
   const handleClear = useCallback(() => {
+    cancelPendingRequest();
     setInputValue('');
     setPredictions([]);
+    setLoadError(false);
     setShowDropdown(false);
     onChangeRef.current('');
     if (onClear) {
       onClear();
     }
-  }, [onClear]);
+  }, [onClear, cancelPendingRequest]);
 
   return (
     <div ref={wrapperRef} className="relative">
@@ -330,6 +412,19 @@ export default function LocationAutocomplete({
           {isLoading ? (
             <div className="p-4 text-center text-sm text-slate-500">
               <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-lime-500 mx-auto"></div>
+            </div>
+          ) : loadError ? (
+            <div className="p-4 text-center">
+              <p className="text-sm font-semibold text-slate-600 dark:text-slate-300">
+                Couldn't load address suggestions
+              </p>
+              <button
+                type="button"
+                className="mt-2 text-sm font-bold text-lime-600 dark:text-lime-400 hover:underline"
+                onClick={handleRetryPredictions}
+              >
+                Retry
+              </button>
             </div>
           ) : predictions.length > 0 ? (
             predictions.map((prediction) => (
