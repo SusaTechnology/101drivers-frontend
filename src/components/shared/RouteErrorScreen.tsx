@@ -39,6 +39,16 @@ const STALE_CHUNK_PATTERNS = [
   'vite:preloaderror',
   'chunkloaderror',
   'loading chunk',
+  // React.lazy resolution failures. When a session resumes (PWA reopened
+  // after days) and a lazy route chunk resolves WITHOUT a module namespace
+  // — stale build after a deploy, or the wake-from-idle network race —
+  // React's minified internals throw on `X._result.default`:
+  //   Safari: "undefined is not an object (evaluating 'E._result.default')"
+  //   Chrome: "Cannot read properties of undefined (reading 'default')"
+  // One reload fixes these, so treat them exactly like stale chunks and
+  // take the quiet auto-reload path instead of the scary card.
+  '_result.default',
+  "reading 'default'",
 ]
 
 function isStaleChunkError(error: unknown): boolean {

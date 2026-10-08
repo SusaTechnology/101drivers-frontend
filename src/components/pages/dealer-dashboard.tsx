@@ -63,7 +63,6 @@ import {
   Car,
   ChevronRight,
   Sparkles,
-  AlertCircle,
   RefreshCw,
   Edit3,
   MessageSquare,
@@ -83,6 +82,7 @@ import {
   CheckCircle2,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import InlineErrorCard from '@/components/shared/InlineErrorCard'
 import { getUser, useDataQuery, useDataMutation, authFetch, clearAuth, stopSessionKeepAlive, serverLogout } from '@/lib/tanstack/dataQuery'
 import NotificationBell from '@/components/notifications/NotificationBell'
 // Postpaid billing panel — dealer-facing read-only summary (outstanding,
@@ -566,7 +566,11 @@ export default function DealerDashboard() {
   const clearDateFilters = () => { setDateFrom(undefined); setDateTo(undefined) }
 
   if (isLoading) return <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex items-center justify-center"><div className="text-center"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-lime-500 mx-auto"></div><p className="mt-4 text-slate-600 dark:text-slate-400">Loading deliveries...</p></div></div>
-  if (isError) return <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex items-center justify-center p-4"><Card className="max-w-md p-6 text-center border-slate-200 dark:border-slate-800 rounded-3xl"><AlertCircle className="h-12 w-12 text-red-500 mx-auto" /><h2 className="mt-4 text-xl font-black text-slate-900 dark:text-white">Failed to load deliveries</h2><p className="mt-2 text-slate-600 dark:text-slate-400">{error?.message || 'Please try again later.'}</p><Button onClick={() => refetch()} className="mt-6 bg-lime-500 text-slate-950 rounded-2xl">Retry</Button></Card></div>
+  // NOTE: no full-page error swap here anymore. A failed deliveries fetch
+  // used to replace the ENTIRE page — header, bottom nav, everything —
+  // with a centered card, which read as "the app broke". The shell now
+  // stays alive and the cause-specific InlineErrorCard renders at the top
+  // of the content area (see the isError block just below </header>).
 
   // Header date labels (both formats cut from ONE render so they can never
   // straddle midnight mid-render). The long form is shown on >=sm screens;
@@ -632,6 +636,24 @@ export default function DealerDashboard() {
           </div>
         )}
       </header>
+
+      {/* Data-load failure — cause-specific banner INSIDE the live shell.
+          The header, bottom nav, pull-to-refresh and map view all stay
+          usable while the list failed; the card explains WHAT failed
+          (offline / session expired / our server / no access) and retries.
+          Offline cards ALSO auto-retry the moment the device reconnects,
+          and the socket-reconnect effect above refetches on its own —
+          transient mobile failures now self-heal without any tap. */}
+      {isError && (
+        <div className="max-w-[980px] mx-auto px-4 pt-4">
+          <InlineErrorCard
+            error={error}
+            title="Couldn't load your deliveries"
+            onRetry={() => refetch()}
+            retrying={isFetching}
+          />
+        </div>
+      )}
 
       {/* Map View */}
       {showMapView && (
