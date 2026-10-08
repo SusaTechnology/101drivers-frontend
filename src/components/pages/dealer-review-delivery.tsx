@@ -99,6 +99,10 @@ interface ReviewDeliveryData {
   recipientEmail?: string;
   recipientPhone?: string;
 
+  // Optional notes for the driver (carried from the create form's
+  // "instructions" textarea; forwarded to the API as specialInstructions)
+  instructions?: string;
+
   // Quote
   quoteId?: string;
   miles?: number;
@@ -448,6 +452,8 @@ export default function ReviewDeliveryPage() {
         recipientName: reviewData.recipientName,
         recipientEmail: reviewData.recipientEmail,
         recipientPhone: reviewData.recipientPhone,
+        // Optional driver notes — backend persists to DeliveryRequest.specialInstructions
+        specialInstructions: reviewData.instructions?.trim() || undefined,
         paymentType: reviewData.paymentType,
       };
 
@@ -806,6 +812,7 @@ export default function ReviewDeliveryPage() {
         recipientName: reviewData.recipientName,
         recipientEmail: reviewData.recipientEmail,
         recipientPhone: reviewData.recipientPhone,
+        specialInstructions: reviewData.instructions?.trim() || undefined,
         paymentType: reviewData.paymentType,
       };
 
@@ -1338,6 +1345,22 @@ export default function ReviewDeliveryPage() {
                 )}
               </CardContent>
             </Card>
+
+          {/* Special Instructions (optional) — shown so the dealer can verify
+              exactly what the driver will see. Empty/whitespace-only notes
+              are hidden entirely. */}
+          {reviewData.instructions?.trim() && (
+            <Card className="border-slate-200 dark:border-slate-800 shadow-lg">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-lg font-black">Special Instructions</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/50">
+                  <p className="text-sm font-medium text-slate-700 dark:text-slate-300 whitespace-pre-wrap">{reviewData.instructions}</p>
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
           {/* Price Estimate */}
           <Card className="border-slate-200 dark:border-slate-800 shadow-lg">

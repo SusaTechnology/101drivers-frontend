@@ -23,6 +23,7 @@ import {
   Route as RouteIcon,
   AlertCircle,
   Inbox,
+  MessageSquare,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
@@ -375,6 +376,17 @@ export default function DriverBookedLaterPage() {
                           </div>
                         )}
                       </div>
+
+                      {/* Special Instructions from the dealer (optional) */}
+                      {d.specialInstructions?.trim() && (
+                        <div className="mt-3 flex items-start gap-2 p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700">
+                          <MessageSquare className="h-4 w-4 text-primary shrink-0 mt-0.5" />
+                          <div className="min-w-0">
+                            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Special Instructions</p>
+                            <p className="text-[12px] text-slate-700 dark:text-slate-300 font-medium whitespace-pre-wrap mt-0.5">{d.specialInstructions}</p>
+                          </div>
+                        </div>
+                      )}
 
                       {/* Warning if another delivery is active */}
                       {hasActiveDelivery && (

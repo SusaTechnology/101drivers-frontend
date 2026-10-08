@@ -339,6 +339,7 @@ model DeliveryRequest {
   recipientEmail          String?
   recipientName           String?
   recipientPhone          String?
+  specialInstructions      String?
   requiresOpsConfirmation Boolean                           @default(false)
   resubmissions           DeliveryRequest[]                 @relation(name: "resubmissions")
   resubmittedFrom         DeliveryRequest?                  @relation(name: "resubmissions", fields: [resubmittedFromId], references: [id])

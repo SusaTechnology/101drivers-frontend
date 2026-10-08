@@ -48,6 +48,8 @@ export type DriverFeedItem = {
   status: EnumDeliveryRequestStatus;
   pickupAddress: string;
   dropoffAddress: string;
+  /** Optional customer notes for the driver (gate codes, key handoff, etc.). */
+  specialInstructions: string | null;
   pickupWindowStart: Date | null;
   pickupWindowEnd: Date | null;
   dropoffWindowStart: Date | null;
@@ -253,6 +255,7 @@ async getDriverJobFeed(input: {
       serviceType: true,
       pickupAddress: true,
       dropoffAddress: true,
+      specialInstructions: true,
       pickupLat: true,
       pickupLng: true,
       dropoffLat: true,
@@ -796,6 +799,7 @@ async getDriverJobFeed(input: {
         status: delivery.status,
         pickupAddress: delivery.pickupAddress,
         dropoffAddress: delivery.dropoffAddress,
+        specialInstructions: delivery.specialInstructions ?? null,
         pickupWindowStart: delivery.pickupWindowStart,
         pickupWindowEnd: delivery.pickupWindowEnd,
         dropoffWindowStart: delivery.dropoffWindowStart,
@@ -904,6 +908,7 @@ async getDriverJobFeed(input: {
         status: true,
         pickupAddress: true,
         dropoffAddress: true,
+        specialInstructions: true,
         pickupWindowStart: true,
         pickupWindowEnd: true,
         dropoffWindowStart: true,
@@ -975,6 +980,7 @@ async getDriverJobFeed(input: {
       status: delivery.status,
       pickupAddress: delivery.pickupAddress,
       dropoffAddress: delivery.dropoffAddress,
+      specialInstructions: delivery.specialInstructions ?? null,
       pickupWindowStart: delivery.pickupWindowStart,
       pickupWindowEnd: delivery.pickupWindowEnd,
       dropoffWindowStart: delivery.dropoffWindowStart,
@@ -1030,6 +1036,7 @@ async getDriverJobFeed(input: {
             serviceType: true,
             pickupAddress: true,
             dropoffAddress: true,
+            specialInstructions: true,
             pickupLat: true,
             pickupLng: true,
             dropoffLat: true,

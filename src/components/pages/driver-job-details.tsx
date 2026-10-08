@@ -671,6 +671,27 @@ export default function DriverJobDetailsPage() {
           </CardContent>
         </Card>
 
+        {/* Special Instructions — the dealer's optional notes for this job
+            (gate codes, key handoff, parking, etc.). Hidden entirely when
+            the dealer didn't write anything. */}
+        {job.specialInstructions?.trim() && (
+          <Card className="mt-6 border-slate-200 dark:border-slate-800 shadow-lg">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-lg font-black flex items-center gap-2">
+                <MessageSquare className="w-5 h-5 text-primary" />
+                Special Instructions
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800">
+                <p className="text-sm font-medium text-slate-700 dark:text-slate-300 whitespace-pre-wrap">
+                  {job.specialInstructions}
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
         {/* Pickup Requirements */}
         {/* <Card className="mt-6 border-slate-200 dark:border-slate-800 shadow-lg">
           <CardHeader>

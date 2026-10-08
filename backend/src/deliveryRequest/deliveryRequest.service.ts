@@ -222,6 +222,8 @@ async createQuotePreview(input: CreateQuotePreviewInput): Promise<any> {
         recipientEmail:
           this.normalizeOptionalEmail(input.recipientEmail) ?? null,
         recipientPhone: this.trimOptionalString(input.recipientPhone) ?? null,
+        specialInstructions:
+          this.trimOptionalString(input.specialInstructions) ?? null,
 
         afterHours: input.afterHours === true,
         isUrgent: input.isUrgent === true,
@@ -1996,6 +1998,8 @@ async createIndividualDeliveryDraftFromQuote(
       recipientEmail:
         this.normalizeOptionalEmail(input.recipientEmail) ?? null,
       recipientPhone: this.trimOptionalString(input.recipientPhone) ?? null,
+      specialInstructions:
+        this.trimOptionalString(input.specialInstructions) ?? null,
 
       afterHours: input.afterHours === true,
       isUrgent: input.isUrgent === true,

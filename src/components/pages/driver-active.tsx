@@ -1583,6 +1583,19 @@ const DROPOFF_REF_IMAGES = [
                   </div>
                 </div>
               )}
+
+              {/* Special Instructions from the dealer (optional) — gate
+                  codes, key handoff, parking notes etc. Hidden when the
+                  dealer didn't write anything. */}
+              {deliveryData?.specialInstructions?.trim() && (
+                <div className="mt-5 p-4 rounded-2xl bg-amber-50 dark:bg-amber-900/10 border border-amber-200/70 dark:border-amber-900/30">
+                  <div className="flex items-center gap-2 mb-1.5">
+                    <MessageSquare className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+                    <p className="text-[10px] font-black uppercase tracking-widest text-amber-700 dark:text-amber-400">Special Instructions</p>
+                  </div>
+                  <p className="text-sm font-medium text-amber-900 dark:text-amber-200 whitespace-pre-wrap">{deliveryData.specialInstructions}</p>
+                </div>
+              )}
             </div>
 
             {/* Map with driver position and multiple routes */}

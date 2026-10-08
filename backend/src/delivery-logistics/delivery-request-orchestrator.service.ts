@@ -70,6 +70,11 @@ export type CreateDeliveryDraftFromQuoteInput = {
   isUrgent?: boolean;
   afterHours?: boolean;
   vehicleStandardsConfirmed?: boolean | null;
+
+  // Optional customer notes for the driver — persisted on the draft so they
+  // survive save-draft → resume → promote.
+  specialInstructions?: string | null;
+
   // ── Address fields (used when quoteId is NOT provided) ──
   pickupAddress?: string | null;
   pickupLat?: number | null;
@@ -113,6 +118,9 @@ export type CreateIndividualDeliveryDraftFromQuoteInput = {
   isUrgent?: boolean;
   afterHours?: boolean;
   vehicleStandardsConfirmed?: boolean | null;
+
+  // Optional customer notes for the driver (gate codes, key handoff, etc.)
+  specialInstructions?: string | null;
 };
 
 export type SchedulePreviewInput = {
@@ -177,6 +185,9 @@ export type CreateDeliveryFromQuoteInput = {
   isUrgent?: boolean;
   afterHours?: boolean;
   vehicleStandardsConfirmed?: boolean | null;
+
+  // Optional customer notes for the driver (gate codes, key handoff, etc.)
+  specialInstructions?: string | null;
 };
 
 /**
@@ -217,6 +228,9 @@ export type PromoteDraftToDeliveryInput = {
   isUrgent?: boolean;
   afterHours?: boolean;
   vehicleStandardsConfirmed?: boolean | null;
+
+  // Optional customer notes for the driver (gate codes, key handoff, etc.)
+  specialInstructions?: string | null;
 };
 
 export type CreateIndividualDeliveryFromQuoteInput = {
@@ -251,6 +265,9 @@ export type CreateIndividualDeliveryFromQuoteInput = {
   isUrgent?: boolean;
   afterHours?: boolean;
   vehicleStandardsConfirmed?: boolean | null;
+
+  // Optional customer notes for the driver (gate codes, key handoff, etc.)
+  specialInstructions?: string | null;
 };
 
 type IndividualCustomerShape = {
@@ -1013,6 +1030,7 @@ export class DeliveryRequestOrchestratorService {
         recipientName: input.recipientName?.trim() || null,
         recipientEmail: input.recipientEmail?.trim().toLowerCase() || null,
         recipientPhone: input.recipientPhone?.trim() || null,
+        specialInstructions: input.specialInstructions?.trim() || null,
 
         isUrgent: input.isUrgent === true,
         pickupPin: this.generateIndividualPin(),
@@ -1188,6 +1206,7 @@ export class DeliveryRequestOrchestratorService {
         recipientName: input.recipientName?.trim() || null,
         recipientEmail: input.recipientEmail?.trim().toLowerCase() || null,
         recipientPhone: input.recipientPhone?.trim() || null,
+        specialInstructions: input.specialInstructions?.trim() || null,
 
         isUrgent: input.isUrgent === true,
         pickupPin: this.generateIndividualPin(),
@@ -1488,6 +1507,7 @@ private async createIndividualDeliveryForResolvedCustomer(
       recipientName: input.recipientName?.trim() || null,
       recipientEmail: input.recipientEmail?.trim().toLowerCase() || null,
       recipientPhone: input.recipientPhone?.trim() || null,
+      specialInstructions: input.specialInstructions?.trim() || null,
 
       isUrgent: input.isUrgent === true,
       trackingShareToken: null,
@@ -2519,6 +2539,7 @@ private async resolveIndividualCustomerForCreate(
         recipientName: input.recipientName?.trim() || null,
         recipientEmail: input.recipientEmail?.trim().toLowerCase() || null,
         recipientPhone: input.recipientPhone?.trim() || null,
+        specialInstructions: input.specialInstructions?.trim() || null,
 
         isUrgent: input.isUrgent === true,
         pickupPin: this.generateIndividualPin(),
@@ -3059,6 +3080,7 @@ private async resolveIndividualCustomerForCreate(
         recipientName: input.recipientName?.trim() || null,
         recipientEmail: input.recipientEmail?.trim().toLowerCase() || null,
         recipientPhone: input.recipientPhone?.trim() || null,
+        specialInstructions: input.specialInstructions?.trim() || null,
 
         isUrgent: input.isUrgent === true,
         pickupPin: this.generateIndividualPin(),

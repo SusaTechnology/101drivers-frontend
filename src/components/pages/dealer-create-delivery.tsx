@@ -597,6 +597,11 @@ export default function CreateDeliveryPage({ draftId }: CreateDeliveryPageProps)
           if (data.recipientName) setValue('recipientName', data.recipientName);
           if (data.recipientEmail) setValue('recipientEmail', data.recipientEmail);
           if (data.recipientPhone) setValue('recipientPhone', data.recipientPhone);
+
+          // Restore special instructions — without this the textarea comes
+          // back EMPTY when the dealer clicks "Go back and edit" on the
+          // review page, even though every other field is restored.
+          if (data.instructions) setValue('instructions', data.instructions);
           
           // Restore coordinates and initialize refs to prevent false change detection
           if (data.pickupLat && data.pickupLng) {
@@ -853,6 +858,9 @@ export default function CreateDeliveryPage({ draftId }: CreateDeliveryPageProps)
         if (draft.recipientEmail) setValue('recipientEmail', draft.recipientEmail);
         if (draft.recipientPhone) setValue('recipientPhone', draft.recipientPhone);
 
+        // Special instructions persisted on the draft row
+        if (draft.specialInstructions) setValue('instructions', draft.specialInstructions);
+
         // Quote data
         if (draft.quoteId || draft.quote?.id) {
           setQuoteId(draft.quoteId || draft.quote?.id);
@@ -1012,6 +1020,11 @@ export default function CreateDeliveryPage({ draftId }: CreateDeliveryPageProps)
       pickupCity: pickupCity,
       dropoffState: dropoffState,
 
+      // Special instructions — carried to the review page (and back via
+      // sessionStorage) so "Go back and edit" keeps the textarea content,
+      // and forwarded into the create/draft payloads.
+      instructions: data.instructions || '',
+
       // Schedule
       pickupWindowStart: validatedWindows?.pickupWindowStart,
       pickupWindowEnd: validatedWindows?.pickupWindowEnd,
@@ -1133,6 +1146,8 @@ export default function CreateDeliveryPage({ draftId }: CreateDeliveryPageProps)
       recipientName: data.recipientName,
       recipientEmail: data.recipientEmail,
       recipientPhone: data.recipientPhone,
+      // Persist instructions on the draft row so they survive resume → edit
+      specialInstructions: data.instructions?.trim() || undefined,
       // Coordinates
       pickupLat: pickupCoords?.lat,
       pickupLng: pickupCoords?.lng,
@@ -2039,7 +2054,9 @@ const handleQuotePreview = () => {
       vehicleModel: finalModel,
       vehicleColor: finalColor,
       vehicleStandardsConfirmed: data.vehicleStandardsConfirmed === true,
-      // specialInstructions: data.instructions,
+      // The dealer's optional notes for the driver — previously commented
+      // out, which is why drivers never saw special instructions.
+      specialInstructions: data.instructions?.trim() || undefined,
       recipientBusinessName: data.recipientBusinessName,
       recipientName: data.recipientName,
       recipientEmail: data.recipientEmail,

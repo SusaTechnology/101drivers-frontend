@@ -54,6 +54,7 @@ async createIndividualDeliveryDraftFromQuote(
     recipientName: body.recipientName ?? null,
     recipientEmail: body.recipientEmail ?? null,
     recipientPhone: body.recipientPhone ?? null,
+    specialInstructions: body.specialInstructions ?? null,
 
     afterHours: body.afterHours === true,
     isUrgent: body.isUrgent === true,
@@ -130,6 +131,7 @@ async createIndividualDeliveryDraftFromQuote(
       recipientName: body.recipientName ?? null,
       recipientEmail: body.recipientEmail ?? null,
       recipientPhone: body.recipientPhone ?? null,
+      specialInstructions: body.specialInstructions ?? null,
 
       afterHours: body.afterHours === true,
       isUrgent: body.isUrgent === true,
