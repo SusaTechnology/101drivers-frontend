@@ -245,6 +245,44 @@ const confirmDelete = () => {
     email: '',
     phone: '',
   })
+  // Field-level validation errors for the contact section (null = valid).
+  // These inputs are NOT inside a <form>, so the browser's native
+  // type=email validation never fires (it only runs on form submit) —
+  // validation must be JS-driven here.
+  const [contactErrors, setContactErrors] = useState<{
+    email?: string | null
+    phone?: string | null
+  }>({})
+
+  // ---- Contact field validators ----
+  // Email: pragmatic pattern — exactly one @, no whitespace, and a dot
+  // TLD of 2+ characters. Catches "hello", "a@b", "a b@c.com" etc.
+  const validateContactEmail = (value: string): string | null => {
+    const v = value.trim()
+    if (!v) return null // empty is allowed (accounts without contact info yet)
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(v)) {
+      return 'Enter a valid email address, e.g. name@company.com.'
+    }
+    return null
+  }
+  // Phone: only digits and the usual separators (+, spaces, dashes, dots,
+  // parentheses) may appear — letters are rejected outright — and the
+  // digit count must be a plausible real number (7–15 digits, ITU E.164).
+  const validateContactPhone = (value: string): string | null => {
+    const v = value.trim()
+    if (!v) return null
+    if (!/^\+?[0-9\s\-().]{6,22}$/.test(v)) {
+      return 'Phone can only contain digits and + ( ) - . separators — no letters.'
+    }
+    const digits = v.replace(/\D/g, '')
+    if (digits.length < 7) {
+      return 'This number looks too short — include the area code.'
+    }
+    if (digits.length > 15) {
+      return 'This number looks too long — please double-check it.'
+    }
+    return null
+  }
 
   // Saved addresses - using useQuery directly to avoid pagination params
   const {
@@ -543,7 +581,43 @@ const confirmDelete = () => {
     if (confirm('Delete this vehicle?')) deleteVehicle.mutate({ pathParams: { id } })
   }
 
+  // Live re-validation: once a field has shown an error, re-check on every
+  // keystroke so the error disappears the moment the value becomes valid.
+  const updateContactField = (field: 'email' | 'phone', value: string) => {
+    setContactPerson(prev => ({ ...prev, [field]: value }))
+    setContactErrors(prev => {
+      if (!prev[field]) return prev
+      const err =
+        field === 'email'
+          ? value.trim()
+            ? validateContactEmail(value)
+            : null
+          : value.trim()
+            ? validateContactPhone(value)
+            : null
+      return { ...prev, [field]: err }
+    })
+  }
+
+  // Returns true when every FILLED contact value is usable. Blocks the
+  // save with an inline error message under the offending field.
+  const validateContactFields = (): boolean => {
+    const emailError = contactPerson.email.trim()
+      ? validateContactEmail(contactPerson.email)
+      : null
+    const phoneError = contactPerson.phone.trim()
+      ? validateContactPhone(contactPerson.phone)
+      : null
+    setContactErrors({ email: emailError, phone: phoneError })
+    if (emailError || phoneError) {
+      toast.error('Please fix the highlighted contact fields')
+      return false
+    }
+    return true
+  }
+
   const handleSaveContactOnly = () => {
+    if (!validateContactFields()) return
     updateCustomer.mutate({
       pathParams: { id: customerId },
       contactName: contactPerson.name,
@@ -564,6 +638,9 @@ const confirmDelete = () => {
   }
 
   const handleSaveAll = () => {
+    // handleSaveAll sends the contact fields too, so the same validation
+    // gate applies (handleSaveBusinessProfile doesn't send them — no gate).
+    if (!validateContactFields()) return
     updateCustomer.mutate({
       pathParams: { id: customerId },
       businessName: businessProfile.name,
@@ -987,18 +1064,31 @@ const confirmDelete = () => {
                     <Label className="text-xs font-bold">Contact email</Label>
                     <Input
                       type="email"
+                      inputMode="email"
+                      autoComplete="email"
                       value={contactPerson.email}
-                      onChange={(e) => setContactPerson(prev => ({ ...prev, email: e.target.value }))}
-                      className="h-14 rounded-2xl"
+                      onChange={(e) => updateContactField('email', e.target.value)}
+                      aria-invalid={!!contactErrors.email}
+                      className={`h-14 rounded-2xl ${contactErrors.email ? 'border-red-400 focus-visible:ring-red-300' : ''}`}
                     />
+                    {contactErrors.email && (
+                      <p className="text-xs font-bold text-red-600 dark:text-red-400">{contactErrors.email}</p>
+                    )}
                   </div>
                   <div className="space-y-2">
                     <Label className="text-xs font-bold">Contact phone</Label>
                     <Input
+                      type="tel"
+                      inputMode="tel"
+                      autoComplete="tel"
                       value={contactPerson.phone}
-                      onChange={(e) => setContactPerson(prev => ({ ...prev, phone: e.target.value }))}
-                      className="h-14 rounded-2xl"
+                      onChange={(e) => updateContactField('phone', e.target.value)}
+                      aria-invalid={!!contactErrors.phone}
+                      className={`h-14 rounded-2xl ${contactErrors.phone ? 'border-red-400 focus-visible:ring-red-300' : ''}`}
                     />
+                    {contactErrors.phone && (
+                      <p className="text-xs font-bold text-red-600 dark:text-red-400">{contactErrors.phone}</p>
+                    )}
                   </div>
                 </div>
               </CardContent>
