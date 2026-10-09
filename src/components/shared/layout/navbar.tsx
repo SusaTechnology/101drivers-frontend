@@ -3,9 +3,11 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { ArrowRight as ArrowForward, Menu } from "lucide-react";
 import { RightHemisphereNav } from "./rightHemisphereNav";
+import { useRequestDelivery } from "@/hooks/useRequestDelivery";
 
 export const NavBar = () => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const { requestDelivery } = useRequestDelivery();
 
   return (
     <header className="sticky top-0 z-50 w-full bg-white/85 dark:bg-background-dark/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-800" style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}>
@@ -108,14 +110,20 @@ export const NavBar = () => {
             </Link>
 
             <div className="pt-3 border-t border-slate-200 dark:border-slate-800 flex flex-col gap-2">
-              <Link
-                to="/home#quote"
+              {/* Auth-aware CTA: logged-in customers open the delivery request
+                  directly; logged-out visitors go to the delivery-type chooser.
+                  The old /home#quote Link dumped everyone on the home page. */}
+              <button
+                type="button"
                 className="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-2xl text-sm font-black bg-lime-500 text-slate-950 hover:opacity-95 transition"
-                onClick={() => setMobileMenuOpen(false)}
+                onClick={() => {
+                  setMobileMenuOpen(false);
+                  requestDelivery();
+                }}
               >
                 Request a Delivery
                 <ArrowForward className="w-5 h-5" />
-              </Link>
+              </button>
             </div>
           </div>
         </div>

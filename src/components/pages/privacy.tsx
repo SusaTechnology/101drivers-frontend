@@ -45,9 +45,11 @@ import {
 import { cn } from '@/lib/utils'
 import DOMPurify from 'dompurify'
 import { SEOHead } from '../shared/SEOHead'
+import { useRequestDelivery } from '@/hooks/useRequestDelivery'
 
 export default function PrivacyPolicy() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const { requestDelivery } = useRequestDelivery()
   const [activeSection, setActiveSection] = useState('terms')
   const [dbContent, setDbContent] = useState<string | null>(null)
   const [loadingContent, setLoadingContent] = useState(true)
@@ -113,13 +115,16 @@ export default function PrivacyPolicy() {
         </div>
 
         <div className="flex items-center gap-4">
-          <Link
-            to="/"
+          {/* Auth-aware CTA — used to link to "/" (the reported
+              "Request a Delivery returns to the home page" bug). */}
+          <button
+            type="button"
+            onClick={requestDelivery}
             className="inline-flex items-center gap-2 bg-lime-500 text-slate-950 hover:bg-lime-600 px-6 py-2.5 rounded-full text-sm hover:shadow-lg hover:shadow-lime-500/20 transition-all font-extrabold"
           >
             Request a Delivery
             <ArrowRight className="h-4 w-4" />
-          </Link>
+          </button>
 
           <Button
             variant="outline"
@@ -161,13 +166,14 @@ export default function PrivacyPolicy() {
             >
               Terms
             </Link>
-            <Link
-              to="/quote"
+            <button
+              type="button"
+              onClick={() => { setMobileMenuOpen(false); requestDelivery(); }}
               className="mt-2 inline-flex items-center justify-center gap-2 px-5 py-3 rounded-2xl text-sm font-black bg-lime-500 text-slate-950 hover:opacity-95 transition"
             >
               Request a Delivery
               <ArrowRight className="h-4 w-4" />
-            </Link>
+            </button>
           </div>
         </div>
       )}

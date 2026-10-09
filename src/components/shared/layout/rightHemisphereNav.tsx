@@ -10,6 +10,7 @@ import {
   Menu,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useRequestDelivery } from "@/hooks/useRequestDelivery";
 
 export const RightHemisphereNav = () => {
   const [dropdownOpen, setDropdownOpen] = useState(false);
@@ -17,6 +18,7 @@ export const RightHemisphereNav = () => {
   const [dotsMenuOpen, setDotsMenuOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const dotsMenuRef = useRef<HTMLDivElement>(null);
+  const { requestDelivery } = useRequestDelivery();
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -69,15 +71,16 @@ export const RightHemisphereNav = () => {
         )}
       </div>
 
-      {/* Request a Delivery — CTA */}
+      {/* Request a Delivery — CTA. Auth-aware: logged-in customers open the
+          delivery request directly; logged-out visitors go to the
+          delivery-type chooser. A bare "#quote" anchor is a dead click on
+          any page that has no #quote element. */}
       <Button
         className="bg-lime-500 text-slate-950 hover:bg-lime-600 px-5 py-2.5 rounded-full text-sm font-bold transition-all hidden sm:inline-flex items-center gap-2"
-        asChild
+        onClick={requestDelivery}
       >
-        <a href="#quote">
-          Request a Delivery
-          <ArrowForward className="w-4 h-4" />
-        </a>
+        Request a Delivery
+        <ArrowForward className="w-4 h-4" />
       </Button>
 
       {/* Mobile Login / Sign Up button — compact pill */}
@@ -113,14 +116,14 @@ export const RightHemisphereNav = () => {
             </Link>
           ))}
           <div className="border-t border-slate-200 dark:border-slate-700 my-1" />
-          <a
-            href="#quote"
-            onClick={() => setMobileMenuOpen(false)}
+          <button
+            type="button"
+            onClick={() => { setMobileMenuOpen(false); requestDelivery(); }}
             className="flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-lime-500 text-slate-950 font-bold text-sm hover:bg-lime-600 transition-colors"
           >
             Request a Delivery
             <ArrowForward className="w-4 h-4" />
-          </a>
+          </button>
         </div>
       )}
 
