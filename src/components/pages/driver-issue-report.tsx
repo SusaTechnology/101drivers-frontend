@@ -25,7 +25,7 @@ import {
   Clock,
   Calendar,
   Upload,
-  Image,
+  Loader2,
   Paperclip,
   Send,
   Inbox,
@@ -33,6 +33,7 @@ import {
   X,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { PhotoDialog } from '@/components/ui/photo-dialog'
 import { WhatsAppUrgentCallout } from '@/components/shared/WhatsAppSupportButton'
 import {
   Card,
@@ -44,7 +45,6 @@ import {
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
-import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import {
@@ -134,11 +134,12 @@ export default function DriverIssueReportPage() {
   // embedded into the report message where Operations can open them. A
   // delivery context is required because the upload endpoint is
   // delivery-scoped by design.
-  const [attachments, setAttachments] = useState<Array<{ kind: 'Photo' | 'Screenshot'; url: string }>>([])
+  const [attachments, setAttachments] = useState<string[]>([])
   const [isUploadingAttachment, setIsUploadingAttachment] = useState(false)
   const photoInputRef = useRef<HTMLInputElement | null>(null)
-  const screenshotInputRef = useRef<HTMLInputElement | null>(null)
-  const pendingAttachmentKindRef = useRef<'Photo' | 'Screenshot'>('Photo')
+  // Full-size preview dialog state (tap a thumbnail to open).
+  const [photoDialogOpen, setPhotoDialogOpen] = useState(false)
+  const [photoDialogSrc, setPhotoDialogSrc] = useState('')
 
   // Fetch delivery details if deliveryId is provided
   const {
@@ -185,7 +186,7 @@ export default function DriverIssueReportPage() {
           })
           return
         }
-        setAttachments((prev) => [...prev, { kind: pendingAttachmentKindRef.current, url }])
+        setAttachments((prev) => [...prev, url])
         toast.success('Attachment added')
       },
       onError: (error: any) => {
@@ -227,7 +228,7 @@ export default function DriverIssueReportPage() {
     // URLs into the message so Operations can open the evidence.
     const attachmentBlock = attachments.length
       ? `\n\n[Attachments]\n${attachments
-          .map((a, i) => `${a.kind} ${i + 1}: ${a.url}`)
+          .map((url, i) => `Photo ${i + 1}: ${url}`)
           .join('\n')}`
       : ''
 
@@ -249,7 +250,7 @@ export default function DriverIssueReportPage() {
     navigate({ to: '/driver-active' })
   }
 
-  const openAttachmentPicker = (kind: 'Photo' | 'Screenshot') => {
+  const openAttachmentPicker = () => {
     if (!deliveryId) {
       toast.error('Delivery context required', {
         description:
@@ -257,9 +258,7 @@ export default function DriverIssueReportPage() {
       })
       return
     }
-    pendingAttachmentKindRef.current = kind
-    if (kind === 'Photo') photoInputRef.current?.click()
-    else screenshotInputRef.current?.click()
+    photoInputRef.current?.click()
   }
 
   const handleAttachmentChosen = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -525,47 +524,28 @@ export default function DriverIssueReportPage() {
                     Attachments (optional)
                   </p>
                   <p className="text-[11px] text-slate-600 dark:text-slate-400 mt-1">
-                    Upload photos/screenshots as evidence.
+                    Add photos or screenshots as evidence — tap a photo to view it full size.
                   </p>
                 </div>
                 <Paperclip className="w-5 h-5 text-lime-500 shrink-0" />
               </div>
 
-              <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => openAttachmentPicker('Photo')}
-                  disabled={isUploadingAttachment}
-                  className="py-4 rounded-2xl font-extrabold bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:bg-lime-50 transition inline-flex items-center justify-center gap-2 disabled:opacity-50"
-                >
-                  <Upload className="w-4 h-4 text-lime-500" />
-                  {isUploadingAttachment ? 'Uploading...' : 'Add photo'}
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => openAttachmentPicker('Screenshot')}
-                  disabled={isUploadingAttachment}
-                  className="py-4 rounded-2xl font-extrabold bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:bg-lime-50 transition inline-flex items-center justify-center gap-2 disabled:opacity-50"
-                >
-                  <Image className="w-4 h-4 text-lime-500" />
-                  Add screenshot
-                </Button>
-              </div>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={openAttachmentPicker}
+                disabled={isUploadingAttachment}
+                className="mt-4 w-full py-4 rounded-2xl font-extrabold bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:bg-lime-50 transition inline-flex items-center justify-center gap-2 disabled:opacity-50"
+              >
+                <Upload className="w-4 h-4 text-lime-500" />
+                {isUploadingAttachment ? 'Uploading...' : 'Add photo'}
+              </Button>
 
-              {/* Hidden pickers — "Add photo" opens the camera on mobile,
-                  "Add screenshot" opens the gallery/file picker. */}
+              {/* Hidden picker — accept="image/*" WITHOUT capture, so the phone
+                  offers Camera, Gallery and Files in one system sheet (covers
+                  both photos and screenshots); desktop opens the file browser. */}
               <input
                 ref={photoInputRef}
-                type="file"
-                accept="image/*"
-                capture="environment"
-                className="hidden"
-                onChange={handleAttachmentChosen}
-              />
-              <input
-                ref={screenshotInputRef}
                 type="file"
                 accept="image/*"
                 className="hidden"
@@ -578,24 +558,38 @@ export default function DriverIssueReportPage() {
                 </p>
               )}
 
-              {attachments.length > 0 && (
+              {(attachments.length > 0 || isUploadingAttachment) && (
                 <div className="mt-4 p-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700">
-                  <p className="text-xs font-bold text-slate-700 dark:text-slate-300 mb-2">Attached evidence:</p>
-                  <div className="flex flex-wrap gap-2">
-                    {attachments.map((att, idx) => (
-                      <Badge key={att.url} variant="outline" className="bg-white dark:bg-slate-900">
-                        <FileText className="w-3 h-3 text-lime-500 mr-1" />
-                        {att.kind} {idx + 1}
+                  <p className="text-xs font-bold text-slate-700 dark:text-slate-300 mb-2">
+                    Attached evidence{attachments.length > 0 ? ` (${attachments.length})` : ''}:
+                  </p>
+                  <div className="flex flex-wrap gap-3">
+                    {attachments.map((url, idx) => (
+                      <div key={url} className="relative">
+                        <img
+                          src={url}
+                          alt={`Evidence ${idx + 1}`}
+                          className="w-20 h-20 object-cover rounded-xl border border-slate-200 dark:border-slate-700 cursor-pointer hover:opacity-80 transition-opacity"
+                          onClick={() => {
+                            setPhotoDialogSrc(url)
+                            setPhotoDialogOpen(true)
+                          }}
+                        />
                         <button
                           type="button"
                           onClick={() => removeAttachment(idx)}
-                          className="ml-1 text-slate-400 hover:text-red-500"
+                          className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-slate-900 dark:bg-white text-white dark:text-slate-900 flex items-center justify-center shadow hover:bg-red-500 dark:hover:bg-red-500 dark:hover:text-white transition"
                           aria-label="Remove attachment"
                         >
                           <X className="w-3 h-3" />
                         </button>
-                      </Badge>
+                      </div>
                     ))}
+                    {isUploadingAttachment && (
+                      <div className="w-20 h-20 rounded-xl border-2 border-dashed border-slate-300 dark:border-slate-600 flex items-center justify-center text-slate-400">
+                        <Loader2 className="w-5 h-5 animate-spin" />
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
@@ -631,6 +625,14 @@ export default function DriverIssueReportPage() {
           </CardContent>
         </Card>
       </main>
+
+      {/* Full-size attachment preview (tap a thumbnail) */}
+      <PhotoDialog
+        open={photoDialogOpen}
+        onOpenChange={setPhotoDialogOpen}
+        src={photoDialogSrc}
+        title="Attachment"
+      />
 
       {/* Bottom navigation */}
       {/* <nav className="fixed bottom-0 left-0 right-0 z-50 bg-white/95 dark:bg-slate-950/95 backdrop-blur-sm border-t border-slate-200 dark:border-slate-800">
