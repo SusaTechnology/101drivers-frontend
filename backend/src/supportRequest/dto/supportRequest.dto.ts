@@ -26,9 +26,11 @@ export class CreateSupportRequestBody {
 
   @swagger.ApiProperty({
     enum: EnumSupportActorRole,
+    required: false,
   })
+  @IsOptional()
   @IsEnum(EnumSupportActorRole)
-  actorRole!: EnumSupportActorRole;
+  actorRole?: EnumSupportActorRole;
 
   @swagger.ApiProperty({
     enum: EnumSupportCategory,

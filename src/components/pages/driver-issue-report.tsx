@@ -1,5 +1,5 @@
 // Driver Issue Report Page - Updated with real API
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { Link, useNavigate, useLocation } from '@tanstack/react-router'
 import { cn } from '@/lib/utils'
 import { useTheme } from '@/lib/theme'
@@ -54,7 +54,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { getUser, useDataQuery, useCreate } from '@/lib/tanstack/dataQuery'
+import { getUser, useDataQuery, useCreate, useFileUpload } from '@/lib/tanstack/dataQuery'
 import {
   CATEGORIES_BY_ROLE,
   PRIORITY_OPTIONS,
@@ -63,6 +63,7 @@ import {
   type CreateSupportRequestPayload,
   type CreateSupportRequestResponse,
 } from '@/types/support'
+import { compressPhoto } from '@/lib/image-compress'
 
 // Issue types for drivers (mapped to categories)
 const issueTypes = [
@@ -127,7 +128,17 @@ export default function DriverIssueReportPage() {
   const [priority, setPriority] = useState<SupportRequestPriority>('NORMAL')
   const [subject, setSubject] = useState('')
   const [description, setDescription] = useState('')
-  const [attachments, setAttachments] = useState<string[]>([])
+  // Real attachment uploads. Reuses the authenticated /uploads/delivery-evidence
+  // endpoint (jpeg/png/webp, 5MB after compression, delivery-scoped storage).
+  // SupportRequest has no attachments column, so the returned CDN URLs are
+  // embedded into the report message where Operations can open them. A
+  // delivery context is required because the upload endpoint is
+  // delivery-scoped by design.
+  const [attachments, setAttachments] = useState<Array<{ kind: 'Photo' | 'Screenshot'; url: string }>>([])
+  const [isUploadingAttachment, setIsUploadingAttachment] = useState(false)
+  const photoInputRef = useRef<HTMLInputElement | null>(null)
+  const screenshotInputRef = useRef<HTMLInputElement | null>(null)
+  const pendingAttachmentKindRef = useRef<'Photo' | 'Screenshot'>('Photo')
 
   // Fetch delivery details if deliveryId is provided
   const {
@@ -160,6 +171,32 @@ export default function DriverIssueReportPage() {
     }
   )
 
+  // Single-file upload per pick; the endpoint accepts up to 6 files per
+  // request but evidence comes one photo at a time from the camera/gallery.
+  const uploadAttachmentMutation = useFileUpload<{ ok: boolean; files: Array<{ slotIndex: number; url: string }> }>(
+    `${import.meta.env.VITE_API_URL}/api/uploads/delivery-evidence`,
+    {
+      onSuccess: (data) => {
+        setIsUploadingAttachment(false)
+        const url = data?.files?.[0]?.url
+        if (!url) {
+          toast.error('Upload failed', {
+            description: 'The server did not return a file URL. Please try again.',
+          })
+          return
+        }
+        setAttachments((prev) => [...prev, { kind: pendingAttachmentKindRef.current, url }])
+        toast.success('Attachment added')
+      },
+      onError: (error: any) => {
+        setIsUploadingAttachment(false)
+        toast.error('Upload failed', {
+          description: error?.message || 'Please try again.',
+        })
+      },
+    }
+  )
+
   // Theme handling
   useEffect(() => {
     setMounted(true)
@@ -186,12 +223,20 @@ export default function DriverIssueReportPage() {
       return
     }
 
+    // SupportRequest has no attachments column — embed the uploaded file
+    // URLs into the message so Operations can open the evidence.
+    const attachmentBlock = attachments.length
+      ? `\n\n[Attachments]\n${attachments
+          .map((a, i) => `${a.kind} ${i + 1}: ${a.url}`)
+          .join('\n')}`
+      : ''
+
     const payload: CreateSupportRequestPayload = {
       deliveryId: deliveryId || undefined,
       category: selectedIssueType,
       priority,
       subject: subject.trim(),
-      message: description.trim(),
+      message: description.trim() + attachmentBlock,
     }
 
     createSupportMutation.mutate(payload)
@@ -204,11 +249,44 @@ export default function DriverIssueReportPage() {
     navigate({ to: '/driver-active' })
   }
 
-  const handleAddAttachment = (type: string) => {
-    setAttachments([...attachments, `${type}-${Date.now()}`])
-    toast.success(`${type} added`, {
-      description: `Your ${type.toLowerCase()} has been attached.`,
-    })
+  const openAttachmentPicker = (kind: 'Photo' | 'Screenshot') => {
+    if (!deliveryId) {
+      toast.error('Delivery context required', {
+        description:
+          'Evidence files are stored with the delivery. Open Report issue from an active delivery to attach photos.',
+      })
+      return
+    }
+    pendingAttachmentKindRef.current = kind
+    if (kind === 'Photo') photoInputRef.current?.click()
+    else screenshotInputRef.current?.click()
+  }
+
+  const handleAttachmentChosen = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    // Reset the input so picking the SAME file again still fires onChange.
+    event.target.value = ''
+    if (!file || !deliveryId) return
+
+    setIsUploadingAttachment(true)
+    try {
+      // Compress first — the endpoint rejects files over 5MB and phone
+      // cameras produce far larger photos.
+      const compressed = await compressPhoto(file)
+      const formData = new FormData()
+      formData.append('files', compressed)
+      formData.append('deliveryId', deliveryId)
+      uploadAttachmentMutation.mutate(formData)
+    } catch (error: any) {
+      setIsUploadingAttachment(false)
+      toast.error('Could not process image', {
+        description: error?.message || 'Please try a different photo.',
+      })
+    }
+  }
+
+  const removeAttachment = (index: number) => {
+    setAttachments((prev) => prev.filter((_, i) => i !== index))
   }
 
   // Determine delivery context
@@ -453,44 +531,69 @@ export default function DriverIssueReportPage() {
                 <Paperclip className="w-5 h-5 text-lime-500 shrink-0" />
               </div>
 
-              <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={() => handleAddAttachment('Photo')}
-                  className="py-4 rounded-2xl font-extrabold bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:bg-lime-50 transition inline-flex items-center justify-center gap-2"
+                  onClick={() => openAttachmentPicker('Photo')}
+                  disabled={isUploadingAttachment}
+                  className="py-4 rounded-2xl font-extrabold bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:bg-lime-50 transition inline-flex items-center justify-center gap-2 disabled:opacity-50"
                 >
-                  <Upload className="w-4 w-4 text-lime-500" />
-                  Add photo
+                  <Upload className="w-4 h-4 text-lime-500" />
+                  {isUploadingAttachment ? 'Uploading...' : 'Add photo'}
                 </Button>
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={() => handleAddAttachment('Screenshot')}
-                  className="py-4 rounded-2xl font-extrabold bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:bg-lime-50 transition inline-flex items-center justify-center gap-2"
+                  onClick={() => openAttachmentPicker('Screenshot')}
+                  disabled={isUploadingAttachment}
+                  className="py-4 rounded-2xl font-extrabold bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:bg-lime-50 transition inline-flex items-center justify-center gap-2 disabled:opacity-50"
                 >
                   <Image className="w-4 h-4 text-lime-500" />
                   Add screenshot
                 </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => handleAddAttachment('Note')}
-                  className="py-4 rounded-2xl font-extrabold bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:bg-lime-50 transition inline-flex items-center justify-center gap-2"
-                >
-                  <FileText className="w-4 h-4 text-lime-500" />
-                  Add note
-                </Button>
               </div>
+
+              {/* Hidden pickers — "Add photo" opens the camera on mobile,
+                  "Add screenshot" opens the gallery/file picker. */}
+              <input
+                ref={photoInputRef}
+                type="file"
+                accept="image/*"
+                capture="environment"
+                className="hidden"
+                onChange={handleAttachmentChosen}
+              />
+              <input
+                ref={screenshotInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={handleAttachmentChosen}
+              />
+
+              {!deliveryId && (
+                <p className="mt-3 text-[11px] text-amber-600 dark:text-amber-400">
+                  Attachments are stored with the delivery — open Report issue from an active delivery to add photos.
+                </p>
+              )}
 
               {attachments.length > 0 && (
                 <div className="mt-4 p-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700">
-                  <p className="text-xs font-bold text-slate-700 dark:text-slate-300 mb-2">Attached files:</p>
+                  <p className="text-xs font-bold text-slate-700 dark:text-slate-300 mb-2">Attached evidence:</p>
                   <div className="flex flex-wrap gap-2">
                     {attachments.map((att, idx) => (
-                      <Badge key={idx} variant="outline" className="bg-white dark:bg-slate-900">
+                      <Badge key={att.url} variant="outline" className="bg-white dark:bg-slate-900">
                         <FileText className="w-3 h-3 text-lime-500 mr-1" />
-                        {att.split('-')[0]} {idx + 1}
+                        {att.kind} {idx + 1}
+                        <button
+                          type="button"
+                          onClick={() => removeAttachment(idx)}
+                          className="ml-1 text-slate-400 hover:text-red-500"
+                          aria-label="Remove attachment"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
                       </Badge>
                     ))}
                   </div>
@@ -511,7 +614,7 @@ export default function DriverIssueReportPage() {
               </Button>
               <Button
                 onClick={handleSubmit}
-                disabled={createSupportMutation.isPending || !subject.trim() || !description.trim()}
+                disabled={createSupportMutation.isPending || isUploadingAttachment || !subject.trim() || !description.trim()}
                 className="flex-1 py-4 rounded-2xl font-extrabold bg-lime-500 text-slate-950 hover:shadow-xl hover:shadow-lime-500/20 transition inline-flex items-center justify-center gap-2 disabled:opacity-50"
               >
                 {createSupportMutation.isPending ? 'Submitting...' : 'Submit report'}

@@ -5,6 +5,7 @@ import { SupportRequestControllerBase } from "./base/supportRequest.controller.b
 import { isRecordNotFoundError } from "../prisma.util";
 import * as errors from "../errors";
 import { Request } from "express";
+import { EnumSupportActorRole } from "@prisma/client";
 import { plainToClass } from "class-transformer";
 import { ApiNestedQuery } from "../decorators/api-nested-query.decorator";
 import * as nestAccessControl from "nest-access-control";
@@ -33,6 +34,30 @@ export class SupportRequestController extends SupportRequestControllerBase {
   ) {
     super(service, rolesBuilder);
   }
+
+  /**
+   * Derive the acting role from the AUTHENTICATED user, not from the body.
+   * The FE contract (src/types/support.ts) documents actorRole as optional:
+   * "backend determines from auth token" — but the old DTO REQUIRED it, so
+   * every caller that followed the contract (e.g. the driver issue report
+   * page) was rejected with "actorRole must be one of the following
+   * values". A client-supplied role is also a spoofable claim (a driver
+   * could raise a ticket as ADMIN), so the body value is only kept as a
+   * backward-compatible override for callers that already send it.
+   *
+   * Precedence when a user holds several roles: the operational hat that
+   * most plausibly raised the ticket wins (DRIVER > BUSINESS_CUSTOMER >
+   * PRIVATE_CUSTOMER > ADMIN); an unmatched role set falls back to
+   * PRIVATE_CUSTOMER.
+   */
+  private deriveActorRole(user: any): EnumSupportActorRole {
+    const roles: string[] = Array.isArray(user?.roles) ? user.roles : [];
+    if (roles.includes("DRIVER")) return EnumSupportActorRole.DRIVER;
+    if (roles.includes("BUSINESS_CUSTOMER")) return EnumSupportActorRole.DEALER;
+    if (roles.includes("PRIVATE_CUSTOMER")) return EnumSupportActorRole.PRIVATE_CUSTOMER;
+    if (roles.includes("ADMIN")) return EnumSupportActorRole.ADMIN;
+    return EnumSupportActorRole.PRIVATE_CUSTOMER;
+  }
   @common.Post("contact")
   @swagger.ApiCreatedResponse({ type: SupportRequest })
  
@@ -47,7 +72,7 @@ export class SupportRequestController extends SupportRequestControllerBase {
 
     return this.service.createContactRequest({
       actorUserId: user?.id ?? null,
-      actorRole: body.actorRole,
+      actorRole: body.actorRole ?? this.deriveActorRole(user),
       deliveryId: body.deliveryId ?? null,
       category: body.category,
       priority: body.priority ?? undefined,
