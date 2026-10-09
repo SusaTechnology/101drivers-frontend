@@ -3,13 +3,14 @@ import React, { useState, useEffect } from "react";
 import {
   Sheet,
   SheetContent,
+  SheetClose,
   SheetHeader,
   SheetTitle,
   SheetDescription,
 } from "@/components/ui/sheet";
 import {
   Handshake, AlertTriangle, Shield, Info, Clock, Users,
-  Database, Lock, UserCheck, Mail,
+  Database, Lock, UserCheck, Mail, X,
 } from "lucide-react";
 
 interface PolicySheetProps {
@@ -144,17 +145,33 @@ export default function PolicySheet({
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="right" className="w-full sm:max-w-lg overflow-y-auto">
-        <SheetHeader className="pt-8 px-6">
-          <SheetTitle className="text-2xl font-black text-slate-900 dark:text-white">
-            {title}
-          </SheetTitle>
-          <SheetDescription className="text-sm text-slate-500 dark:text-slate-400">
-            {subtitle}
-          </SheetDescription>
+      {/* Fixed header + scrolling body. The default tiny close X (absolute
+          top-4, 16px icon) gets buried under the mobile browser/status bar
+          (viewport-fit=cover), so we render our own bigger, lower close
+          button inside the fixed header instead. */}
+      <SheetContent
+        side="right"
+        className="w-full sm:max-w-lg overflow-hidden"
+        showCloseButton={false}
+      >
+        <SheetHeader className="shrink-0 px-6 pt-[max(2.5rem,calc(env(safe-area-inset-top)+0.75rem))] pb-4 border-b border-slate-200 dark:border-slate-800">
+          <div className="flex items-start justify-between gap-4">
+            <div className="min-w-0">
+              <SheetTitle className="text-2xl font-black text-slate-900 dark:text-white">
+                {title}
+              </SheetTitle>
+              <SheetDescription className="text-sm text-slate-500 dark:text-slate-400">
+                {subtitle}
+              </SheetDescription>
+            </div>
+            <SheetClose className="shrink-0 w-11 h-11 rounded-full bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 flex items-center justify-center transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-lime-500">
+              <X className="w-5 h-5 text-slate-700 dark:text-slate-200" />
+              <span className="sr-only">Close</span>
+            </SheetClose>
+          </div>
         </SheetHeader>
 
-        <div className="px-6 pb-10 space-y-4 text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
+        <div className="flex-1 min-h-0 overflow-y-auto px-6 pb-10 space-y-4 text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
           {/* ── Loading skeleton ── */}
           {loading && (
             <div className="animate-pulse space-y-3 py-4">

@@ -63,7 +63,14 @@ import PolicySheet from '../shared/PolicySheet'
 // Form schema – includes all fields for the combined payload
 const preferencesSchema = z.object({
   // Personal Info
-  phone: z.string().optional(),
+  phone: z
+    .string()
+    .optional()
+    .refine((v) => {
+      if (!v) return true
+      const digits = v.replace(/\D/g, '')
+      return digits.length >= 7 && digits.length <= 15
+    }, 'Enter a valid phone number (7-15 digits)'),
   profilePhotoUrl: z.string().url().optional().or(z.literal('')),
 
   // Service Area (maps to preferences object)
@@ -431,6 +438,12 @@ export default function DriverPreferencesPage() {
   // Determine if main save should be disabled: if upload is pending or profile loading
   const isSaveDisabled = updateProfile.isPending || uploadPhoto.isPending || driverProfileLoading
 
+  // The account email is read-only here (PATCH /drivers/:id/profile has no
+  // email field — email lives on the User record), but still validate the
+  // format so a broken account email is visible instead of silently wrong.
+  const accountEmail = driverProfile?.user?.email || ''
+  const emailInvalid = !!accountEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(accountEmail)
+
   // Theme handling
   useEffect(() => {
     setMounted(true)
@@ -557,11 +570,30 @@ export default function DriverPreferencesPage() {
                   <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                   <Input
                     id="phone"
-                    {...form.register('phone')}
-                    placeholder="+1-555-111-2222"
-                    className="h-12 pl-10 rounded-2xl border-slate-200 dark:border-slate-700 dark:bg-slate-800/40 text-sm"
+                    {...form.register('phone', {
+                      onChange: (e) => {
+                        // Digits only — characters cannot be typed or pasted
+                        // (same strip-on-change pattern as the ZIP field).
+                        const cleaned = e.target.value.replace(/\D/g, '').slice(0, 15)
+                        e.target.value = cleaned
+                        form.setValue('phone', cleaned)
+                      },
+                    })}
+                    placeholder="5551234567"
+                    autoComplete="tel"
+                    inputMode="numeric"
+                    maxLength={15}
+                    className={cn(
+                      "h-12 pl-10 rounded-2xl border dark:bg-slate-800/40 text-sm",
+                      form.formState.errors.phone
+                        ? "border-red-500 focus-visible:ring-red-500"
+                        : "border-slate-200 dark:border-slate-700"
+                    )}
                   />
                 </div>
+                {form.formState.errors.phone && (
+                  <p className="text-xs text-red-500">{form.formState.errors.phone.message}</p>
+                )}
               </div>
 
               {/* Profile Photo Upload */}
@@ -643,9 +675,21 @@ export default function DriverPreferencesPage() {
                     </Label>
                     <Input
                       readOnly
-                      value={driverProfile.user?.email || ''}
-                      className="h-12 rounded-2xl border-slate-200 dark:border-slate-700 dark:bg-slate-800/40 text-sm bg-slate-50 dark:bg-slate-800/20"
+                      type="email"
+                      value={accountEmail}
+                      aria-invalid={emailInvalid}
+                      className={cn(
+                        "h-12 rounded-2xl border text-sm bg-slate-50 dark:bg-slate-800/40",
+                        emailInvalid
+                          ? "border-red-500"
+                          : "border-slate-200 dark:border-slate-700"
+                      )}
                     />
+                    {emailInvalid && (
+                      <p className="text-xs text-red-500">
+                        This account email looks invalid — contact customer service to fix it.
+                      </p>
+                    )}
                   </div>
 
                   {/* License Number & State */}
