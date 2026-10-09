@@ -67,6 +67,12 @@ import { toast } from "sonner";
 import { usePickupZones } from "@/hooks/usePickupZones";
 import { isInPickupZone } from "@/lib/geo-utils";
 import { getAdvertisedRateSummary } from "@/lib/pricing/home-quote";
+import {
+  coerceQuoteUsage,
+  fetchGuestQuoteUsage,
+  quoteCapMessage,
+  type QuoteUsageSnapshot,
+} from "@/lib/pricing/quote-usage";
 import { WhatsAppIcon } from "@/components/shared/WhatsAppSupportButton";
 import { SiteFooter } from "@/components/shared/SiteFooter";
 import { usePublicDefaultPricing } from "@/hooks/pricing/usePublicDefaultPricing";
@@ -131,6 +137,17 @@ export default function LandingPage() {
   const [distance, setDistance] = useState<number | null>(null);
   const [quoteResult, setQuoteResult] = useState<any>(null);
   const [isLoadingQuote, setIsLoadingQuote] = useState(false);
+
+  // ─── Guest daily quote budget (client mirror) ────────────────────
+  // The SERVER owns the budget (per-IP daily counter, 429 once over);
+  // this state is only a mirror so the quote button can tell the truth
+  // BEFORE an attempt: budget left → "Instant Quote", gone → "Continue"
+  // (opens the signup gate, never calculates). null = unknown / not
+  // capped → normal behavior; the server stays the backstop either way.
+  const [quoteUsage, setQuoteUsage] = useState<QuoteUsageSnapshot | null>(null);
+  const quoteCapReached =
+    !!quoteUsage && quoteUsage.remaining !== null && quoteUsage.remaining <= 0;
+  const capToastShownRef = useRef(false);
 
   // ─── Delivery type (Business / Personal) ───────────────────────────
   // Requirement: the delivery-type question is the FIRST interactive
@@ -373,6 +390,29 @@ export default function LandingPage() {
     }
   }, [quoteResult, pickupCoords, zones]);
 
+  // ─── Cap-mirror updates (guest only) ──────────────────────────────
+  // Single funnel for every place the server reports budget usage: the
+  // first-paint peek, a successful quote response, or a 429 body. The
+  // cap toast fires ONCE when the budget first reads exhausted — the
+  // moment the visitor has spent today's free quotes.
+  const applyQuoteUsage = useCallback(
+    (raw: unknown, opts?: { exhausted?: boolean; message?: string }) => {
+      if (isAuthenticated()) return; // accounts have their own budgets — the guest gate never applies
+      const snapshot = coerceQuoteUsage(raw, opts);
+      if (!snapshot) return;
+      setQuoteUsage(snapshot);
+      const exhausted = snapshot.remaining !== null && snapshot.remaining <= 0;
+      if (exhausted && !capToastShownRef.current) {
+        capToastShownRef.current = true;
+        toast.error("Daily quote limit reached", {
+          description: opts?.message ?? quoteCapMessage(snapshot.limit),
+          duration: 8000,
+        });
+      }
+    },
+    []
+  );
+
   // Compute the REAL price on the server — the same pricing engine that
   // prices the eventual delivery. One source of truth: the landing price
   // and the charged price can no longer diverge. The delivery type drives
@@ -424,26 +464,36 @@ export default function LandingPage() {
       if (routeVersionRef.current !== versionAtStart) return;
 
       if (!response.ok) {
+        let body: unknown = null;
         let message = "Could not calculate the price right now. Please try again in a moment.";
         try {
-          const body = await response.json();
-          if (body?.message) {
-            message = Array.isArray(body.message) ? body.message.join(", ") : body.message;
+          body = await response.json();
+          const parsed = body as { message?: unknown } | null;
+          if (parsed?.message) {
+            message = Array.isArray(parsed.message) ? parsed.message.join(", ") : String(parsed.message);
           }
         } catch { /* non-JSON error body — keep the default message */ }
         setQuoteResult(null);
-        // 429 = daily quote budget (server-side damper on billed Google
-        // Maps calls). Say so plainly instead of a generic "unavailable".
-        toast.error(
-          response.status === 429 ? "Daily quote limit reached" : "Price unavailable",
-          { description: message, duration: response.status === 429 ? 8000 : undefined }
-        );
+        if (response.status === 429) {
+          // Server truth: today's guest budget is gone. Mirror it (the
+          // button flips to "Continue" from now on) and deliver the
+          // dev-spec cap message. The server already refused the 4th
+          // calculation — nothing was priced, nothing was charged.
+          applyQuoteUsage(body, { exhausted: true, message });
+          return;
+        }
+        toast.error("Price unavailable", { description: message });
         return;
       }
 
       const quote = await response.json();
       setQuoteResult(quote);
       setDistance(quote?.distanceMiles != null ? Math.round(quote.distanceMiles) : null);
+
+      // Mirror the post-quote budget — flips the button to "Continue"
+      // (with the one-time cap toast) the moment today's free quota is
+      // exhausted, so the very next click can't promise a calculation.
+      applyQuoteUsage(quote?.quoteUsage);
 
       // Mark this exact type+route as quoted so the auto-fire effect
       // doesn't re-quote the same combination right after a manual click.
@@ -469,7 +519,7 @@ export default function LandingPage() {
     } finally {
       setIsLoadingQuote(false);
     }
-  }, [pickupAddress, dropoffAddress, pickupInZone, deliveryType, promptDeliveryType]);
+  }, [pickupAddress, dropoffAddress, pickupInZone, deliveryType, promptDeliveryType, applyQuoteUsage]);
 
   // Auto-fire the server quote as soon as both addresses are selected and
   // pickup is confirmed inside the zone. The server computes the driving
@@ -478,14 +528,34 @@ export default function LandingPage() {
   // this at exactly ONE request per (type, pickup, dropoff) combination.
   // Note: this auto-fire does NOT scroll — only the button click scrolls,
   // so the page doesn't jump around while the user is still typing.
+  // Once the guest budget is gone the auto-fire stays quiet: the server
+  // would only answer 429 again, and the button already says "Continue".
   useEffect(() => {
-    if (deliveryType && pickupAddress && dropoffAddress && pickupCoords && dropoffCoords && pickupInZone === true && !isLoadingQuote) {
+    if (deliveryType && pickupAddress && dropoffAddress && pickupCoords && dropoffCoords && pickupInZone === true && !isLoadingQuote && !quoteCapReached) {
       const signature = `${deliveryType}||${pickupAddress}||${dropoffAddress}`;
       if (lastQuotedKeyRef.current === signature) return;
       lastQuotedKeyRef.current = signature;
       handleCalculateEstimate({ scrollToEstimate: false });
     }
-  }, [pickupAddress, dropoffAddress, pickupCoords, dropoffCoords, pickupInZone, deliveryType, isLoadingQuote, handleCalculateEstimate]);
+  }, [pickupAddress, dropoffAddress, pickupCoords, dropoffCoords, pickupInZone, deliveryType, isLoadingQuote, quoteCapReached, handleCalculateEstimate]);
+
+  // Learn the guest's budget at FIRST PAINT so a visitor who already
+  // used today's free quotes — same session, a refresh, a back
+  // navigation, or a second tab (the counter is server-side per IP) —
+  // sees "Continue" immediately instead of a button promising a
+  // calculation it can't run. Logged-in visitors are exempt from the
+  // guest gate entirely; failures fall back to normal labeling and the
+  // server-side 429 stays the backstop.
+  useEffect(() => {
+    if (isAuthenticated()) return;
+    let cancelled = false;
+    fetchGuestQuoteUsage().then((snapshot) => {
+      if (!cancelled && snapshot) setQuoteUsage(snapshot);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // ─── Delivery type switch ───────────────────────────────────────────
   // The map shows TWO different prices depending on the request type —
@@ -505,6 +575,39 @@ export default function LandingPage() {
     } catch { /* storage unavailable */ }
   }, [deliveryType, pickupAddress, dropoffAddress]);
 
+  // ─── "Continue" — the button once the free budget is gone ──────
+  // Spec: after the cap, the quote button NEVER calculates again and
+  // must not keep the "Instant Quote" label. It opens the signup gate —
+  // Business vs Personal is already answered by the delivery type the
+  // visitor quoted with — and carries the quote (when one is on screen)
+  // plus the typed addresses through signup, exactly like
+  // "Sign up and request a delivery" does. No calculation can happen
+  // here by construction; the server refuses a 4th one regardless.
+  const handleContinueAfterCap = useCallback(() => {
+    if (!deliveryType) {
+      // Defensive: quoting requires a type, so this is near-unreachable.
+      // The delivery-type chooser IS the Business/Personal gate.
+      promptDeliveryType();
+      return;
+    }
+    try {
+      localStorage.setItem("quoteDraft", JSON.stringify({
+        formData: null,
+        quoteData: quoteResult ?? null,
+        deliveryType,
+        pickupAddress,
+        dropoffAddress,
+      }));
+      // Keep the landing memory in sync so "edit addresses" after
+      // signup returns to a map that remembers what was typed here.
+      localStorage.setItem(
+        HOME_QUOTE_PREFILL_KEY,
+        JSON.stringify({ deliveryType, pickupAddress, dropoffAddress })
+      );
+    } catch { /* storage unavailable — signup still works, carry-over just won't */ }
+    navigate({ to: deliveryType === "BUSINESS" ? "/auth/dealer-signup" : "/auth/individual-signup" });
+  }, [quoteResult, deliveryType, pickupAddress, dropoffAddress, promptDeliveryType, navigate]);
+
   // ─── "Sign up and request a delivery" ───────────────────────────────
   // One button. Carries the server quote through signup so NOTHING has to
   // be retyped: Personal goes straight into the completion flow (which
@@ -513,7 +616,13 @@ export default function LandingPage() {
   // (their account needs admin approval before a delivery can be placed).
   const handleSignupAndRequest = useCallback(() => {
     if (!quoteResult?.id) {
-      // No server quote yet (or the last one failed) — get one first.
+      // No server quote yet (or the last one failed). With the guest
+      // budget gone, a calculation attempt would only 429 — open the
+      // signup gate with what we have instead (same as "Continue").
+      if (quoteCapReached) {
+        handleContinueAfterCap();
+        return;
+      }
       handleCalculateEstimate({ scrollToEstimate: true });
       return;
     }
@@ -537,7 +646,7 @@ export default function LandingPage() {
       // pre-filled delivery form to complete the request.
       navigate({ to: "/auth/individual-signup" });
     }
-  }, [quoteResult, deliveryType, pickupAddress, dropoffAddress, pickupCoords, dropoffCoords, handleCalculateEstimate, navigate]);
+  }, [quoteResult, deliveryType, pickupAddress, dropoffAddress, pickupCoords, dropoffCoords, handleCalculateEstimate, quoteCapReached, handleContinueAfterCap, navigate]);
 
   // "If a type is already selected, it skips straight to the address
   // fields": when the visitor arrives via "Request a Delivery" (#quote)
@@ -1046,26 +1155,34 @@ export default function LandingPage() {
                   )}
                 </div>
 
-                {/* Recalculate button — the server quote auto-fires when both
-                    addresses are set; the button ALSO smooth-scrolls to the
-                    #estimate section so the customer sees the price. */}
+                {/* Quote button — says what it will do: "Instant Quote"/
+                    "Recalculate" while the guest has budget left,
+                    "Continue" once today's free quotes are spent (opens
+                    the signup gate — never a 4th calculation). */}
                 <a
                   href="#estimate"
                   onClick={(e) => {
                     e.preventDefault();
+                    if (quoteCapReached) {
+                      handleContinueAfterCap();
+                      return;
+                    }
                     handleCalculateEstimate({ scrollToEstimate: true });
                   }}
                   className={`w-full px-6 py-3.5 rounded-2xl bg-lime-500 text-slate-950 hover:bg-lime-600 hover:shadow-lg hover:shadow-lime-500/20 font-extrabold transition flex items-center justify-center gap-2 ${
-                    isLoadingQuote || !pickupAddress || !dropoffAddress || pickupInZone === false
+                    !quoteCapReached &&
+                    (isLoadingQuote || !pickupAddress || !dropoffAddress || pickupInZone === false)
                       ? "opacity-50 pointer-events-none"
                       : ""
                   }`}
                 >
-                  {isLoadingQuote
-                    ? "Calculating..."
-                    : quoteResult
-                      ? "Recalculate"
-                      : "Instant Quote"}
+                  {quoteCapReached
+                    ? "Continue"
+                    : isLoadingQuote
+                      ? "Calculating..."
+                      : quoteResult
+                        ? "Recalculate"
+                        : "Instant Quote"}
                   {!isLoadingQuote && <ArrowRight className="h-4 w-4" />}
                 </a>
               </div>

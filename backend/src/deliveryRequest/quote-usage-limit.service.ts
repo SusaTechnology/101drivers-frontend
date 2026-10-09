@@ -45,6 +45,12 @@ import { AppSettingService } from "../appSetting/appSetting.service";
 
 const QUOTE_PREVIEW_SCOPE = "quote_preview";
 
+/** Post-check usage snapshot returned when a request is allowed. */
+export interface QuoteUsageVerdict {
+  used: number;
+  limit: number;
+}
+
 @Injectable()
 export class QuoteUsageLimitService {
   private readonly logger = new Logger(QuoteUsageLimitService.name);
@@ -58,6 +64,12 @@ export class QuoteUsageLimitService {
    * Throws 429 QUOTE_DAILY_LIMIT_REACHED when the caller has used up
    * their daily quote budget. Callers with operational roles and any
    * request while limiting is disabled pass through untouched.
+   *
+   * Returns the post-increment usage when the request is allowed (null
+   * when this caller is not budgeted at all — kill switch off or an
+   * operational role), so the endpoint can echo it back to the client.
+   * The client uses it ONLY to label the quote button honestly; the
+   * enforcement here stays the single source of truth.
    */
   async assertQuotePreviewAllowed(input: {
     /** Authenticated user id, or null for guests. */
@@ -66,15 +78,15 @@ export class QuoteUsageLimitService {
     roles: string[];
     /** Client IP (guests are budgeted per IP). */
     ip: string | null;
-  }): Promise<void> {
+  }): Promise<QuoteUsageVerdict | null> {
     try {
       const limits = await this.appSetting.getQuoteUsageLimits();
-      if (!limits.enabled) return;
+      if (!limits.enabled) return null;
 
       const roles = input.roles ?? [];
       // Operational roles: their quote/route usage is the business
       // itself (job feed, scheduling, ops tools) — never limited.
-      if (roles.includes("ADMIN") || roles.includes("DRIVER")) return;
+      if (roles.includes("ADMIN") || roles.includes("DRIVER")) return null;
 
       let limit: number;
       let identity: string;
@@ -100,22 +112,76 @@ export class QuoteUsageLimitService {
             statusCode: 429,
             code: "QUOTE_DAILY_LIMIT_REACHED",
             message:
-              `You've reached today's limit of ${limit} quote ` +
-              `${limit === 1 ? "calculation" : "calculations"}. ` +
-              `Your saved quotes are safe — please try again tomorrow.`,
+              input.userId
+                ? `You've reached today's limit of ${limit} quote ` +
+                  `${limit === 1 ? "calculation" : "calculations"}. ` +
+                  `Your saved quotes are safe — please try again tomorrow.`
+                // Guests get the signup-path message: the landing page is
+                // their surface, and the way forward is an account, not
+                // waiting until tomorrow.
+                : `You've used today's ${limit} free quote` +
+                  `${limit === 1 ? "" : "s"}. Your saved quotes are safe — ` +
+                  `sign up to request delivery.`,
             limit,
             used,
           },
           429,
         );
       }
+      return { used, limit };
     } catch (error) {
       if (error instanceof HttpException) throw error;
       // Fail-open: a broken quota check must never break the product.
+      // null = "this caller is not capped" — identical semantics to the
+      // kill switch / exempt roles above.
       this.logger.error(
         "Quote usage limit check failed — allowing request",
         error instanceof Error ? error.stack : String(error),
       );
+      return null;
+    }
+  }
+
+  /**
+   * Read-only peek at a GUEST's daily quote budget — no increment, no
+   * throw, fail-open to null (= "not capped").
+   *
+   * The landing page calls this at first paint so a visitor who already
+   * used today's budget (same session, a refresh, or a second tab — the
+   * counter is per client IP) sees a button that tells the truth BEFORE
+   * any attempt. Guests only by contract: the signup-gate UX is a
+   * no-account experience — callers with an account, an operational
+   * role, or with limiting disabled get null and are never label-capped.
+   * The POST-side check remains the enforcement either way.
+   */
+  async peekGuestQuoteUsage(input: {
+    ip: string | null;
+  }): Promise<(QuoteUsageVerdict & { remaining: number }) | null> {
+    try {
+      const limits = await this.appSetting.getQuoteUsageLimits();
+      if (!limits.enabled) return null;
+      const identity = `ip:${input.ip || "unknown"}`;
+      const row = await this.prisma.dailyUsageCounter.findUnique({
+        where: {
+          scope_identity_day: {
+            scope: QUOTE_PREVIEW_SCOPE,
+            identity,
+            day: this.today(),
+          },
+        },
+      });
+      const used = row?.count ?? 0;
+      return {
+        used,
+        limit: limits.guestDailyLimit,
+        remaining: Math.max(0, limits.guestDailyLimit - used),
+      };
+    } catch (error) {
+      this.logger.error(
+        "Quote usage peek failed — treating caller as not capped",
+        error instanceof Error ? error.stack : String(error),
+      );
+      return null;
     }
   }
 

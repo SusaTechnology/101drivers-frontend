@@ -20,6 +20,22 @@ export class DeliveryRequestPublicController {
     protected readonly service: DeliveryRequestService,
     private readonly quoteUsageLimit: QuoteUsageLimitService,
   ) {}
+
+  /**
+   * Client IP as budgeted by QuoteUsageLimitService — nginx sets
+   * x-forwarded-for; fall back to the socket address. Shared by the
+   * quote-preview POST (counting) and the quote-usage GET (peeking) so
+   * both always agree on WHO is being budgeted.
+   */
+  private clientIp(request: Request): string | null {
+    const forwarded = request?.headers?.["x-forwarded-for"];
+    return (
+      (typeof forwarded === "string" && forwarded.split(",")[0]?.trim()) ||
+      request?.ip ||
+      null
+    );
+  }
+
 @common.Post("individual/create-draft-from-quote")
 @swagger.ApiOperation({
   summary: "Public save draft delivery from quote for individual flow",
@@ -60,6 +76,26 @@ async createIndividualDeliveryDraftFromQuote(
     isUrgent: body.isUrgent === true,
   });
 }
+  @common.Get("individual/quote-usage")
+  @swagger.ApiOperation({
+    summary:
+      "Read-only peek at the guest daily quote budget (per client IP)",
+  })
+  @swagger.ApiOkResponse({ type: Object })
+  async getIndividualQuoteUsage(@common.Req() request: Request): Promise<any> {
+    // Lets the landing page label its quote button honestly BEFORE any
+    // attempt ("Instant Quote" vs "Continue") — e.g. a visitor who
+    // already used today's budget in another tab. Read-only: never
+    // increments, never blocks. Returns { used, limit, remaining } for
+    // guests, or null fields when the caller isn't a budgeted guest
+    // (limiting off). Guests-only by contract — the signup-gate UX is a
+    // no-account experience; the POST-side check stays the enforcement.
+    const usage = await this.quoteUsageLimit.peekGuestQuoteUsage({
+      ip: this.clientIp(request),
+    });
+    return usage ?? { used: null, limit: null, remaining: null };
+  }
+
   @common.Post("individual/quote-preview")
   @swagger.ApiOperation({
     summary: "Public quote preview for individual landing-page flow",
@@ -75,24 +111,31 @@ async createIndividualDeliveryDraftFromQuote(
     // is exactly the surface the budget exists for. Guests are budgeted
     // per client IP (nginx sets x-forwarded-for). Throws 429
     // QUOTE_DAILY_LIMIT_REACHED when over; fails open on internal error.
-    const forwarded = request?.headers?.["x-forwarded-for"];
-    const ip =
-      (typeof forwarded === "string" && forwarded.split(",")[0]?.trim()) ||
-      request?.ip ||
-      null;
-    await this.quoteUsageLimit.assertQuotePreviewAllowed({
+    const usage = await this.quoteUsageLimit.assertQuotePreviewAllowed({
       userId: null,
       roles: [],
-      ip,
+      ip: this.clientIp(request),
     });
 
-    return this.service.createQuotePreview({
+    const quote = await this.service.createQuotePreview({
       pickupAddress: body.pickupAddress,
       dropoffAddress: body.dropoffAddress,
       serviceType: body.serviceType,
       customerId: body.customerId ?? null,
       deliveryType: body.deliveryType ?? null,
     });
+    if (!quote) return quote;
+
+    // Echo the post-quote budget so the client can flip the button to
+    // "Continue" the moment the free quota is exhausted — without a
+    // second request. Informational only; this endpoint already did the
+    // enforcing above.
+    return {
+      ...quote,
+      quoteUsage: usage
+        ? { ...usage, remaining: Math.max(0, usage.limit - usage.used) }
+        : null,
+    };
   }
 
   @common.Post("individual/create-from-quote")
