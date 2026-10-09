@@ -40,6 +40,7 @@ const set = (v: unknown): string =>
 // the default import (same reason stripe.service.ts uses Record<string, any>).
 function printAccount(acct: any): void {
   console.log(`\n──────── ${acct.id} ────────`);
+  console.log(`livemode:         ${acct.livemode}   (false = TEST data, not real drivers)`);
   console.log(`email:            ${acct.email ?? "—"}`);
   console.log(`country:          ${acct.country}`);
   console.log(`business_type:    ${acct.business_type ?? "UNSET"}`);
@@ -58,11 +59,18 @@ function printAccount(acct: any): void {
       `phone=${set(ind.phone)} dob=${set(ind.dob?.day)} ` +
       `ssn_last_4=${set(ind.ssn_last_4)} address=${set(ind.address?.line1)}`,
   );
+  console.log(`verification:     ${ind.verification?.status ?? "—"}   (Stripe's identity check on the person)`);
   console.log(
     `currently_due:    ${JSON.stringify(acct.requirements?.currently_due ?? [])}`,
   );
   console.log(
+    `eventually_due:   ${JSON.stringify(acct.requirements?.eventually_due ?? [])}`,
+  );
+  console.log(
     `pending_verify:   ${JSON.stringify(acct.requirements?.pending_verification ?? [])}`,
+  );
+  console.log(
+    `errors:           ${JSON.stringify(acct.requirements?.errors ?? [])}`,
   );
   console.log(
     `disabled_reason:  ${acct.requirements?.disabled_reason ?? "none"}`,
