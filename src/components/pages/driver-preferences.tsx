@@ -58,6 +58,8 @@ import { GOOGLE_MAPS_LIBRARIES, GOOGLE_MAPS_SCRIPT_ID } from '@/lib/google-maps-
 import PickupZoneOverlay from '@/components/map/PickupZoneOverlay'
 import { usePickupZones } from '@/hooks/usePickupZones'
 import PolicySheet from '../shared/PolicySheet'
+import { PhotoDialog } from '@/components/ui/photo-dialog'
+import { compressPhoto } from '@/lib/image-compress'
 // import DriverBottomNav from '../layout/DriverBottomNav'
 
 // Form schema – includes all fields for the combined payload
@@ -74,7 +76,16 @@ const preferencesSchema = z.object({
   profilePhotoUrl: z.string().url().optional().or(z.literal('')),
 
   // Service Area (maps to preferences object)
-  primaryZip: z.string().regex(/^\d{5}$/, 'Enter a valid 5-digit ZIP code').optional().or(z.literal('')),
+  primaryZip: z
+    .string()
+    .regex(/^\d{5}$/, 'Enter a valid 5-digit ZIP code')
+    .refine((v) => {
+      // California only — USPS California ZIP codes run 90001-96162
+      const n = parseInt(v, 10)
+      return n >= 90001 && n <= 96162
+    }, 'Enter a California ZIP code (90001-96162)')
+    .optional()
+    .or(z.literal('')),
   radius: z.string().optional(),
 
   // Location (home base)
@@ -136,6 +147,10 @@ export default function DriverPreferencesPage() {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const mapRef = useRef<google.maps.Map | null>(null)
   const [openPolicySheet, setOpenPolicySheet] = useState<'agreement' | 'terms' | 'privacy' | null>(null);
+  // Full-size photo preview dialog (selfie box + license images).
+  const [photoDialogOpen, setPhotoDialogOpen] = useState(false)
+  const [photoDialogSrc, setPhotoDialogSrc] = useState('')
+  const [photoDialogTitle, setPhotoDialogTitle] = useState('')
   // Google Maps API loader
   const { isLoaded: googleMapsLoaded } = useJsApiLoader({
     id: GOOGLE_MAPS_SCRIPT_ID,
@@ -382,7 +397,7 @@ export default function DriverPreferencesPage() {
   // Photo upload state
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
 
@@ -394,11 +409,22 @@ export default function DriverPreferencesPage() {
       return
     }
 
-    const formData = new FormData()
-    formData.append('file', file)
-    formData.append('driverId', String(driver.profileId))
+    try {
+      // Compress first — the endpoint rejects files over 5MB and phone
+      // cameras produce far larger photos.
+      const compressed = await compressPhoto(file)
+      const formData = new FormData()
+      formData.append('file', compressed)
+      formData.append('driverId', String(driver.profileId))
 
-    uploadPhoto.mutate(formData)
+      uploadPhoto.mutate(formData)
+    } catch (error: any) {
+      if (fileInputRef.current) fileInputRef.current.value = ''
+      setPreviewUrl(null)
+      toast.error('Could not process image', {
+        description: error?.message || 'Please try a different photo.',
+      })
+    }
   }
 
   const handlePreviewClick = () => {
@@ -443,6 +469,23 @@ export default function DriverPreferencesPage() {
   // format so a broken account email is visible instead of silently wrong.
   const accountEmail = driverProfile?.user?.email || ''
   const emailInvalid = !!accountEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(accountEmail)
+
+  // Selfie shown in the photo box (a fresh upload wins over the onboarding selfie)
+  const displayPhotoUrl = form.watch('profilePhotoUrl') || driverProfile?.selfiePhotoUrl || ''
+
+  // Read-only fields explain WHY they can't be edited when tapped.
+  const explainReadOnlyField = (title: string, description: string) => {
+    toast.info(title, {
+      description,
+      action: { label: 'Get help', onClick: () => navigate({ to: '/help-driver' }) },
+    })
+  }
+
+  const openPhotoDialog = (src: string, title: string) => {
+    setPhotoDialogSrc(src)
+    setPhotoDialogTitle(title)
+    setPhotoDialogOpen(true)
+  }
 
   // Theme handling
   useEffect(() => {
@@ -596,7 +639,10 @@ export default function DriverPreferencesPage() {
                 )}
               </div>
 
-              {/* Profile Photo Upload */}
+              {/* Profile Photo (selfie) — tap the box to view it full size;
+                  "Change selfie" opens the picker (camera or files). The new
+                  photo lands in profilePhotoUrl and is saved with
+                  "Save All Preferences". */}
               <div className="space-y-2">
                 <Label className="text-xs font-black uppercase tracking-widest text-slate-500">
                   Profile Photo
@@ -604,8 +650,16 @@ export default function DriverPreferencesPage() {
                 <div className="flex flex-col items-start gap-2">
                   <div
                     className={cn(
-                      "relative w-24 h-24 rounded-2xl border border-slate-200 dark:border-slate-700 overflow-hidden bg-slate-100 dark:bg-slate-800 opacity-50 cursor-not-allowed"
+                      "relative w-24 h-24 rounded-2xl border border-slate-200 dark:border-slate-700 overflow-hidden bg-slate-100 dark:bg-slate-800 cursor-pointer hover:opacity-80 transition-opacity"
                     )}
+                    onClick={() => {
+                      if (uploadPhoto.isPending) return
+                      if (displayPhotoUrl) {
+                        openPhotoDialog(displayPhotoUrl, 'Profile photo')
+                      } else {
+                        handlePreviewClick()
+                      }
+                    }}
                   >
                     {uploadPhoto.isPending ? (
                       <div className="w-full h-full flex items-center justify-center">
@@ -613,9 +667,9 @@ export default function DriverPreferencesPage() {
                       </div>
                     ) : previewUrl ? (
                       <img src={previewUrl} alt="Preview" className="w-full h-full object-cover" />
-                    ) : form.watch('profilePhotoUrl') || driverProfile?.selfiePhotoUrl ? (
+                    ) : displayPhotoUrl ? (
                       <img
-                        src={form.watch('profilePhotoUrl') || driverProfile?.selfiePhotoUrl || ''}
+                        src={displayPhotoUrl}
                         alt="Current"
                         className="w-full h-full object-cover"
                       />
@@ -629,13 +683,12 @@ export default function DriverPreferencesPage() {
                     ref={fileInputRef}
                     type="file"
                     accept="image/*"
-                    capture="environment"
-                    onChange={handleFileChange}
                     className="hidden"
+                    onChange={handleFileChange}
                   />
-                  {!form.watch('profilePhotoUrl') && !driverProfile?.selfiePhotoUrl && !uploadPhoto.isPending && (
+                  {!displayPhotoUrl && !uploadPhoto.isPending && (
                     <p className="text-xs text-slate-400 dark:text-slate-500 leading-relaxed">
-                      Tap to take a new photo
+                      Tap to add a photo
                     </p>
                   )}
                   {uploadPhoto.isPending && (
@@ -644,16 +697,18 @@ export default function DriverPreferencesPage() {
                       Uploading...
                     </p>
                   )}
-                  {(form.watch('profilePhotoUrl') || driverProfile?.selfiePhotoUrl) && !uploadPhoto.isPending && (
-                    <p className="text-xs text-emerald-600 dark:text-emerald-400">Photo ready</p>
+                  {displayPhotoUrl && !uploadPhoto.isPending && (
+                    <p className="text-xs text-emerald-600 dark:text-emerald-400">
+                      Photo ready ·{' '}
+                      <button
+                        type="button"
+                        onClick={handlePreviewClick}
+                        className="font-bold underline underline-offset-2 text-primary hover:text-primary/80 transition"
+                      >
+                        Change selfie
+                      </button>
+                    </p>
                   )}
-                  <p className="text-xs text-slate-900 dark:text-white leading-relaxed">
-                    To update your photo,{' '}
-                    <Link to="/help-driver" className="text-primary underline underline-offset-2 hover:text-primary/80 transition">
-                      contact customer service
-                    </Link>
-                    .
-                  </p>
                 </div>
               </div>
             </div>
@@ -678,8 +733,14 @@ export default function DriverPreferencesPage() {
                       type="email"
                       value={accountEmail}
                       aria-invalid={emailInvalid}
+                      onClick={() =>
+                        explainReadOnlyField(
+                          "Email can't be changed here",
+                          "Your email is your sign-in identity, so it's locked to protect your account. Contact customer service to change it."
+                        )
+                      }
                       className={cn(
-                        "h-12 rounded-2xl border text-sm bg-slate-50 dark:bg-slate-800/40",
+                        "h-12 rounded-2xl border text-sm bg-slate-50 dark:bg-slate-800/40 cursor-pointer",
                         emailInvalid
                           ? "border-red-500"
                           : "border-slate-200 dark:border-slate-700"
@@ -701,7 +762,13 @@ export default function DriverPreferencesPage() {
                       <Input
                         readOnly
                         value={driverProfile.licenseNumber || ''}
-                        className="h-12 rounded-2xl border-slate-200 dark:border-slate-700 dark:bg-slate-800/40 text-sm bg-slate-50 dark:bg-slate-800/20"
+                        onClick={() =>
+                          explainReadOnlyField(
+                            "License details can't be changed here",
+                            "They were verified during onboarding. If something looks wrong, contact customer service and we'll correct it."
+                          )
+                        }
+                        className="h-12 rounded-2xl border-slate-200 dark:border-slate-700 dark:bg-slate-800/40 text-sm bg-slate-50 dark:bg-slate-800/20 cursor-pointer"
                       />
                     </div>
                     <div className="space-y-2">
@@ -711,7 +778,13 @@ export default function DriverPreferencesPage() {
                       <Input
                         readOnly
                         value={driverProfile.licenseState || ''}
-                        className="h-12 rounded-2xl border-slate-200 dark:border-slate-700 dark:bg-slate-800/40 text-sm bg-slate-50 dark:bg-slate-800/20"
+                        onClick={() =>
+                          explainReadOnlyField(
+                            "License details can't be changed here",
+                            "They were verified during onboarding. If something looks wrong, contact customer service and we'll correct it."
+                          )
+                        }
+                        className="h-12 rounded-2xl border-slate-200 dark:border-slate-700 dark:bg-slate-800/40 text-sm bg-slate-50 dark:bg-slate-800/20 cursor-pointer"
                       />
                     </div>
                   </div>
@@ -726,7 +799,8 @@ export default function DriverPreferencesPage() {
                         <img
                           src={driverProfile.licenseFrontUrl}
                           alt="License Front"
-                          className="w-full h-32 object-cover rounded-xl border border-slate-200 dark:border-slate-700"
+                          className="w-full h-32 object-cover rounded-xl border border-slate-200 dark:border-slate-700 cursor-pointer hover:opacity-80 transition-opacity"
+                          onClick={() => openPhotoDialog(driverProfile.licenseFrontUrl, 'License Front')}
                         />
                       ) : (
                         <div className="h-32 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400 text-xs">
@@ -742,7 +816,8 @@ export default function DriverPreferencesPage() {
                         <img
                           src={driverProfile.licenseBackUrl}
                           alt="License Back"
-                          className="w-full h-32 object-cover rounded-xl border border-slate-200 dark:border-slate-700"
+                          className="w-full h-32 object-cover rounded-xl border border-slate-200 dark:border-slate-700 cursor-pointer hover:opacity-80 transition-opacity"
+                          onClick={() => openPhotoDialog(driverProfile.licenseBackUrl, 'License Back')}
                         />
                       ) : (
                         <div className="h-32 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400 text-xs">
@@ -751,6 +826,13 @@ export default function DriverPreferencesPage() {
                       )}
                     </div>
                   </div>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
+                    License number, state and images are verified during onboarding and can't be edited here — tap a photo to view it full size. Need a correction?{' '}
+                    <Link to="/help-driver" className="text-primary underline underline-offset-2 hover:text-primary/80 transition">
+                      Contact customer service
+                    </Link>
+                    .
+                  </p>
                 </div>
               </>
             ) : null}
@@ -1054,6 +1136,12 @@ export default function DriverPreferencesPage() {
       type={openPolicySheet ?? "agreement"} // default type (won't be used when null)
       closeLabel="Return to Preferences"
       fromSignUp= {false}
+    />
+    <PhotoDialog
+      open={photoDialogOpen}
+      onOpenChange={setPhotoDialogOpen}
+      src={photoDialogSrc}
+      title={photoDialogTitle}
     />
     </div>
   )
