@@ -32,6 +32,17 @@ if (!key) {
 }
 const stripe = new Stripe(key);
 
+// The decisive test-vs-live check is the key's OWN prefix. (The API's
+// livemode field was absent from account objects on the deploy box, so
+// we don't rely on it.) Printing only the mode — never the key itself.
+const keyMode = key.startsWith("sk_live_")
+  ? "LIVE — real money, real drivers"
+  : key.startsWith("rk_live_")
+    ? "LIVE (restricted key) — real money, real drivers"
+    : key.startsWith("sk_test_") || key.startsWith("rk_test_")
+      ? "TEST — sandbox, NONE of this is production data"
+      : "UNKNOWN prefix — find out which key this is";
+
 const set = (v: unknown): string =>
   v === null || v === undefined || v === "" ? "UNSET" : "set";
 
@@ -40,7 +51,7 @@ const set = (v: unknown): string =>
 // the default import (same reason stripe.service.ts uses Record<string, any>).
 function printAccount(acct: any): void {
   console.log(`\n──────── ${acct.id} ────────`);
-  console.log(`livemode:         ${acct.livemode}   (false = TEST data, not real drivers)`);
+  console.log(`livemode:         ${acct.livemode ?? "—"}   (key mode above is the decisive check)`);
   console.log(`email:            ${acct.email ?? "—"}`);
   console.log(`country:          ${acct.country}`);
   console.log(`business_type:    ${acct.business_type ?? "UNSET"}`);
@@ -79,6 +90,7 @@ function printAccount(acct: any): void {
 }
 
 async function main(): Promise<void> {
+  console.log(`\nStripe key mode:  ${keyMode}`);
   const arg = process.argv[2];
 
   if (arg && arg.startsWith("acct_")) {
