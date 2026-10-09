@@ -503,6 +503,8 @@ export class StripeService {
    * Update a Connect account with pre-filled personal data.
    * Used to push driver's SSN, name, address, DOB from our DB into Stripe
    * so the onboarding flow only asks for bank account + ID verification.
+   * Sent as several INDEPENDENT field-group updates — see the split
+   * comment at the bottom of this method for why.
    */
   async updateConnectAccount(accountId: string, params: {
     businessType?: 'individual';
@@ -618,7 +620,76 @@ export class StripeService {
       };
     }
 
-    return this.stripe.accounts.update(accountId, updateData);
+    // ── Split into independent field-group updates ──────────────────
+    // A single combined accounts.update is ALL-OR-NOTHING: one rejected
+    // field (malformed SSN, unrecognized state, or a driver who once
+    // picked "Company" in an old session — Stripe refuses business_type
+    // changes) failed the WHOLE call, so NOTHING was prefilled and the
+    // driver faced a completely blank onboarding form. That was the
+    // "we send the data but Stripe doesn't prefill it" report. Each group
+    // is now sent separately: a rejected field costs only its own group,
+    // and the failure is logged with the group name so the offending
+    // value in our DB can be fixed.
+    const individual = (updateData.individual || {}) as Record<string, any>;
+    const groups: Array<{ label: string; data: Record<string, any> }> = [];
+
+    // business_type must ship with the first individual payload — Stripe
+    // rejects individual.* fields while business_type is undetermined.
+    const identity: Record<string, any> = {};
+    if (updateData.business_type) identity.business_type = updateData.business_type;
+    if (individual.first_name || individual.last_name || individual.phone) {
+      identity.individual = {};
+      if (individual.first_name) identity.individual.first_name = individual.first_name;
+      if (individual.last_name) identity.individual.last_name = individual.last_name;
+      if (individual.phone) identity.individual.phone = individual.phone;
+    }
+    if (Object.keys(identity).length) groups.push({ label: "identity", data: identity });
+
+    if (individual.dob || individual.ssn_last_4) {
+      const verification: Record<string, any> = { individual: {} };
+      if (individual.dob) verification.individual.dob = individual.dob;
+      if (individual.ssn_last_4) verification.individual.ssn_last_4 = individual.ssn_last_4;
+      groups.push({ label: "verification (dob/ssn)", data: verification });
+    }
+
+    if (individual.address) {
+      groups.push({
+        label: "address",
+        data: { individual: { address: individual.address } },
+      });
+    }
+
+    if (updateData.business_profile) {
+      groups.push({
+        label: "business_profile",
+        data: { business_profile: updateData.business_profile },
+      });
+    }
+
+    if (updateData.tos_acceptance) {
+      groups.push({
+        label: "tos_acceptance",
+        data: { tos_acceptance: updateData.tos_acceptance },
+      });
+    }
+
+    // Loosely typed on purpose: stripe v22's CJS typings hide the type
+    // namespace behind `export =` (same reason updateData above is
+    // Record<string, any>), so Stripe.Response<Stripe.Account> is not
+    // reachable from the default import.
+    let lastAccount: Record<string, any> | null = null;
+    for (const group of groups) {
+      try {
+        lastAccount = await this.stripe.accounts.update(accountId, group.data);
+      } catch (err: any) {
+        // Non-fatal by design: the driver can still type this field
+        // manually during onboarding, and every other group still lands.
+        this.logger.warn(
+          `Connect pre-fill [${group.label}] failed for ${accountId}: ${err?.message ?? err}`,
+        );
+      }
+    }
+    return lastAccount;
   }
 
   // ── Webhooks ─────────────────────────────────────────────────────
