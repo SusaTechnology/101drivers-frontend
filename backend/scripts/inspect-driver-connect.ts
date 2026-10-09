@@ -35,7 +35,10 @@ const stripe = new Stripe(key);
 const set = (v: unknown): string =>
   v === null || v === undefined || v === "" ? "UNSET" : "set";
 
-function printAccount(acct: Stripe.Account): void {
+// Loosely typed on purpose: stripe v22's CJS typings hide the type
+// namespace behind `export =`, so Stripe.Account is not reachable from
+// the default import (same reason stripe.service.ts uses Record<string, any>).
+function printAccount(acct: any): void {
   console.log(`\n──────── ${acct.id} ────────`);
   console.log(`email:            ${acct.email ?? "—"}`);
   console.log(`country:          ${acct.country}`);
