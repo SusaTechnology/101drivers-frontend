@@ -840,12 +840,19 @@ export class StripePaymentController {
         || '127.0.0.1';
 
       try {
-        await this.stripeService.updateConnectAccount(accountId, {
+        const prefilledAccount = await this.stripeService.updateConnectAccount(accountId, {
           businessType: 'individual',
           firstName,
           lastName,
           phone: phoneForStripe,
           supportPhone: phoneForStripe,
+          // Industry + product description pre-filled by the platform so
+          // Stripe never asks drivers "what does your business do?" —
+          // drivers are not businesses, they are recipients of payouts.
+          // 4215 = Courier Services (local pick-up and delivery).
+          mcc: '4215',
+          productDescription:
+            'Driver payouts for deliveries booked through the 101 Drivers marketplace',
           dob,
           ssnLast4: driver.ssnLastFour || undefined,
           businessUrl: process.env.FRONTEND_URL || 'https://101drivers.techbee.et',
@@ -864,7 +871,16 @@ export class StripePaymentController {
             },
           } : {}),
         });
-        this.logger.log(`Pre-filled Connect account ${accountId} for driver ${driverId} with SSN, name, phone, address, DOB`);
+        this.logger.log(`Pre-filled Connect account ${accountId} for driver ${driverId} with SSN, name, phone, address, DOB, business profile`);
+        // Observability: whatever remains in `currently_due` is EXACTLY what
+        // Stripe will show the driver on the next onboarding link. This log
+        // line answers any future "why is Stripe asking X" report without
+        // guessing — read it, push that field, question gone.
+        this.logger.log(
+          `Connect onboarding will still ask driver ${driverId} for: ${JSON.stringify(
+            prefilledAccount?.requirements?.currently_due ?? [],
+          )}`,
+        );
       } catch (prefillErr: any) {
         // Non-blocking: if pre-fill fails, onboarding still works (driver enters manually)
         this.logger.warn(`Connect pre-fill warning for driver ${driverId}: ${prefillErr.message}`);

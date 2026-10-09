@@ -518,6 +518,21 @@ export class StripeService {
      */
     phone?: string;
     /**
+     * Merchant category code (industry). Stripe's hosted onboarding asks
+     * every connected account "what does your business do?" whenever `mcc`
+     * is not set on the account. Drivers are not businesses — the platform
+     * pushes 4215 (Courier Services — Local Pick-up and Delivery) so that
+     * question never appears.
+     */
+    mcc?: string;
+    /**
+     * Fills `business_profile.product_description`. Together with `mcc`,
+     * this is what removes the "describe your product / service" step from
+     * driver onboarding — Stripe skips any business-profile field the
+     * platform already provided via the API before the link was generated.
+     */
+    productDescription?: string;
+    /**
      * Optional separate support phone. If omitted, no support phone is
      * pushed (Stripe may ask the driver during onboarding).
      */
@@ -550,6 +565,16 @@ export class StripeService {
     if (params.phone) {
       updateData.individual = updateData.individual || {};
       updateData.individual.phone = params.phone;
+    }
+
+    if (params.mcc) {
+      updateData.business_profile = updateData.business_profile || {};
+      updateData.business_profile.mcc = params.mcc;
+    }
+
+    if (params.productDescription) {
+      updateData.business_profile = updateData.business_profile || {};
+      updateData.business_profile.product_description = params.productDescription;
     }
 
     if (params.supportPhone) {
