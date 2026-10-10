@@ -1,5 +1,6 @@
 import { Injectable, Logger } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
+import { randomUUID } from "crypto";
 import Stripe from "stripe";
 
 /**
@@ -360,15 +361,28 @@ export class StripeService {
     reason?: string;
     metadata?: Record<string, string>;
   }) {
-    // Stable idempotency key:
-    //  - Full refund of charge X  -> `refund-{chargeId}`
-    //  - Partial refund of $Y      -> `refund-{chargeId}-{Y}`
-    // Reissuing the same refund (e.g. after a network timeout) MUST reuse
-    // the same key so Stripe dedupes it. Including Date.now() here would
-    // break that protection and could double-refund the customer.
-    const idempotencyKey = `refund-${params.chargeId}${
-      params.amount ? `-${params.amount}` : ''
-    }`;
+    // Task 130: unique idempotency key PER ATTEMPT (not per charge).
+    //
+    // The old static key (`refund-{chargeId}` / `refund-{chargeId}-{amount}`)
+    // collided with Stripe's idempotency layer: Stripe stores the FIRST
+    // request's exact parameters under a key for 24h, so any later attempt
+    // whose parameters legitimately differed was rejected with "Keys for
+    // idempotent requests can only be used with the same parameters..." and
+    // blocked ALL refunds on that charge for up to 24h. Parameters differ in
+    // normal operations: an admin note typed on one attempt and omitted on
+    // the next, metadata changed by a backend deploy (Task 127 added
+    // refundedBy), a different partial amount, or a DIFFERENT flow (admin
+    // refund vs cancellation / expiry / dispute auto-refund) refunding the
+    // same charge through this shared helper.
+    //
+    // Double-refund protection is preserved WITHOUT the static key:
+    //  - stripe-node reuses THIS call's key on any SDK-level network retry;
+    //  - full refunds hit Stripe's native charge_already_refunded guard
+    //    (plus the already-fully-refunded pre-check in the admin endpoint);
+    //  - partial refunds are bounded by the endpoint's remaining-balance
+    //    validation, and the refund buttons are disabled while the mutation
+    //    is in flight on both admin pages.
+    const idempotencyKey = `refund-${params.chargeId}-${randomUUID()}`;
     return this.stripe.refunds.create(
       {
         charge: params.chargeId,

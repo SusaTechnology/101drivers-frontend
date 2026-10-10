@@ -1262,6 +1262,12 @@ export class StripePaymentController {
     if (code === 'insufficient_funds' || code === 'insufficient_balance') {
       return 'The Stripe account balance is too low to cover this refund. Add funds to the Stripe balance, then retry the refund.';
     }
+    if (code === 'idempotency_error') {
+      // Task 130: refund idempotency keys are now unique per attempt, so this
+      // should no longer occur — mapped anyway so if Stripe ever returns it
+      // the admin gets a clear next step instead of raw Stripe jargon.
+      return 'Stripe blocked this attempt because the same refund request was already submitted with different details. No money has moved — please try the refund again.';
+    }
     if (code === 'resource_missing') {
       return 'The Stripe charge for this payment could not be found. Verify the payment in the Stripe dashboard before retrying.';
     }
