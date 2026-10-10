@@ -529,6 +529,19 @@ export class NotificationEventEngine {
       delivery.customer?.contactName ??
       "Customer";
 
+    // Task 131: greet by FIRST name only ("Jake Buffett" -> "Jake").
+    const firstName = displayName.trim().split(/\s+/)[0] || "Customer";
+
+    // Task 131: friendly status line — every release path (private create,
+    // business create, business draft promote) fires with the delivery
+    // LISTED, so show the owner-approved copy instead of the raw enum.
+    // Fall back to the raw status if a future path ever calls this in a
+    // non-LISTED state, so the email never claims the wrong thing.
+    const statusLine =
+      delivery.status === "LISTED"
+        ? "Listed — waiting for a driver"
+        : String(delivery.status);
+
     return this.queueAndSend({
       actorUserId: input.actorUserId ?? null,
       customerId: delivery.customerId,
@@ -537,14 +550,23 @@ export class NotificationEventEngine {
       type: EnumNotificationEventType.DELIVERY_STATUS_CHANGED,
       templateCode: "delivery-listed",
       toEmail,
-      subject: "Your delivery is now listed",
+      subject: "Your delivery request is in",
       body: [
-        `Hi ${displayName},`,
+        `Hi ${firstName},`,
         "",
-        `Your delivery is now available in the marketplace for drivers.`,
+        "We received your delivery request. It's now open for drivers.",
+        "",
         `Pickup: ${delivery.pickupAddress}`,
+        "",
         `Drop-off: ${delivery.dropoffAddress}`,
-        `Status: ${delivery.status}`,
+        "",
+        `Status: ${statusLine}`,
+        "",
+        "You'll get another text and email with the driver's name and phone number as soon as one accepts.",
+        "",
+        "Questions? WhatsApp (424) 313-2168 or email info@101drivers.com",
+        "",
+        "— 101 Drivers Inc",
       ].join("\n"),
       payload: {
         deliveryId: delivery.id,
