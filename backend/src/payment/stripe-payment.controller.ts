@@ -918,6 +918,7 @@ export class StripePaymentController {
         id: true,
         stripeConnectAccountId: true,
         stripeConnectOnboardingComplete: true,
+        user: { select: { fullName: true } },
       },
     });
 
@@ -941,10 +942,39 @@ export class StripePaymentController {
         });
       }
 
+      // ── Name-mismatch flag (FLAG ONLY — no automatic correction) ──
+      // Stripe's hosted form lets the account holder type/edit their own
+      // name, so the legal name Stripe holds can drift from the profile
+      // name (real case: a driver entered "Just A Driver" at Stripe).
+      // A mismatched name can trigger ID-verification payout holds and
+      // breaks year-end 1099 name/TIN matching. We compare normalized
+      // names and return the flag so the driver wallet shows a warning;
+      // the driver (or ops, via this log line) decides what to do.
+      const profileName = (driver.user?.fullName ?? '').replace(/\s+/g, ' ').trim();
+      const individual = (account as any).individual ?? {};
+      const stripeName = [individual.first_name, individual.last_name]
+        .filter((v: unknown): v is string => typeof v === 'string' && v.trim().length > 0)
+        .join(' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+      const comparable = (v: string) => v.toLowerCase();
+      const nameMatchesProfile: boolean | null =
+        stripeName && profileName
+          ? comparable(stripeName) === comparable(profileName)
+          : null;
+      if (nameMatchesProfile === false) {
+        this.logger.warn(
+          `Connect name mismatch for driver ${driverId}: Stripe="${stripeName}" profile="${profileName}"`,
+        );
+      }
+
       return {
         setupComplete: detailsSubmitted,
         needsOnboarding: !detailsSubmitted,
         accountId: driver.stripeConnectAccountId,
+        nameOnStripe: stripeName || null,
+        profileName: profileName || null,
+        nameMatchesProfile,
       };
     } catch (err: any) {
       this.logger.error(`Failed to get Connect status for driver ${driverId}: ${err.message}`);

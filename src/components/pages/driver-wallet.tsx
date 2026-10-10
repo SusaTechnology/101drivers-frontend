@@ -34,6 +34,7 @@ import {
 } from 'lucide-react'
 import { QRCodeSVG } from 'qrcode.react'
 import { CustomizeCodeDialog } from '@/components/referral/CustomizeCodeDialog'
+import { StripeOnboardingBriefingDialog } from '@/components/stripe/StripeOnboardingBriefingDialog'
 import { Button } from '@/components/ui/button'
 import {
   useDataQuery,
@@ -365,6 +366,10 @@ export default function DriverWalletPage() {
   const { data: connectStatus, refetch: refetchConnectStatus } = useDataQuery<{
     setupComplete: boolean;
     needsOnboarding: boolean;
+    /** Task 122 name-mismatch flag (flag-only — see StripeOnboardingBriefingDialog + backend). */
+    nameOnStripe?: string | null;
+    profileName?: string | null;
+    nameMatchesProfile?: boolean | null;
   }>({
     apiEndPoint: `${API_URL}/api/payments/stripe/connect/status/${user?.profileId}`,
     enabled: !!user?.profileId,
@@ -384,6 +389,24 @@ export default function DriverWalletPage() {
       toast.error('Failed to start payout setup', { description: error?.message })
     },
   })
+
+  // ── Pre-Stripe briefing dialog (Task 122) ──────────
+  // The button no longer redirects immediately: it first shows a briefing
+  // (legal name, bank verification, phone code) so drivers know exactly
+  // what to enter at Stripe's hosted form. Fully decoupled — the dialog
+  // component is presentation-only; this page owns the actual mutation.
+  const [stripeBriefingOpen, setStripeBriefingOpen] = useState(false)
+
+  const requestStripeOnboarding = () => {
+    if (!user?.profileId) return
+    setStripeBriefingOpen(true)
+  }
+
+  const confirmStripeOnboarding = () => {
+    if (!user?.profileId) return
+    setStripeBriefingOpen(false)
+    connectOnboardingMutation.mutate({ driverId: user.profileId })
+  }
 
   // ── Withdrawal / Instant Payout mutations ──────────────────
   const freeWithdrawalMutation = useDataMutation<any, void>({
@@ -1304,6 +1327,23 @@ export default function DriverWalletPage() {
             </div>
           </CardHeader>
           <CardContent className="space-y-3">
+            {connectStatus?.nameMatchesProfile === false && (
+              <div className="rounded-2xl border border-amber-200 dark:border-amber-800/40 bg-amber-50 dark:bg-amber-900/10 p-4">
+                <div className="flex items-center gap-2">
+                  <AlertCircle className="h-4 w-4 text-amber-500" />
+                  <p className="text-xs font-semibold text-amber-700 dark:text-amber-300">
+                    Name check needed on your Stripe account
+                  </p>
+                </div>
+                <p className="text-[11px] text-amber-600 dark:text-amber-400 mt-1">
+                  Stripe has your name as “{connectStatus?.nameOnStripe || '—'}” but your profile
+                  says “{connectStatus?.profileName || '—'}”. Payouts still go to your verified
+                  bank account, but a mismatched name can trigger identity checks or tax-form
+                  problems. Tap “{connectStatus?.setupComplete ? 'Update bank account or details' : 'Set up payouts with Stripe'}”
+                  and enter your legal name exactly as it appears on your ID.
+                </p>
+              </div>
+            )}
             {connectStatus?.setupComplete ? (
               <div className="space-y-3">
                 <div className="rounded-2xl border border-emerald-200 dark:border-emerald-800/40 bg-emerald-50 dark:bg-emerald-900/10 p-4">
@@ -1325,7 +1365,7 @@ export default function DriverWalletPage() {
                     and updates. The button opens Stripe's hosted portal
                     where the driver can edit their bank details. */}
                 <Button
-                  onClick={() => user?.profileId && connectOnboardingMutation.mutate({ driverId: user.profileId })}
+                  onClick={requestStripeOnboarding}
                   disabled={connectOnboardingMutation.isPending || !user?.profileId}
                   variant="outline"
                   className="w-full py-3 rounded-2xl border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition inline-flex items-center justify-center gap-2 font-bold text-sm"
@@ -1355,7 +1395,7 @@ export default function DriverWalletPage() {
                   </p>
                 </div>
                 <Button
-                  onClick={() => user?.profileId && connectOnboardingMutation.mutate({ driverId: user.profileId })}
+                  onClick={requestStripeOnboarding}
                   disabled={connectOnboardingMutation.isPending || !user?.profileId}
                   className="w-full py-4 rounded-2xl lime-btn hover:shadow-xl hover:shadow-primary/20 transition inline-flex items-center justify-center gap-2"
                 >
@@ -1588,6 +1628,14 @@ export default function DriverWalletPage() {
           // Refetch the code so the wallet shows the new code
           window.location.reload()
         }}
+      />
+
+      {/* Pre-Stripe onboarding briefing (Task 122) */}
+      <StripeOnboardingBriefingDialog
+        open={stripeBriefingOpen}
+        onOpenChange={setStripeBriefingOpen}
+        onConfirm={confirmStripeOnboarding}
+        confirmPending={connectOnboardingMutation.isPending}
       />
     </div>
   )
