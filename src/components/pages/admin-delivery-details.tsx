@@ -461,6 +461,24 @@ export default function AdminDeliveryDetailsPage({ deliveryId }: { deliveryId: s
   const pickupEvidence = delivery ? buildEvidenceWithDashboard('PICKUP') : [];
   const dropoffEvidence = delivery ? buildEvidenceWithDashboard('DROPOFF') : [];
 
+  // ── Payment record (refund state) ────────────────────────────
+  // Hooks must run UNCONDITIONALLY on every render, so this block lives
+  // ABOVE the loading/error early returns below. The banner-clearing effect
+  // used to sit underneath them: on the loading render it never ran, then
+  // the moment data arrived React counted one extra hook and crashed with
+  // "Rendered more hooks than during the previous render" — the whole page
+  // was replaced by the error boundary, so none of the Task 128 refund UI
+  // (badges / refunded row / dialog) could ever appear.
+  const paymentRecord = delivery?.payment ?? null;
+
+  // Task 128: clear the "refund submitted" banner once the DB reflects the
+  // refund (webhook bumped refundedAmountCents past the pre-refund baseline).
+  React.useEffect(() => {
+    if (lastRefund && (paymentRecord?.refundedAmountCents ?? 0) > lastRefund.baselineCents) {
+      setLastRefund(null);
+    }
+  }, [lastRefund, paymentRecord?.refundedAmountCents]);
+
   // Loading state
   if (isLoading) {
     return (
@@ -545,7 +563,8 @@ export default function AdminDeliveryDetailsPage({ deliveryId }: { deliveryId: s
   // ── Refund eligibility (Task 126) ────────────────────────────
   // Surface KNOWN blockers on the page BEFORE the admin tries to refund,
   // instead of a generic failure toast afterwards.
-  const paymentRecord = delivery.payment ?? null;
+  // (`paymentRecord` is declared above the loading/error early returns —
+  // hooks must run unconditionally; see the hooks-order note there.)
   // Task 127: REFUNDED + anything other than PARTIAL means fully refunded.
   // `status` has only ever been flipped to REFUNDED on full refunds (both the
   // old and the partial-aware webhook logic), so legacy rows that predate the
@@ -571,13 +590,6 @@ export default function AdminDeliveryDetailsPage({ deliveryId }: { deliveryId: s
     return null;
   })();
 
-  // Task 128: clear the "refund submitted" banner once the DB reflects the
-  // refund (webhook bumped refundedAmountCents past the pre-refund baseline).
-  React.useEffect(() => {
-    if (lastRefund && (paymentRecord?.refundedAmountCents ?? 0) > lastRefund.baselineCents) {
-      setLastRefund(null);
-    }
-  }, [lastRefund, paymentRecord?.refundedAmountCents]);
   const vehicleInfo = [delivery.vehicleMake, delivery.vehicleModel, delivery.vehicleColor]
     .filter(Boolean)
     .join(' ') || 'Not specified';
