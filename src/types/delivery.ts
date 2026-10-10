@@ -134,6 +134,10 @@ export interface Payment {
   paidAt?: string | null;
   createdAt?: string | null;
   updatedAt?: string | null;
+  /** Task 126: refund tracking (returned by the admin detail endpoint). NONE / PARTIAL / FULL. */
+  refundStatus?: string | null;
+  /** Cumulative amount refunded so far, in cents. */
+  refundedAmountCents?: number | null;
 }
 
 // Payout type

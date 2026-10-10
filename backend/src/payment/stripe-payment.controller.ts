@@ -459,11 +459,13 @@ export class StripePaymentController {
       };
     } catch (err: any) {
       this.logger.error(`Refund failed for payment ${paymentId}: ${err.message}`);
-      // Don't leak Stripe internal errors
-      const friendly = this.translateStripeCardError(
-        err,
-        'We could not process the refund at this time. Please try again or contact support.',
-      );
+      // Our own validation throws (already fully refunded, bad status, no
+      // charge, amount over remaining) are ALREADY admin-specific — re-throw
+      // them untouched instead of flattening them into the generic fallback.
+      if (err instanceof BadRequestException || err instanceof NotFoundException) {
+        throw err;
+      }
+      const friendly = this.translateRefundError(err);
       throw new BadRequestException(friendly);
     }
   }
@@ -1217,5 +1219,57 @@ export class StripePaymentController {
       .trim();
     const looksSafe = !!cleaned && !/(pm_|in_|sub_|cust|req_|ch_|pi_)[A-Za-z0-9]+/i.test(cleaned);
     return looksSafe ? `We could not process your request: ${cleaned}.` : fallbackMsg;
+  }
+
+  /**
+   * Refund-specific Stripe error translation (Task 126).
+   *
+   * The shared translateStripeCardError() is DEALER-facing: it masks any
+   * Stripe message containing charge/payment-intent ids and tells the reader
+   * to "contact support". Neither makes sense on the admin page — the admin
+   * IS support and has Stripe dashboard access, so refund errors must say
+   * exactly what went wrong and what to do next (owner request: "let them
+   * know the detail why they cannot refund on the toast").
+   */
+  private translateRefundError(err: any): string {
+    const code = err?.code || '';
+
+    // Refund-declined codes — each with the reason + the next step.
+    if (code === 'charge_already_refunded') {
+      return 'This charge has already been fully refunded at Stripe. The payment record here will update within a few minutes — no further refund is needed.';
+    }
+    if (code === 'charge_disputed') {
+      return 'This payment is disputed — refunds must be handled through the Stripe dispute process. Open the payment in the Stripe dashboard.';
+    }
+    if (code === 'insufficient_funds' || code === 'insufficient_balance') {
+      return 'The Stripe account balance is too low to cover this refund. Add funds to the Stripe balance, then retry the refund.';
+    }
+    if (code === 'resource_missing') {
+      return 'The Stripe charge for this payment could not be found. Verify the payment in the Stripe dashboard before retrying.';
+    }
+    if (code === 'amount_too_large' || code === 'amount_too_small') {
+      const cleaned = String(err?.message || '')
+        .replace(/^Request req_[A-Za-z0-9]+:\s*/i, '')
+        .trim();
+      return `Stripe rejected the refund amount${cleaned ? `: ${cleaned}` : '.'}`;
+    }
+
+    // Connectivity / Stripe-side outages — nothing moved, safe to retry.
+    if (err?.type === 'StripeConnectionError' || err?.type === 'APIConnectionError') {
+      return 'We could not reach Stripe. No refund was issued — please try again in a moment.';
+    }
+    if (err?.type === 'StripeAPIError' || (Number(err?.statusCode) || 0) >= 500) {
+      return 'Stripe is temporarily unavailable. No refund was issued — please try again in a moment.';
+    }
+
+    // Anything else: surface the (request-id-stripped) Stripe message as-is.
+    // Admins can act on it and cross-check the Stripe dashboard, so unlike
+    // the dealer path we do NOT mask charge / payment-intent ids here.
+    const cleaned = String(err?.message || '')
+      .replace(/^Request req_[A-Za-z0-9]+:\s*/i, '')
+      .trim();
+    return cleaned
+      ? `Refund declined by Stripe: ${cleaned}`
+      : 'Refund failed at Stripe. No money has moved — check this payment in the Stripe dashboard, then try again.';
   }
 }

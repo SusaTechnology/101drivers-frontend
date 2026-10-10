@@ -511,6 +511,27 @@ export default function AdminDeliveryDetailsPage({ deliveryId }: { deliveryId: s
   const driverPhone = delivery.activeAssignment?.driver?.phone
     || delivery.activeAssignment?.driver?.user?.phone
     || null;
+
+  // ── Refund eligibility (Task 126) ────────────────────────────
+  // Surface KNOWN blockers on the page BEFORE the admin tries to refund,
+  // instead of a generic failure toast afterwards.
+  const paymentRecord = delivery.payment ?? null;
+  const fullyRefunded =
+    paymentRecord?.status === 'REFUNDED' && paymentRecord?.refundStatus === 'FULL';
+  const refundedSoFar = (paymentRecord?.refundedAmountCents ?? 0) / 100;
+  const refundRemaining =
+    paymentRecord?.amount != null
+      ? Math.max(0, Number(paymentRecord.amount) - refundedSoFar)
+      : null;
+  const refundBlockedReason: string | null = (() => {
+    if (fullyRefunded) {
+      return 'This payment has already been fully refunded — no further refunds are possible.';
+    }
+    if (paymentRecord && !['CAPTURED', 'PAID', 'REFUNDED'].includes(paymentRecord.status)) {
+      return `Refund unavailable — payment status is ${paymentRecord.status}. Only captured or paid payments can be refunded.`;
+    }
+    return null;
+  })();
   const vehicleInfo = [delivery.vehicleMake, delivery.vehicleModel, delivery.vehicleColor]
     .filter(Boolean)
     .join(' ') || 'Not specified';
@@ -1245,9 +1266,18 @@ export default function AdminDeliveryDetailsPage({ deliveryId }: { deliveryId: s
                   </div>
                 ) : null}
 
-                {/* Refund button — only for CAPTURED or PAID payments with a charge */}
-                {delivery.financialSummary?.paymentId &&
-                  ['CAPTURED', 'PAID'].includes(delivery.financialSummary?.paymentStatus || '') && (
+                {/* Refund — Task 126: KNOWN blockers are shown on the page
+                    before the admin tries; only actionable payments get the
+                    button. Partially-refunded payments can refund the rest. */}
+                {delivery.financialSummary?.paymentId && refundBlockedReason ? (
+                  <div className="mt-1 p-3 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
+                    <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Refund unavailable</p>
+                    <p className="text-xs text-slate-600 dark:text-slate-400 mt-1">{refundBlockedReason}</p>
+                  </div>
+                ) : delivery.financialSummary?.paymentId &&
+                  (['CAPTURED', 'PAID'].includes(delivery.financialSummary?.paymentStatus || '') ||
+                    (delivery.financialSummary?.paymentStatus === 'REFUNDED' && !fullyRefunded)) ? (
+                  <>
                     <Button
                       variant="outline"
                       size="sm"
@@ -1262,7 +1292,13 @@ export default function AdminDeliveryDetailsPage({ deliveryId }: { deliveryId: s
                       )}
                       Process Refund
                     </Button>
-                  )}
+                    {refundedSoFar > 0 && refundRemaining != null && (
+                      <p className="text-[10px] text-slate-500 mt-1">
+                        ${refundedSoFar.toFixed(2)} already refunded — ${refundRemaining.toFixed(2)} will be refunded now
+                      </p>
+                    )}
+                  </>
+                ) : null}
               </CardContent>
             </Card>
 
@@ -1867,7 +1903,11 @@ export default function AdminDeliveryDetailsPage({ deliveryId }: { deliveryId: s
               Process Refund
             </AlertDialogTitle>
             <AlertDialogDescription>
-              This will issue a full refund via Stripe. The funds will be returned to the customer's card within 5-10 business days.
+              This will issue a refund via Stripe for{' '}
+              {refundedSoFar > 0 && refundRemaining != null
+                ? `$${refundRemaining.toFixed(2)} (the remaining balance)`
+                : 'the full payment amount'}
+              . The funds will be returned to the customer's card within 5-10 business days.
             </AlertDialogDescription>
           </AlertDialogHeader>
           {delivery && (
@@ -1875,6 +1915,7 @@ export default function AdminDeliveryDetailsPage({ deliveryId }: { deliveryId: s
               <p className="text-xs text-orange-600 dark:text-orange-400">Payment Details</p>
               <p className="text-sm text-orange-700 dark:text-orange-300">
                 Amount: {formatCurrency(delivery.financialSummary?.grossAmount)} · Status: {delivery.financialSummary?.paymentStatus}
+                {refundedSoFar > 0 && ` · Already refunded: ${formatCurrency(refundedSoFar)}`}
               </p>
             </div>
           )}

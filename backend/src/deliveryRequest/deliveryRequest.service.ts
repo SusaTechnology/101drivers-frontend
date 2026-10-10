@@ -1597,6 +1597,10 @@ async getAdminDeliveryDetail(input: {
           paymentType: true,
           provider: true,
           status: true,
+          // Task 126: let the admin page pre-check refund eligibility
+          // (fully-refunded / non-refundable status) BEFORE the admin tries.
+          refundStatus: true,
+          refundedAmountCents: true,
           invoiceId: true,
           authorizedAt: true,
           capturedAt: true,
