@@ -217,6 +217,9 @@ export interface AdminPaymentDetail {
   stripeInvoiceId: string | null;
   stripeInvoiceItemId: string | null;
   attemptCount: number | null;
+  /** Task 128: refund tracking — both returned by GET /api/payments/admin/:id. */
+  refundedAmountCents: number | null;
+  refundStatus: string | null;
   createdAt: string;
   updatedAt: string;
   delivery: AdminPaymentDetailDelivery;

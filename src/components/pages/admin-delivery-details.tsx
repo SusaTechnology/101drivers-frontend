@@ -120,6 +120,13 @@ export default function AdminDeliveryDetailsPage({ deliveryId }: { deliveryId: s
     onSuccess: (data: any) => {
       setShowRefundDialog(false);
       setRefundReason('');
+      // Task 128: record the in-flight refund for the on-page banner, with the
+      // pre-refund refundedAmountCents as the baseline — the banner clears once
+      // the webhook bumps the DB past it (works for full AND partial refunds).
+      setLastRefund({
+        amount: data?.amount ?? Number(paymentRecord?.amount ?? 0),
+        baselineCents: paymentRecord?.refundedAmountCents ?? 0,
+      });
       // Task 127: tell the admin what ACTUALLY happened. Stripe confirms most
       // card refunds instantly; some sit in `pending` briefly — don't claim
       // completion we don't have.
@@ -133,6 +140,10 @@ export default function AdminDeliveryDetailsPage({ deliveryId }: { deliveryId: s
         });
       }
       refetch();
+      // Task 128: delayed refetches to pick up the webhook's DB update
+      // (payment status / refund badges / banner clearing).
+      setTimeout(() => refetch(), 3000);
+      setTimeout(() => refetch(), 8000);
     },
     onError: (error: any) => {
       toast.error('Refund failed', { description: error?.message || 'Unknown error' });
@@ -143,6 +154,10 @@ export default function AdminDeliveryDetailsPage({ deliveryId }: { deliveryId: s
   // Task 127: optional free-text reason for the refund — written to the Stripe
   // refund metadata and surfaced on the Payment Events timeline ("Reason: ...").
   const [refundReason, setRefundReason] = useState('');
+  // Task 128: "refund submitted" in-progress banner state — amount + the
+  // pre-refund refundedAmountCents baseline (cleared by the React.useEffect
+  // below once the webhook's DB update lands).
+  const [lastRefund, setLastRefund] = useState<{ amount: number; baselineCents: number } | null>(null);
   
   // Dialog states
   const [assignDriverOpen, setAssignDriverOpen] = useState(false);
@@ -542,6 +557,10 @@ export default function AdminDeliveryDetailsPage({ deliveryId }: { deliveryId: s
     paymentRecord?.amount != null
       ? Math.max(0, Number(paymentRecord.amount) - refundedSoFar)
       : null;
+  // Task 128: visible refund states — "partially refunded" = money has gone
+  // back but not all of it; refundDate = when the webhook completed it.
+  const partiallyRefunded = !fullyRefunded && refundedSoFar > 0;
+  const refundDate = paymentRecord?.refundedAt ? new Date(paymentRecord.refundedAt) : null;
   const refundBlockedReason: string | null = (() => {
     if (fullyRefunded) {
       return 'This payment has already been fully refunded — no further refunds are possible.';
@@ -551,6 +570,14 @@ export default function AdminDeliveryDetailsPage({ deliveryId }: { deliveryId: s
     }
     return null;
   })();
+
+  // Task 128: clear the "refund submitted" banner once the DB reflects the
+  // refund (webhook bumped refundedAmountCents past the pre-refund baseline).
+  React.useEffect(() => {
+    if (lastRefund && (paymentRecord?.refundedAmountCents ?? 0) > lastRefund.baselineCents) {
+      setLastRefund(null);
+    }
+  }, [lastRefund, paymentRecord?.refundedAmountCents]);
   const vehicleInfo = [delivery.vehicleMake, delivery.vehicleModel, delivery.vehicleColor]
     .filter(Boolean)
     .join(' ') || 'Not specified';
@@ -604,6 +631,19 @@ export default function AdminDeliveryDetailsPage({ deliveryId }: { deliveryId: s
                   DISPUTED
                 </Badge>
               )}
+              {/* Task 128: refund state visible at the top of the page. */}
+              {partiallyRefunded && (
+                <Badge className="bg-amber-100 dark:bg-amber-900/20 text-amber-700 dark:text-amber-300 text-[10px] font-bold">
+                  <Undo2 className="w-3 h-3 mr-1" />
+                  PARTIALLY REFUNDED
+                </Badge>
+              )}
+              {fullyRefunded && (
+                <Badge className="bg-purple-100 dark:bg-purple-900/20 text-purple-700 dark:text-purple-300 text-[10px] font-bold">
+                  <Undo2 className="w-3 h-3 mr-1" />
+                  REFUNDED
+                </Badge>
+              )}
             </div>
             <h1 className="text-2xl lg:text-3xl font-black">Delivery Details</h1>
             <p className="text-slate-600 dark:text-slate-400 mt-1 text-sm max-w-4xl">
@@ -646,6 +686,20 @@ export default function AdminDeliveryDetailsPage({ deliveryId }: { deliveryId: s
             )}
           </div>
         </section>
+
+        {/* Task 128: in-progress refund banner — visible between the admin
+            clicking "Process Refund" and the Stripe webhook updating the DB
+            (usually seconds). Without it the page shows nothing in the
+            meantime. */}
+        {lastRefund && (
+          <div className="mb-6 p-3 rounded-xl bg-emerald-50 dark:bg-emerald-900/10 border border-emerald-200 dark:border-emerald-900/30 flex items-start gap-2">
+            <Loader2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5 animate-spin" />
+            <div className="text-sm text-emerald-700 dark:text-emerald-300">
+              <span className="font-bold">Refund of ${lastRefund.amount.toFixed(2)} submitted.</span>{' '}
+              Stripe is processing it — the refund badges, amounts, and Payment Events timeline on this page update automatically (usually a few seconds).
+            </div>
+          </div>
+        )}
 
         {/* Main Grid */}
         <div className="grid grid-cols-1 xl:grid-cols-12 gap-6">
@@ -1244,10 +1298,31 @@ export default function AdminDeliveryDetailsPage({ deliveryId }: { deliveryId: s
                 
                 <div className="flex items-center justify-between text-xs text-slate-500">
                   <span>Payment Status</span>
-                  <Badge variant="outline" className="text-[10px]">
-                    {delivery.financialSummary?.paymentStatus || 'Pending'}
-                  </Badge>
+                  <div className="flex items-center gap-1.5">
+                    {/* Task 128: refund state alongside the status badge
+                        under the money. */}
+                    {partiallyRefunded && (
+                      <Badge className="bg-amber-100 dark:bg-amber-900/20 text-amber-700 dark:text-amber-300 text-[10px] font-bold">
+                        Partially refunded
+                      </Badge>
+                    )}
+                    <Badge variant="outline" className="text-[10px]">
+                      {delivery.financialSummary?.paymentStatus || 'Pending'}
+                    </Badge>
+                  </div>
                 </div>
+
+                {/* Task 128: how much has actually gone back, and when. */}
+                {refundedSoFar > 0 && (
+                  <div className="flex items-center justify-between text-xs text-slate-500">
+                    <span>Refunded</span>
+                    <span className="font-bold text-slate-700 dark:text-slate-300">
+                      ${refundedSoFar.toFixed(2)}
+                      {!fullyRefunded && paymentRecord?.amount != null && ` of $${Number(paymentRecord.amount).toFixed(2)}`}
+                      {refundDate ? ` · ${refundDate.toLocaleDateString()}` : ''}
+                    </span>
+                  </div>
+                )}
 
                 <div className="flex items-center justify-between text-xs text-slate-500">
                   <span>Payout Status</span>
@@ -1288,7 +1363,14 @@ export default function AdminDeliveryDetailsPage({ deliveryId }: { deliveryId: s
                 {/* Refund — Task 126: KNOWN blockers are shown on the page
                     before the admin tries; only actionable payments get the
                     button. Partially-refunded payments can refund the rest. */}
-                {delivery.financialSummary?.paymentId && refundBlockedReason ? (
+                {delivery.financialSummary?.paymentId && fullyRefunded ? (
+                  <div className="mt-1 p-3 rounded-xl bg-purple-50 dark:bg-purple-900/10 border border-purple-200 dark:border-purple-800">
+                    <p className="text-[10px] font-bold uppercase tracking-wide text-purple-500 dark:text-purple-400">Fully refunded</p>
+                    <p className="text-xs text-purple-700 dark:text-purple-300 mt-1">
+                      This payment was fully refunded{refundDate ? ` on ${refundDate.toLocaleDateString()}` : ''} — the money is back on the dealer's card (allow 5-10 business days to appear on their statement). No further refunds are possible.
+                    </p>
+                  </div>
+                ) : delivery.financialSummary?.paymentId && refundBlockedReason ? (
                   <div className="mt-1 p-3 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
                     <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Refund unavailable</p>
                     <p className="text-xs text-slate-600 dark:text-slate-400 mt-1">{refundBlockedReason}</p>
@@ -1953,7 +2035,7 @@ export default function AdminDeliveryDetailsPage({ deliveryId }: { deliveryId: s
               <p className="text-xs text-orange-600 dark:text-orange-400">Payment Details</p>
               <p className="text-sm text-orange-700 dark:text-orange-300">
                 Amount: {formatCurrency(delivery.financialSummary?.grossAmount)} · Status: {delivery.financialSummary?.paymentStatus}
-                {refundedSoFar > 0 && ` · Already refunded: ${formatCurrency(refundedSoFar)}`}
+                {refundedSoFar > 0 && ` · PARTIALLY REFUNDED — ${formatCurrency(refundedSoFar)} already returned`}
               </p>
             </div>
           )}

@@ -126,13 +126,27 @@ export default function AdminPaymentDetailPage({ paymentId }: AdminPaymentDetail
   const [refundMode, setRefundMode] = useState<'full' | 'partial'>('full');
   const [refundAmount, setRefundAmount] = useState('');
   const [refundNote, setRefundNote] = useState('');
-  // ── "Refund just submitted" local state ──
+  // ── "Refund just submitted" local state (in-progress indicator) ──
   // After a successful refund, the webhook hasn't fired yet (takes
   // a few seconds), so the DB still shows the old status. This local
   // state lets us show an immediate "Refund of $X submitted" banner
-  // so the admin knows it worked. After a 5-second delay, we refetch
-  // to pick up the webhook's DB update.
-  const [lastRefund, setLastRefund] = useState<{ amount: number; refundId: string } | null>(null);
+  // so the admin knows it worked. Task 128: baselineCents records the
+  // pre-refund refundedAmountCents so the banner clears as soon as the
+  // DB reflects THIS refund — including PARTIAL refunds (the old check
+  // only cleared on REFUNDED/FULL, so a partial-refund banner never
+  // cleared).
+  const [lastRefund, setLastRefund] = useState<{ amount: number; refundId: string; baselineCents: number } | null>(null);
+
+  // ── Task 128: refund-state derivations ──
+  // `status` is only ever flipped to REFUNDED on FULL refunds (partial
+  // refunds keep CAPTURED + refundStatus PARTIAL), and legacy rows carry
+  // the schema-default refundStatus NONE — so REFUNDED + not-PARTIAL =
+  // fully refunded.
+  const refundedSoFar = (payment?.refundedAmountCents ?? 0) / 100;
+  const totalAmount = Number(payment?.amount ?? 0);
+  const refundRemaining = Math.max(0, totalAmount - refundedSoFar);
+  const fullyRefunded = payment?.status === 'REFUNDED' && payment?.refundStatus !== 'PARTIAL';
+  const partiallyRefunded = !fullyRefunded && refundedSoFar > 0;
 
   // Refund mutation — calls POST /api/payments/stripe/refund/:paymentId
   // with optional `amount` for partial refunds. The webhook updates the
@@ -148,11 +162,20 @@ export default function AdminPaymentDetailPage({ paymentId }: AdminPaymentDetail
       // Show immediate feedback with the refund details from the API response
       const refundAmount = data?.amount ?? Number(payment?.amount ?? 0);
       const refundId = data?.refundId ?? '';
-      setLastRefund({ amount: refundAmount, refundId });
-      toast.success('Refund submitted', {
-        description: `$${refundAmount.toFixed(2)} refund submitted to Stripe. ` +
-          'The payment status will update automatically when Stripe processes it (usually a few seconds).',
-      });
+      setLastRefund({ amount: refundAmount, refundId, baselineCents: payment?.refundedAmountCents ?? 0 });
+      // Task 128: don't claim completion we don't have — Stripe confirms most
+      // card refunds instantly; some sit in `pending` briefly.
+      if (data?.status === 'pending') {
+        toast.success('Refund submitted', {
+          description: `$${refundAmount.toFixed(2)} refund submitted to Stripe and is processing. ` +
+            'The payment status will update automatically once Stripe confirms (usually a few seconds).',
+        });
+      } else {
+        toast.success('Refund processed', {
+          description: `$${refundAmount.toFixed(2)} refund accepted by Stripe — funds return to the dealer's card, ` +
+            'typically appearing on their statement within 5-10 business days.',
+        });
+      }
       // Immediate refetch (in case webhook already fired)
       refetch();
       // Delayed refetch to pick up the webhook's DB update
@@ -179,14 +202,16 @@ export default function AdminPaymentDetailPage({ paymentId }: AdminPaymentDetail
     });
   };
 
-  // Clear the "refund just submitted" banner once the payment status
-  // has been updated by the webhook (REFUNDED or refundStatus != NONE).
-  // This means the DB caught up with the refund.
+  // Clear the "refund just submitted" banner once the DB reflects THIS
+  // refund — i.e. the webhook has bumped refundedAmountCents past the
+  // pre-refund baseline captured at click time. Works for BOTH full and
+  // partial refunds (the old check only cleared on REFUNDED/FULL, so a
+  // partial-refund banner never cleared).
   React.useEffect(() => {
-    if (lastRefund && payment && (payment.status === 'REFUNDED' || (payment as any).refundStatus === 'FULL')) {
+    if (lastRefund && payment && (payment.refundedAmountCents ?? 0) > lastRefund.baselineCents) {
       setLastRefund(null);
     }
-  }, [payment?.status, (payment as any)?.refundStatus]);
+  }, [payment?.refundedAmountCents, lastRefund]);
 
   const actorUserId = user?.id || 'system';
 
@@ -466,6 +491,21 @@ export default function AdminPaymentDetailPage({ paymentId }: AdminPaymentDetail
               )}>
                 {payment.status}
               </Badge>
+              {/* Task 128: refund state visible at the top, alongside the
+                  badges under the money — partial (amber) / fully refunded
+                  (purple, matching the REFUNDED status color). */}
+              {partiallyRefunded && (
+                <Badge className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold border bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-900">
+                  <RotateCcw className="w-3 h-3" />
+                  Partially refunded
+                </Badge>
+              )}
+              {fullyRefunded && (
+                <Badge className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold border bg-purple-100 text-purple-700 border-purple-200 dark:bg-purple-900/30 dark:text-purple-300 dark:border-purple-900">
+                  <RotateCcw className="w-3 h-3" />
+                  Refunded
+                </Badge>
+              )}
               <Badge variant="outline" className="text-[11px] font-bold rounded-full">
                 {getPaymentTypeLabel(payment.paymentType)}
               </Badge>
@@ -527,12 +567,16 @@ export default function AdminPaymentDetailPage({ paymentId }: AdminPaymentDetail
                 Mark Payout Paid
               </Button>
             )}
-            {/* ── Refund button ──
-                Shows when the payment is CAPTURED, PAID, or partially
-                REFUNDED (so the admin can issue additional partial
-                refunds). Hidden for AUTHORIZED (not captured yet),
-                FAILED, or VOIDED payments. */}
-            {['CAPTURED', 'PAID', 'REFUNDED'].includes(payment.status) && payment.providerPaymentIntentId && (
+            {/* ── Refund action (Task 128) ──
+                CAPTURED/PAID payments get the Process Refund button. A FULLY
+                refunded payment gets NO button at all — just a clear
+                "Fully refunded" pill in its place. */}
+            {fullyRefunded ? (
+              <div className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-900/40 text-xs font-bold text-purple-700 dark:text-purple-300">
+                <CheckCircle className="w-4 h-4" />
+                Fully refunded{payment.refundedAt ? ` on ${formatPaymentDate(payment.refundedAt)}` : ''} — no further refunds possible
+              </div>
+            ) : ['CAPTURED', 'PAID'].includes(payment.status) && payment.providerPaymentIntentId && (
               <Button
                 onClick={() => setRefundOpen(true)}
                 size="sm"
@@ -544,7 +588,7 @@ export default function AdminPaymentDetailPage({ paymentId }: AdminPaymentDetail
                 ) : (
                   <RotateCcw className="w-3.5 h-3.5 mr-1" />
                 )}
-                {payment.status === 'REFUNDED' ? 'Additional Refund' : 'Process Refund'}
+                Process Refund
               </Button>
             )}
           </div>
@@ -565,7 +609,7 @@ export default function AdminPaymentDetailPage({ paymentId }: AdminPaymentDetail
                 Stripe refund ID: <code className="text-xs font-mono">{lastRefund.refundId.slice(0, 25)}...</code>
               </span>
               <span className="block mt-0.5 text-xs text-emerald-500 dark:text-emerald-400/70">
-                The payment status will update to REFUNDED automatically when the webhook fires (usually a few seconds).
+                The payment status and refund amounts will update automatically when the webhook fires (usually a few seconds).
                 You can see this refund in the Stripe Dashboard under the original charge.
               </span>
             </div>
@@ -1327,6 +1371,8 @@ export default function AdminPaymentDetailPage({ paymentId }: AdminPaymentDetail
               <DialogDescription>
                 Issue a refund to the customer's card via Stripe. This action
                 cannot be undone.
+                {partiallyRefunded &&
+                  ` This payment is PARTIALLY refunded — $${refundedSoFar.toFixed(2)} of $${totalAmount.toFixed(2)} has already been returned to the dealer's card.`}
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-4 py-2">
@@ -1341,7 +1387,7 @@ export default function AdminPaymentDetailPage({ paymentId }: AdminPaymentDetail
                     className="rounded-xl"
                     onClick={() => setRefundMode('full')}
                   >
-                    Full (${Number(payment.amount).toFixed(2)})
+                    Full (${refundRemaining < totalAmount ? `${refundRemaining.toFixed(2)} remaining` : `${totalAmount.toFixed(2)}`})
                   </Button>
                   <Button
                     type="button"
@@ -1365,15 +1411,15 @@ export default function AdminPaymentDetailPage({ paymentId }: AdminPaymentDetail
                     type="number"
                     step="0.01"
                     min="0.01"
-                    max={Number(payment.amount).toFixed(2)}
+                    max={refundRemaining.toFixed(2)}
                     value={refundAmount}
                     onChange={(e) => setRefundAmount(e.target.value)}
                     placeholder="0.00"
                     className="rounded-xl"
                   />
-                  {payment.status === 'REFUNDED' && (
+                  {refundedSoFar > 0 && (
                     <p className="text-[11px] text-amber-600 dark:text-amber-400">
-                      Already refunded: ${(Number(payment.refundedAmountCents ?? 0) / 100).toFixed(2)} of ${Number(payment.amount).toFixed(2)}
+                      Partially refunded: ${refundedSoFar.toFixed(2)} of ${totalAmount.toFixed(2)} already returned — most you can refund now is ${refundRemaining.toFixed(2)}
                     </p>
                   )}
                 </div>
@@ -1427,7 +1473,7 @@ export default function AdminPaymentDetailPage({ paymentId }: AdminPaymentDetail
               >
                 {refundMutation.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
                 {refundMode === 'full'
-                  ? `Confirm Full Refund ($${Number(payment.amount).toFixed(2)})`
+                  ? `Confirm Full Refund ($${refundRemaining.toFixed(2)}${partiallyRefunded ? ' remaining' : ''})`
                   : `Confirm Partial Refund ($${refundAmount || '0.00'})`}
               </Button>
             </DialogFooter>

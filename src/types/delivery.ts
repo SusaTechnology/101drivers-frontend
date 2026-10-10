@@ -138,6 +138,8 @@ export interface Payment {
   refundStatus?: string | null;
   /** Cumulative amount refunded so far, in cents. */
   refundedAmountCents?: number | null;
+  /** Task 128: when the refund completed (set by the Stripe webhook). */
+  refundedAt?: string | null;
 }
 
 // Payout type

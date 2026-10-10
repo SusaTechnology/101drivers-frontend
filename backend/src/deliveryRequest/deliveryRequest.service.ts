@@ -1601,6 +1601,9 @@ async getAdminDeliveryDetail(input: {
           // (fully-refunded / non-refundable status) BEFORE the admin tries.
           refundStatus: true,
           refundedAmountCents: true,
+          // Task 128: when the refund actually completed — shown on the
+          // delivery page's refund badges / fully-refunded note.
+          refundedAt: true,
           invoiceId: true,
           authorizedAt: true,
           capturedAt: true,
