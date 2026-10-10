@@ -588,15 +588,26 @@ export class StripeWebhookController {
     // So: recompute the customer-refund total from the charge's refund list,
     // excluding referral-credit refunds.
     let customerRefundedCents = charge.amount_refunded || 0;
+    // Task 127: remember the newest customer refund — the one that triggered
+    // this webhook — so its metadata (refundedBy / adminNote written by the
+    // admin refund endpoint) can be shown on the Payment Events timeline.
+    let latestRefund: any = null;
     try {
       if (this.stripeService) {
         const refunds = await this.stripeService.stripe.refunds.list({
           charge: charge.id,
           limit: 100,
         });
-        customerRefundedCents = refunds.data
-          .filter((r: any) => r?.metadata?.source !== "referral-credit-autoapply")
-          .reduce((sum: number, r: any) => sum + (r.amount || 0), 0);
+        const customerRefunds = refunds.data.filter(
+          (r: any) => r?.metadata?.source !== "referral-credit-autoapply",
+        );
+        customerRefundedCents = customerRefunds.reduce(
+          (sum: number, r: any) => sum + (r.amount || 0),
+          0,
+        );
+        // Stripe lists refunds newest-first, so the first entry is the one
+        // this charge.refunded event is about.
+        latestRefund = customerRefunds[0] ?? null;
       }
     } catch (listErr: any) {
       // Fall back to the cumulative field (pre-referral-credit behavior) —
@@ -604,6 +615,14 @@ export class StripeWebhookController {
       this.logger.warn(
         `Could not list refunds for charge ${charge.id} (${listErr.message}) — using amount_refunded as-is`,
       );
+    }
+    // If the API list failed, the webhook payload's charge object usually
+    // still carries the refunds list — use it for metadata before giving up.
+    if (!latestRefund) {
+      latestRefund =
+        charge.refunds?.data?.find(
+          (r: any) => r?.metadata?.source !== "referral-credit-autoapply",
+        ) ?? null;
     }
 
     const cumulativeRefundedCents = customerRefundedCents;
@@ -702,16 +721,37 @@ export class StripeWebhookController {
       throw txErr;
     }
 
-    await this.createPaymentEventIdempotent({
-      paymentId: payment.id,
-      type: "REFUND",
-      status: "REFUNDED",
-      amount: deltaRefundedCents / 100,
-      message: `Refund ${isFullRefund ? "full" : "partial"} (delta $${(deltaRefundedCents / 100).toFixed(2)}, cumulative $${(cumulativeRefundedCents / 100).toFixed(2)} of $${(totalAmountCents / 100).toFixed(2)})${payment.lockInChargeId === charge.id ? " (on lock-in charge)" : ""}`,
-      providerRef: charge.refunds?.data?.[0]?.id,
-      raw: charge as any,
-      stripeEventId,
-    });
+    // ── Payment Events timeline entry (Task 127 rewrite) ──
+    // Only real customer refunds get an event: a $0 delta means the refund
+    // was a referral-credit statement refund (reward, not customer money),
+    // and a "Refund partial (delta $0.00)" row would be pure noise.
+    //
+    // The message is written for ADMINS reading the Payment Events timeline:
+    // what completed, how much, statement timing, who processed it, and the
+    // reason they typed in the refund dialog (both read back from the
+    // Stripe refund metadata the endpoint attached at request time).
+    if (deltaRefundedCents > 0) {
+      const meta = latestRefund?.metadata || {};
+      const processedBy = meta.refundedBy ? ` Processed by ${meta.refundedBy}.` : "";
+      const reason = meta.adminNote ? ` Reason: "${meta.adminNote}".` : "";
+      const refundDollars = deltaRefundedCents / 100;
+      const totalDollars = totalAmountCents / 100;
+      const refundedToDateDollars = cumulativeRefundedCents / 100;
+      const remainingDollars = Math.max(0, totalAmountCents - cumulativeRefundedCents) / 100;
+      const detail = isFullRefund
+        ? `Full refund completed — $${refundDollars.toFixed(2)} of $${totalDollars.toFixed(2)} returned to the dealer's card`
+        : `Partial refund completed — $${refundDollars.toFixed(2)} of $${totalDollars.toFixed(2)} returned to the dealer's card ($${refundedToDateDollars.toFixed(2)} refunded to date, $${remainingDollars.toFixed(2)} still charged)`;
+      await this.createPaymentEventIdempotent({
+        paymentId: payment.id,
+        type: "REFUND",
+        status: "REFUNDED",
+        amount: refundDollars,
+        message: `${detail} (typically appears on their statement within 5–10 business days).${processedBy}${reason}${payment.lockInChargeId === charge.id ? " (on lock-in charge)" : ""}`,
+        providerRef: latestRefund?.id || charge.refunds?.data?.[0]?.id,
+        raw: charge as any,
+        stripeEventId,
+      });
+    }
 
     this.logger.log(
       `Refund processed for payment ${payment.id}: delta $${(deltaRefundedCents / 100).toFixed(2)}, cumulative $${(cumulativeRefundedCents / 100).toFixed(2)} / $${(totalAmountCents / 100).toFixed(2)} (${refundStatus})`,

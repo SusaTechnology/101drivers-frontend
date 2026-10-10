@@ -117,9 +117,21 @@ export default function AdminDeliveryDetailsPage({ deliveryId }: { deliveryId: s
   const refundMutation = useDataMutation({
     apiEndPoint: `${import.meta.env.VITE_API_URL}/api/payments/stripe/refund/:paymentId`,
     method: 'POST',
-    onSuccess: () => {
+    onSuccess: (data: any) => {
       setShowRefundDialog(false);
-      toast.success('Refund processed', { description: 'The payment has been refunded successfully.' });
+      setRefundReason('');
+      // Task 127: tell the admin what ACTUALLY happened. Stripe confirms most
+      // card refunds instantly; some sit in `pending` briefly — don't claim
+      // completion we don't have.
+      if (data?.status === 'pending') {
+        toast.success('Refund submitted', {
+          description: 'Stripe has the refund and is processing it. This page and the Payment Events timeline will update once Stripe confirms.',
+        });
+      } else {
+        toast.success('Refund processed', {
+          description: "Stripe accepted the refund — funds return to the dealer's card, typically appearing on their statement within 5-10 business days.",
+        });
+      }
       refetch();
     },
     onError: (error: any) => {
@@ -128,6 +140,9 @@ export default function AdminDeliveryDetailsPage({ deliveryId }: { deliveryId: s
   });
 
   const [showRefundDialog, setShowRefundDialog] = useState(false);
+  // Task 127: optional free-text reason for the refund — written to the Stripe
+  // refund metadata and surfaced on the Payment Events timeline ("Reason: ...").
+  const [refundReason, setRefundReason] = useState('');
   
   // Dialog states
   const [assignDriverOpen, setAssignDriverOpen] = useState(false);
@@ -516,8 +531,12 @@ export default function AdminDeliveryDetailsPage({ deliveryId }: { deliveryId: s
   // Surface KNOWN blockers on the page BEFORE the admin tries to refund,
   // instead of a generic failure toast afterwards.
   const paymentRecord = delivery.payment ?? null;
+  // Task 127: REFUNDED + anything other than PARTIAL means fully refunded.
+  // `status` has only ever been flipped to REFUNDED on full refunds (both the
+  // old and the partial-aware webhook logic), so legacy rows that predate the
+  // refundStatus field (NONE/null) must hide the Process Refund button too.
   const fullyRefunded =
-    paymentRecord?.status === 'REFUNDED' && paymentRecord?.refundStatus === 'FULL';
+    paymentRecord?.status === 'REFUNDED' && paymentRecord?.refundStatus !== 'PARTIAL';
   const refundedSoFar = (paymentRecord?.refundedAmountCents ?? 0) / 100;
   const refundRemaining =
     paymentRecord?.amount != null
@@ -1299,6 +1318,19 @@ export default function AdminDeliveryDetailsPage({ deliveryId }: { deliveryId: s
                     )}
                   </>
                 ) : null}
+
+                {/* Task 127: the Payment Events timeline (refund entries with
+                    date, amount, reason, and who processed them) lives on the
+                    payment detail page — surface the path from here. */}
+                {delivery.financialSummary?.paymentId && (
+                  <a
+                    href={`/admin-payment-detail?paymentId=${delivery.financialSummary.paymentId}`}
+                    className="mt-2 inline-flex items-center gap-1.5 text-xs font-bold text-primary hover:underline"
+                  >
+                    <ExternalLink className="w-3 h-3" />
+                    View payment events & refund history
+                  </a>
+                )}
               </CardContent>
             </Card>
 
@@ -1895,7 +1927,13 @@ export default function AdminDeliveryDetailsPage({ deliveryId }: { deliveryId: s
       </Dialog>
 
       {/* Refund Confirmation Dialog */}
-      <AlertDialog open={showRefundDialog} onOpenChange={setShowRefundDialog}>
+      <AlertDialog
+        open={showRefundDialog}
+        onOpenChange={(open) => {
+          setShowRefundDialog(open);
+          if (!open) setRefundReason('');
+        }}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle className="flex items-center gap-2 text-orange-600">
@@ -1919,6 +1957,22 @@ export default function AdminDeliveryDetailsPage({ deliveryId }: { deliveryId: s
               </p>
             </div>
           )}
+          {/* Task 127: optional reason — recorded on the Stripe refund and shown
+              on the Payment Events timeline next to the refund entry. */}
+          <div>
+            <Label htmlFor="refund-reason" className="text-xs font-bold text-slate-600 dark:text-slate-400">
+              Reason (optional)
+            </Label>
+            <Textarea
+              id="refund-reason"
+              value={refundReason}
+              onChange={(e) => setRefundReason(e.target.value)}
+              placeholder="e.g. Dealer cancelled before pickup — appears in the payment events timeline"
+              className="mt-1.5 rounded-xl"
+              rows={2}
+              disabled={refundMutation.isPending}
+            />
+          </div>
           <AlertDialogFooter>
             <AlertDialogCancel className="rounded-xl" disabled={refundMutation.isPending}>Cancel</AlertDialogCancel>
             <AlertDialogAction
@@ -1926,7 +1980,9 @@ export default function AdminDeliveryDetailsPage({ deliveryId }: { deliveryId: s
                 if (delivery?.financialSummary?.paymentId) {
                   refundMutation.mutate({
                     pathParams: { paymentId: delivery.financialSummary.paymentId },
-                    note: 'Full refund processed by admin',
+                    // Task 127: send the admin-typed reason; when empty the
+                    // backend omits adminNote entirely (no fake default reason).
+                    note: refundReason.trim() || undefined,
                   });
                 }
               }}

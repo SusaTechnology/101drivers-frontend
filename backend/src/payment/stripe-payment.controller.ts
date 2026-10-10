@@ -361,7 +361,16 @@ export class StripePaymentController {
   async refundPayment(
     @Param("paymentId") paymentId: string,
     @Body() body?: { note?: string; amount?: number },
+    @Req() request?: any,
   ) {
+    // Task 127: record WHO processed the refund. The webhook that later
+    // writes the REFUND PaymentEvent reads this metadata back, so the
+    // admin panel's Payment Events timeline can show "Processed by <name>".
+    const refundedBy =
+      request?.user?.fullName ||
+      request?.user?.email ||
+      request?.user?.id ||
+      'admin';
     // 1. Fetch the payment record
     const payment = await this.prisma.payment.findUnique({
       where: { id: paymentId },
@@ -387,7 +396,12 @@ export class StripePaymentController {
     // reject immediately — don't even call Stripe. This prevents
     // the "Charge has already been refunded" error from Stripe
     // when the admin double-clicks or retries a full refund.
-    if (payment.status === 'REFUNDED' && (payment as any).refundStatus === 'FULL') {
+    // Task 127: REFUNDED + anything other than PARTIAL counts as fully
+    // refunded. Legacy rows refunded before the partial-refund fields
+    // existed keep the default refundStatus = NONE (or null), and `status`
+    // has only ever been flipped to REFUNDED on FULL refunds — so they
+    // must be blocked here too, not sent to Stripe to fail.
+    if (payment.status === 'REFUNDED' && (payment as any).refundStatus !== 'PARTIAL') {
       throw new BadRequestException(
         'This payment has already been fully refunded. No further refunds are possible.',
       );
@@ -436,7 +450,11 @@ export class StripePaymentController {
         metadata: {
           paymentId,
           deliveryId: payment.deliveryId,
-          adminNote: body?.note || (isPartial ? 'Partial refund processed by admin' : 'Full refund processed by admin'),
+          refundedBy,
+          // Task 127: only attach adminNote when the admin actually typed a
+          // reason. The old hardcoded "Full refund processed by admin" default
+          // is not a reason — showing it as one on the timeline is noise.
+          ...(body?.note ? { adminNote: body.note } : {}),
         },
       });
 
