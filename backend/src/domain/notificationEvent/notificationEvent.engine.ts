@@ -105,6 +105,27 @@ export class NotificationEventEngine {
       }
     }
 
+    // ── Cross-role duplicate guard ──
+    // Keeps one inbox from receiving two differently-worded role emails for
+    // the same delivery (e.g. the platform owner holding both the dealer and
+    // the driver account, or a dealer who listed themselves as the delivery
+    // recipient). Each send is addressed to the role-correct inbox, but when
+    // one human occupies several roles both copies land in the same inbox.
+    // Rule: per delivery, an inbox receives at most ONE role's email.
+    if (
+      await this.shouldSuppressCrossRoleEmail({
+        channel: input.channel,
+        deliveryId: input.deliveryId,
+        toEmail: input.toEmail,
+        templateCode: input.templateCode,
+      })
+    ) {
+      this.logger.warn(
+        `Cross-role duplicate email suppressed: delivery=${input.deliveryId}, to=${input.toEmail}, template=${input.templateCode}`
+      );
+      return null;
+    }
+
     const created = await this.prisma.notificationEvent.create({
       data: {
         actorUserId: input.actorUserId ?? null,
@@ -213,6 +234,89 @@ export class NotificationEventEngine {
     await this.trackingGateway.emitNotificationCreated({
       userId,
       notification: notificationPayload,
+    });
+  }
+
+  /**
+   * Role bucket for an email template code — used by the cross-role
+   * duplicate guard. Driver-worded, dealer/customer-worded and
+   * recipient-worded emails are different roles. Returns null for
+   * admin/ops/support/verification templates, which are exempt: they are
+   * not tied to a delivery's role split and must never be suppressed.
+   */
+  private classifyEmailRole(
+    templateCode?: string | null
+  ): "driver" | "customer" | "recipient" | null {
+    const tc = (templateCode ?? "").toLowerCase();
+    if (!tc) return null;
+
+    // Driver first: codes like "delivery-cancelled-lock-in-driver" contain
+    // both "delivery-" and "driver" — the driver intent wins.
+    if (tc.includes("driver") || tc.startsWith("payout-")) return "driver";
+    if (tc.includes("recipient")) return "recipient";
+    if (
+      tc.includes("customer") ||
+      tc.includes("dealer") ||
+      tc.includes("delivery-") ||
+      tc.includes("booked") ||
+      tc.includes("listed") ||
+      tc.includes("lock-in") ||
+      tc.includes("tracking") ||
+      tc.includes("trip-")
+    ) {
+      return "customer";
+    }
+
+    return null;
+  }
+
+  /**
+   * Cross-role duplicate guard.
+   *
+   * Every email IS addressed to the role-correct inbox: driver emails go to
+   * driver.user.email, dealer emails to customer.user.email, recipient
+   * copies to delivery.recipientEmail. But one HUMAN can occupy several
+   * roles on the same delivery, and then both copies land in one inbox —
+   * e.g. "A booked delivery was cancelled" (driver wording) AND "Your
+   * delivery has been cancelled" (dealer wording) arriving together.
+   *
+   * Rule: for one delivery, an inbox receives at most ONE role's email —
+   * the first role that reaches it (QUEUED or SENT) wins; any later
+   * cross-role copy to the same inbox is suppressed. Same-role copies
+   * (e.g. two different status updates for the dealer) are never affected,
+   * and templates without a role bucket (admin/ops/support) are exempt.
+   */
+  private async shouldSuppressCrossRoleEmail(input: {
+    channel: EnumNotificationEventChannel;
+    deliveryId?: string | null;
+    toEmail?: string | null;
+    templateCode?: string | null;
+  }): Promise<boolean> {
+    if (input.channel !== EnumNotificationEventChannel.EMAIL) return false;
+    if (!input.deliveryId || !input.toEmail?.trim()) return false;
+
+    const emailRole = this.classifyEmailRole(input.templateCode);
+    if (!emailRole) return false;
+
+    const siblings = await this.prisma.notificationEvent.findMany({
+      where: {
+        deliveryId: input.deliveryId,
+        channel: EnumNotificationEventChannel.EMAIL,
+        toEmail: { equals: input.toEmail.trim(), mode: "insensitive" },
+        status: {
+          in: [
+            EnumNotificationEventStatus.QUEUED,
+            EnumNotificationEventStatus.SENT,
+          ],
+        },
+        templateCode: { not: null },
+      },
+      select: { templateCode: true },
+    });
+
+    return siblings.some((sibling) => {
+      const siblingRole = this.classifyEmailRole(sibling.templateCode);
+      return siblingRole !== null && siblingRole !== emailRole;
     });
   }
 
