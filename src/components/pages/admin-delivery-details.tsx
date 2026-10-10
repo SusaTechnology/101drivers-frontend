@@ -81,6 +81,7 @@ import {
   Camera,
   Mail,
   MessageSquare,
+  Phone,
   Calendar,
   Car,
   ArrowLeft,
@@ -505,6 +506,11 @@ export default function AdminDeliveryDetailsPage({ deliveryId }: { deliveryId: s
   const driverName = delivery.activeAssignment?.driver?.user?.fullName || null;
   const driverPhoto = delivery.activeAssignment?.driver?.profilePhotoUrl || delivery.activeAssignment?.driver?.selfiePhotoUrl || null;
   const driverUserId = delivery.activeAssignment?.driver?.user?.id || null;
+  // Task 125: surface the driver's phone (Driver.phone first, then the
+  // driver's User.phone — both already returned by the admin detail endpoint).
+  const driverPhone = delivery.activeAssignment?.driver?.phone
+    || delivery.activeAssignment?.driver?.user?.phone
+    || null;
   const vehicleInfo = [delivery.vehicleMake, delivery.vehicleModel, delivery.vehicleColor]
     .filter(Boolean)
     .join(' ') || 'Not specified';
@@ -1127,6 +1133,15 @@ export default function AdminDeliveryDetailsPage({ deliveryId }: { deliveryId: s
                       <p className="text-[10px] text-slate-500">
                         Assigned {formatDeliveryDate(delivery.activeAssignment?.assignedAt, true)}
                       </p>
+                      {driverPhone && (
+                        <a
+                          href={`tel:${driverPhone}`}
+                          className="mt-1 inline-flex items-center gap-1 text-xs font-bold text-primary hover:underline"
+                        >
+                          <Phone className="w-3 h-3" />
+                          {driverPhone}
+                        </a>
+                      )}
                     </div>
                   </div>
                 ) : (

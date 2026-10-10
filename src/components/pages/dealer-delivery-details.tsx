@@ -2193,13 +2193,18 @@ export default function DealerDeliveryDetails({ deliveryId }: DealerDeliveryDeta
                         <div className="flex items-center justify-between gap-3">
                           <div className="flex items-center gap-2 flex-wrap">
                             <span className="font-black text-slate-900 dark:text-white text-lg">{driver.name}</span>
-                            <a
-                              href="tel:3109628402"
-                              className="inline-flex items-center gap-1 text-sm font-bold text-lime-600 dark:text-lime-400 hover:underline"
-                            >
-                              <Phone className="h-3 w-3" />
-                              310-962-8402
-                            </a>
+                            {/* Real driver phone from the active assignment (was a
+                                hardcoded placeholder number — Task 125). Hidden
+                                entirely when no phone is on file. */}
+                            {driver.phone && driver.phone !== '—' && (
+                              <a
+                                href={`tel:${driver.phone}`}
+                                className="inline-flex items-center gap-1 text-sm font-bold text-lime-600 dark:text-lime-400 hover:underline"
+                              >
+                                <Phone className="h-3 w-3" />
+                                {driver.phone}
+                              </a>
+                            )}
                           </div>
                           {/* Rating: 5 stars with half-star support.
                               e.g. 4.5 = 4 full golden + 1 half golden/gray + 0 gray
