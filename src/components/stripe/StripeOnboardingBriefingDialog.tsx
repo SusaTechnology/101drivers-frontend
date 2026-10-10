@@ -1,4 +1,5 @@
 import {
+  ClipboardCheck,
   ShieldCheck,
   Banknote,
   Smartphone,
@@ -24,7 +25,10 @@ import { Button } from '@/components/ui/button'
  * the account holder type ANY name (real case: a driver entered
  * "Just A Driver"), which later triggers identity-verification holds and
  * tax-form mismatches. The dialog tells drivers exactly what to enter so
- * the problem is prevented at the source.
+ * the problem is prevented at the source. It also explains that the
+ * platform pre-fills most fields (name, address, business details), so
+ * drivers leave fields that don't apply to them (like the website)
+ * untouched instead of guessing.
  *
  * Decoupled by design:
  *  - Fully controlled via props (open / onOpenChange) — no internal state.
@@ -43,10 +47,16 @@ interface BriefingItem {
 
 const BRIEFING_ITEMS: BriefingItem[] = [
   {
-    icon: ShieldCheck,
-    title: 'Use your legal name',
+    icon: ClipboardCheck,
+    title: 'We pre-fill your details',
     description:
-      "Enter your full legal name exactly as it appears on your government ID and bank account — not a nickname or a role like “Just A Driver”.",
+      "Your name, address, and business details (like the website) are filled in for you. If the name shown is already your legal name, don't edit it — and leave any fields that don't apply to you just as they are.",
+  },
+  {
+    icon: ShieldCheck,
+    title: 'If you edit the name, use your legal name',
+    description:
+      "If you do need to change it, it must be your full legal name exactly as it appears on your government ID and bank account — not a nickname or a role like “Just A Driver”.",
   },
   {
     icon: Banknote,
