@@ -1327,21 +1327,30 @@ export default function DriverWalletPage() {
             </div>
           </CardHeader>
           <CardContent className="space-y-3">
-            {connectStatus?.nameMatchesProfile === false && (
+            {connectStatus?.setupComplete && connectStatus?.nameMatchesProfile === false && (
               <div className="rounded-2xl border border-amber-200 dark:border-amber-800/40 bg-amber-50 dark:bg-amber-900/10 p-4">
                 <div className="flex items-center gap-2">
                   <AlertCircle className="h-4 w-4 text-amber-500" />
                   <p className="text-xs font-semibold text-amber-700 dark:text-amber-300">
-                    Name check needed on your Stripe account
+                    Name mismatch: Stripe vs. our database
                   </p>
                 </div>
                 <p className="text-[11px] text-amber-600 dark:text-amber-400 mt-1">
-                  Stripe has your name as “{connectStatus?.nameOnStripe || '—'}” but your profile
-                  says “{connectStatus?.profileName || '—'}”. Payouts still go to your verified
-                  bank account, but a mismatched name can trigger identity checks or tax-form
-                  problems. Tap “{connectStatus?.setupComplete ? 'Update bank account or details' : 'Set up payouts with Stripe'}”
-                  and enter your legal name exactly as it appears on your ID.
+                  The name you entered on Stripe (“{connectStatus?.nameOnStripe || '—'}”) is different from
+                  the name we have in our database (“{connectStatus?.profileName || '—'}”). Your payouts
+                  still go to your verified bank account, but your name on Stripe should be your legal
+                  name — the one on your government ID — otherwise Stripe may pause payouts for identity
+                  checks and your year-end tax form won&apos;t match.
                 </p>
+                <Button
+                  onClick={requestStripeOnboarding}
+                  variant="outline"
+                  size="sm"
+                  className="mt-2 rounded-xl border-amber-300 dark:border-amber-700 text-amber-700 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-900/20 font-bold"
+                >
+                  <ExternalLink className="w-3.5 h-3.5 mr-1" />
+                  Fix my name at Stripe
+                </Button>
               </div>
             )}
             {connectStatus?.setupComplete ? (

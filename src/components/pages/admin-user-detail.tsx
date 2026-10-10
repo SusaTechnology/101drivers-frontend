@@ -416,6 +416,24 @@ export default function AdminUserDetailPage({ userId }: AdminUserDetailPageProps
     enabled: false,
   });
 
+  // ── Stripe Connect name-mismatch flag (Task 123, FLAG ONLY) ──
+  // Surfaces when the name the driver typed on Stripe differs from the
+  // legal name in our database. The backend intentionally does NOT
+  // auto-correct; the fix happens on the driver side (Driver Wallet →
+  // "Update bank account or details" → Stripe hosted portal).
+  const driverIdForStripe = user?.driver?.id;
+  const { data: driverConnectStatus } = useDataQuery<{
+    setupComplete: boolean;
+    needsOnboarding: boolean;
+    nameOnStripe?: string | null;
+    profileName?: string | null;
+    nameMatchesProfile?: boolean | null;
+  }>({
+    apiEndPoint: `${import.meta.env.VITE_API_URL}/api/payments/stripe/connect/status/${driverIdForStripe}`,
+    noFilter: true,
+    enabled: !!driverIdForStripe,
+  });
+
   // Compute the postpaid status endpoint so we can invalidate it when
   // the billing mode switches (otherwise PostpaidBillingCard would
   // keep showing stale data for up to 60s, since it polls on a 60s
@@ -2128,6 +2146,24 @@ export default function AdminUserDetailPage({ userId }: AdminUserDetailPageProps
                     </CardHeader>
 
                     <CardContent className="p-6 sm:p-7 space-y-4">
+                      {driverConnectStatus?.setupComplete && driverConnectStatus?.nameMatchesProfile === false && (
+                        <div className="rounded-2xl border border-amber-200 dark:border-amber-800/40 bg-amber-50 dark:bg-amber-900/10 p-4">
+                          <div className="flex items-center gap-2">
+                            <AlertTriangle className="h-4 w-4 text-amber-500" />
+                            <p className="text-xs font-semibold text-amber-700 dark:text-amber-300">
+                              Stripe name mismatch — should be the legal name
+                            </p>
+                          </div>
+                          <p className="text-[11px] text-amber-600 dark:text-amber-400 mt-1">
+                            The name this driver entered on Stripe (“{driverConnectStatus?.nameOnStripe || '—'}”) is
+                            different from the legal name in our database (“{driverConnectStatus?.profileName || '—'}”).
+                            Payouts still go to the driver&apos;s verified bank account, but a mismatched Stripe name
+                            can trigger identity-verification payout holds and breaks year-end tax (1099) matching.
+                            Ask the driver to open Driver Wallet → “Update bank account or details” and enter their
+                            legal name exactly as on their government ID.
+                          </p>
+                        </div>
+                      )}
                       {editMode === 'driver' ? (
                         <form onSubmit={editDriverForm.handleSubmit(handleEditDriver)} className="space-y-4">
                           <div className="space-y-4">
