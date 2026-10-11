@@ -11,6 +11,7 @@ import {
   useCmsNewsPost,
 } from "@/lib/cms";
 import { formatContentDate } from "@/lib/format-date";
+import { renderCmsInline } from "@/lib/cms-inline";
 
 /**
  * News announcement — /news/$slug. The post comes from the CMS (Postgres
@@ -131,7 +132,7 @@ export default function NewsDetailPage({ slug }: { slug: string }) {
                 key={i}
                 className="text-sm lg:text-base text-slate-600 dark:text-slate-400 leading-relaxed"
               >
-                {paragraph}
+                {renderCmsInline(paragraph)}
               </p>
             ))}
           </div>

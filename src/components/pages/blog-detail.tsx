@@ -22,6 +22,7 @@ import {
   useCmsBlogPost,
 } from "@/lib/cms";
 import { formatContentDate } from "@/lib/format-date";
+import { renderCmsInline as renderInline } from "@/lib/cms-inline";
 import type { BlogBlock } from "@/content/types";
 
 /**
@@ -38,42 +39,8 @@ import type { BlogBlock } from "@/content/types";
  * BreadcrumbList when the post contains FAQs.
  */
 
-/** Inline formatting: `**bold**` and `[label](/path)` — React nodes
- *  only, never raw HTML. */
-function renderInline(text: string): React.ReactNode[] {
-  const nodes: React.ReactNode[] = [];
-  const pattern = /(\*\*[^*]+\*\*)|(\[[^\]]+\]\([^)\s]+\))/g;
-  let last = 0;
-  let key = 0;
-  let match: RegExpExecArray | null;
-  while ((match = pattern.exec(text)) !== null) {
-    if (match.index > last) nodes.push(text.slice(last, match.index));
-    const token = match[0];
-    if (token.startsWith("**")) {
-      nodes.push(
-        <strong key={key++} className="font-bold text-slate-900 dark:text-white">
-          {token.slice(2, -2)}
-        </strong>,
-      );
-    } else {
-      const link = token.match(/^\[([^\]]+)\]\(([^)]+)\)$/);
-      if (link) {
-        nodes.push(
-          <Link
-            key={key++}
-            to={link[2] as LinkProps["to"]}
-            className="font-bold text-lime-600 dark:text-lime-400 hover:underline"
-          >
-            {link[1]}
-          </Link>,
-        );
-      }
-    }
-    last = pattern.lastIndex;
-  }
-  if (last < text.length) nodes.push(text.slice(last));
-  return nodes;
-}
+// Inline formatting (bold / italic / links) lives in @/lib/cms-inline —
+// shared with the admin editor previews so they always match.
 
 const CELL = "p-4 border-b border-slate-200 dark:border-slate-800 align-top";
 
@@ -149,7 +116,7 @@ function Block({ block }: { block: BlogBlock }) {
                         : "text-slate-900 dark:text-white"
                     }`}
                   >
-                    {cell}
+                    {renderInline(cell)}
                   </th>
                 ))}
               </tr>
@@ -177,7 +144,7 @@ function Block({ block }: { block: BlogBlock }) {
                             : "text-slate-700 dark:text-slate-300"
                       }`}
                     >
-                      {cell}
+                      {renderInline(cell)}
                     </td>
                   ))}
                 </tr>
@@ -186,7 +153,7 @@ function Block({ block }: { block: BlogBlock }) {
           </table>
           {block.note && (
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-2 leading-relaxed">
-              {block.note}
+              {renderInline(block.note)}
             </p>
           )}
         </div>
@@ -227,7 +194,7 @@ function Block({ block }: { block: BlogBlock }) {
               className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6"
             >
               <h3 className="font-bold text-base mb-2 text-slate-900 dark:text-white">
-                {faq.q}
+                {renderInline(faq.q)}
               </h3>
               <p className="text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
                 {renderInline(faq.a)}
@@ -253,21 +220,38 @@ function Block({ block }: { block: BlogBlock }) {
     case "related":
       return (
         <div className="grid md:grid-cols-2 gap-4 mb-8">
-          {block.items.map((item) => (
-            <Link
-              key={item.label}
-              to={item.to as LinkProps["to"]}
-              className="block p-4 bg-slate-50 dark:bg-slate-800/50 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-            >
-              <div className="flex items-center gap-2 text-lime-600 dark:text-lime-400 font-medium mb-1">
-                {item.label}
-                <ArrowRight className="w-4 h-4" aria-hidden="true" />
-              </div>
-              <p className="text-sm text-slate-600 dark:text-slate-400">
-                {item.description}
-              </p>
-            </Link>
-          ))}
+          {block.items.map((item) => {
+            const card =
+              "block p-4 bg-slate-50 dark:bg-slate-800/50 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors";
+            const inner = (
+              <>
+                <div className="flex items-center gap-2 text-lime-600 dark:text-lime-400 font-medium mb-1">
+                  {item.label}
+                  <ArrowRight className="w-4 h-4" aria-hidden="true" />
+                </div>
+                <p className="text-sm text-slate-600 dark:text-slate-400">
+                  {item.description}
+                </p>
+              </>
+            );
+            // Internal paths use the router; anything else (https://, mailto:)
+            // opens as a normal link so an external URL can't break routing.
+            return item.to.startsWith("/") ? (
+              <Link key={item.label} to={item.to as LinkProps["to"]} className={card}>
+                {inner}
+              </Link>
+            ) : (
+              <a
+                key={item.label}
+                href={item.to}
+                target="_blank"
+                rel="noopener noreferrer"
+                className={card}
+              >
+                {inner}
+              </a>
+            );
+          })}
         </div>
       );
   }

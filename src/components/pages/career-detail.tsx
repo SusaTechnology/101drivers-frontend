@@ -6,6 +6,7 @@ import { SEOHead } from "../shared/SEOHead";
 import { SiteFooter } from "../shared/SiteFooter";
 import { ContentNotFound } from "../shared/ContentNotFound";
 import { useCmsJobPosting } from "@/lib/cms";
+import { renderCmsInline } from "@/lib/cms-inline";
 
 /**
  * Job posting — /careers/$slug. The role comes from the CMS (Postgres via
@@ -124,7 +125,7 @@ export default function CareerDetailPage({ slug }: { slug: string }) {
                 key={i}
                 className="text-sm lg:text-base text-slate-600 dark:text-slate-400 leading-relaxed"
               >
-                {paragraph}
+                {renderCmsInline(paragraph)}
               </p>
             ))}
           </div>

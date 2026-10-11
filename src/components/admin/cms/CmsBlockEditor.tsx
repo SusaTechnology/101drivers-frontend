@@ -1,4 +1,3 @@
-import { Fragment } from "react";
 import {
   AlignLeft,
   ArrowDown,
@@ -38,17 +37,25 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
+import { RichField } from "@/components/admin/cms/RichField";
+import {
+  CmsTableField,
+  PricingRowsField,
+} from "@/components/admin/cms/CmsTableField";
+import { renderCmsInline } from "@/lib/cms-inline";
 import type { BlogBlock } from "@/content/types";
 
 /**
  * Structured blog body editor.
  *
  * The public renderer consumes TYPED blocks (never raw HTML), so instead of
- * a WYSIWYG this editor exposes one card per block with plain fields — the
- * same authoring model as headless CMSes (Sanity/Contentful), which keeps
- * the published markup identical to the hand-written posts. Inline
- * formatting inside any text field: **bold** and [label](/path).
+ * a free-form WYSIWYG this editor exposes one card per block — the same
+ * authoring model as WordPress/Gutenberg and headless CMSes, which keeps
+ * the published markup identical to the hand-written posts. Text fields use
+ * RichField: a formatting toolbar (bold / italic / link, Ctrl/Cmd+B I K)
+ * that writes the same inline markup the public renderCmsInline parses —
+ * no syntax memorization. Tables and pricing rows are visual grids
+ * (CmsTableField / PricingRowsField).
  *
  * The preview dialog re-renders the blocks with the SAME styling as the
  * public blog page so what the editor sees is what visitors get.
@@ -75,8 +82,6 @@ const BLOCK_TYPES: { type: BlogBlock["type"]; label: string; icon: typeof AlignL
 const splitLines = (text: string): string[] =>
   text.split("\n").map((l) => l.trim()).filter((l) => l.length > 0);
 const joinLines = (items: string[]): string => items.join("\n");
-const splitCells = (line: string): string[] => line.split("|").map((c) => c.trim());
-const joinCells = (cells: string[]): string => cells.join("  |  ");
 
 export function CmsBlockEditor({
   blocks,
@@ -187,16 +192,17 @@ function BlockFields({
   switch (block.type) {
     case "p":
       return (
-        <TextField
+        <RichField
           value={block.text}
           onChange={(text) => onChange({ type: "p", text })}
           multiline
-          placeholder="Write the paragraph… **bold** and [link](/path) are supported."
+          rows={4}
+          placeholder="Write the paragraph… use the toolbar above for bold, italic and links."
         />
       );
     case "h2":
       return (
-        <TextField
+        <RichField
           value={block.text}
           onChange={(text) => onChange({ type: "h2", text })}
           placeholder="Section heading"
@@ -204,7 +210,7 @@ function BlockFields({
       );
     case "h3":
       return (
-        <TextField
+        <RichField
           value={block.text}
           onChange={(text) => onChange({ type: "h3", text })}
           placeholder="Sub heading"
@@ -214,7 +220,7 @@ function BlockFields({
     case "ol":
       return (
         <div className="space-y-2">
-          <TextField
+          <RichField
             value={joinLines(block.items)}
             onChange={(text) => onChange({ type: block.type, items: splitLines(text) })}
             multiline
@@ -249,7 +255,7 @@ function BlockFields({
             onChange={(label) => onChange({ type: "callout", label: label || undefined, text: block.text })}
             placeholder="Optional label (e.g. TL;DR)"
           />
-          <TextField
+          <RichField
             value={block.text}
             onChange={(text) => onChange({ type: "callout", label: block.label, text })}
             multiline
@@ -259,38 +265,10 @@ function BlockFields({
       );
     case "table":
       return (
-        <div className="space-y-2">
-          <TextField
-            value={joinCells(block.head)}
-            onChange={(line) => onChange({ ...block, head: splitCells(line) })}
-            placeholder="Header cells, separated by |"
-          />
-          <TextField
-            value={block.rows.map(joinCells).join("\n")}
-            onChange={(text) =>
-              onChange({ ...block, rows: splitLines(text).map(splitCells) })
-            }
-            multiline
-            placeholder={"One row per line, cells separated by |"}
-          />
-          <div className="flex flex-wrap gap-3">
-            <NumberField
-              label="Highlight column"
-              value={block.highlightCol}
-              onChange={(v) => onChange({ ...block, highlightCol: v })}
-            />
-            <NumberField
-              label="Highlight row"
-              value={block.highlightRow}
-              onChange={(v) => onChange({ ...block, highlightRow: v })}
-            />
-          </div>
-          <TextField
-            value={block.note ?? ""}
-            onChange={(note) => onChange({ ...block, note: note || undefined })}
-            placeholder="Optional note under the table"
-          />
-        </div>
+        <CmsTableField
+          value={block}
+          onChange={(v) => onChange({ type: "table", ...v })}
+        />
       );
     case "pricing":
       return (
@@ -307,19 +285,9 @@ function BlockFields({
               placeholder="Label (e.g. Standard sedan)"
             />
           </div>
-          <TextField
-            value={block.rows.map((r) => joinCells([r.k, r.v, r.included ? "included" : ""])).join("\n")}
-            onChange={(text) =>
-              onChange({
-                ...block,
-                rows: splitLines(text).map((line) => {
-                  const [k = "", v = "", flag = ""] = splitCells(line);
-                  return { k, v, included: flag.toLowerCase() === "included" || undefined };
-                }),
-              })
-            }
-            multiline
-            placeholder={"One row per line:  label  |  value  |  included (optional)"}
+          <PricingRowsField
+            rows={block.rows}
+            onChange={(rows) => onChange({ ...block, rows })}
           />
         </div>
       );
@@ -328,20 +296,22 @@ function BlockFields({
         <div className="space-y-2">
           {block.items.map((item, i) => (
             <div key={i} className="rounded-lg border border-slate-200 dark:border-slate-800 p-2 space-y-2">
-              <div className="flex items-center gap-2">
-                <span className="text-[10px] font-bold text-slate-400">Q{i + 1}</span>
-                <TextField
-                  value={item.q}
-                  onChange={(q) =>
-                    onChange({ type: "faq", items: block.items.map((it, j) => (j === i ? { ...it, q } : it)) })
-                  }
-                  placeholder="Question"
-                />
+              <div className="flex items-start gap-2">
+                <span className="pt-2 text-[10px] font-bold text-slate-400">Q{i + 1}</span>
+                <div className="min-w-0 flex-1">
+                  <RichField
+                    value={item.q}
+                    onChange={(q) =>
+                      onChange({ type: "faq", items: block.items.map((it, j) => (j === i ? { ...it, q } : it)) })
+                    }
+                    placeholder="Question"
+                  />
+                </div>
                 <Button
                   type="button"
                   variant="ghost"
                   size="sm"
-                  className="h-7 w-7 p-0 text-red-600"
+                  className="mt-0.5 h-7 w-7 p-0 text-red-600"
                   onClick={() =>
                     onChange({ type: "faq", items: block.items.filter((_, j) => j !== i) })
                   }
@@ -349,12 +319,13 @@ function BlockFields({
                   <X className="h-3.5 w-3.5" />
                 </Button>
               </div>
-              <TextField
+              <RichField
                 value={item.a}
                 onChange={(a) =>
                   onChange({ type: "faq", items: block.items.map((it, j) => (j === i ? { ...it, a } : it)) })
                 }
                 multiline
+                rows={2}
                 placeholder="Answer"
               />
             </div>
@@ -419,7 +390,6 @@ function BlockFields({
                 onChange={(description) =>
                   onChange({ type: "related", items: block.items.map((it, j) => (j === i ? { ...it, description } : it)) })
                 }
-                multiline
                 placeholder="Short description"
               />
             </div>
@@ -447,53 +417,18 @@ function TextField({
   value,
   onChange,
   placeholder,
-  multiline,
 }: {
   value: string;
   onChange: (value: string) => void;
   placeholder?: string;
-  multiline?: boolean;
 }) {
-  return multiline ? (
-    <Textarea
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      placeholder={placeholder}
-      rows={3}
-      className="text-sm"
-    />
-  ) : (
+  return (
     <Input
       value={value}
       onChange={(e) => onChange(e.target.value)}
       placeholder={placeholder}
       className="h-9 text-sm"
     />
-  );
-}
-
-function NumberField({
-  label,
-  value,
-  onChange,
-}: {
-  label: string;
-  value: number | undefined;
-  onChange: (value: number | undefined) => void;
-}) {
-  return (
-    <div className="flex items-center gap-2">
-      <Label className="text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap">{label}</Label>
-      <Input
-        type="number"
-        value={value ?? ""}
-        onChange={(e) => {
-          const raw = e.target.value;
-          onChange(raw === "" ? undefined : Number(raw));
-        }}
-        className="h-8 w-24 text-xs"
-      />
-    </div>
   );
 }
 
@@ -528,9 +463,7 @@ export function CmsBlockPreviewDialog({
             <p className="text-sm text-slate-400">Nothing to preview yet — the body is empty.</p>
           )}
           {blocks.map((block, i) => (
-            <Fragment key={i}>
-              <PreviewBlock block={block} />
-            </Fragment>
+            <PreviewBlock key={i} block={block} />
           ))}
         </div>
       </DialogContent>
@@ -538,15 +471,15 @@ export function CmsBlockPreviewDialog({
   );
 }
 
-/** Mirrors the public blog renderer's styling (plain <a> instead of router Links). */
+/** Mirrors the public blog renderer's styling AND formatting. */
 function PreviewBlock({ block }: { block: BlogBlock }) {
   switch (block.type) {
     case "p":
-      return <p className="text-sm text-slate-600 dark:text-slate-300 leading-relaxed">{block.text}</p>;
+      return <p className="text-sm text-slate-600 dark:text-slate-300 leading-relaxed">{renderCmsInline(block.text)}</p>;
     case "h2":
-      return <h2 className="text-xl font-black text-slate-900 dark:text-white mt-6 mb-2">{block.text}</h2>;
+      return <h2 className="text-xl font-black text-slate-900 dark:text-white mt-6 mb-2">{renderCmsInline(block.text)}</h2>;
     case "h3":
-      return <h3 className="text-base font-black text-slate-900 dark:text-white mt-4 mb-2">{block.text}</h3>;
+      return <h3 className="text-base font-black text-slate-900 dark:text-white mt-4 mb-2">{renderCmsInline(block.text)}</h3>;
     case "ul":
       return (
         <ul className="list-disc list-inside text-sm text-slate-600 dark:text-slate-300 space-y-1">
@@ -554,7 +487,7 @@ function PreviewBlock({ block }: { block: BlogBlock }) {
             <li key={i} className={block.marker ? "flex items-start gap-2 list-none" : ""}>
               {block.marker === "check" && <CheckCircle2 className="w-4 h-4 text-lime-500 shrink-0 mt-0.5" />}
               {block.marker === "cross" && <XCircle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />}
-              <span>{item}</span>
+              <span>{renderCmsInline(item)}</span>
             </li>
           ))}
         </ul>
@@ -563,7 +496,7 @@ function PreviewBlock({ block }: { block: BlogBlock }) {
       return (
         <ol className="list-decimal list-inside text-sm text-slate-600 dark:text-slate-300 space-y-1">
           {block.items.map((item, i) => (
-            <li key={i}>{item}</li>
+            <li key={i}>{renderCmsInline(item)}</li>
           ))}
         </ol>
       );
@@ -571,7 +504,7 @@ function PreviewBlock({ block }: { block: BlogBlock }) {
       return (
         <div className="bg-lime-50 dark:bg-lime-500/10 border-l-4 border-lime-500 p-4 rounded-r-lg">
           {block.label && <strong className="text-slate-900 dark:text-white">{block.label} </strong>}
-          <span className="text-sm text-slate-700 dark:text-slate-300">{block.text}</span>
+          <span className="text-sm text-slate-700 dark:text-slate-300">{renderCmsInline(block.text)}</span>
         </div>
       );
     case "table":
@@ -581,8 +514,13 @@ function PreviewBlock({ block }: { block: BlogBlock }) {
             <thead>
               <tr className="bg-slate-100 dark:bg-slate-800">
                 {block.head.map((cell, i) => (
-                  <th key={i} className="p-2 text-left font-bold border-b-2 border-slate-200 dark:border-slate-700">
-                    {cell}
+                  <th
+                    key={i}
+                    className={`p-2 text-left font-bold border-b-2 border-slate-200 dark:border-slate-700 ${
+                      block.highlightCol === i ? "text-lime-600 dark:text-lime-400" : ""
+                    }`}
+                  >
+                    {renderCmsInline(cell)}
                   </th>
                 ))}
               </tr>
@@ -591,15 +529,20 @@ function PreviewBlock({ block }: { block: BlogBlock }) {
               {block.rows.map((row, r) => (
                 <tr key={r} className={block.highlightRow === r ? "bg-lime-50 dark:bg-lime-500/10" : ""}>
                   {row.map((cell, c) => (
-                    <td key={c} className="p-2 border-b border-slate-200 dark:border-slate-800">
-                      {cell}
+                    <td
+                      key={c}
+                      className={`p-2 border-b border-slate-200 dark:border-slate-800 ${
+                        block.highlightCol === c ? "font-bold text-lime-700 dark:text-lime-400" : ""
+                      }`}
+                    >
+                      {renderCmsInline(cell)}
                     </td>
                   ))}
                 </tr>
               ))}
             </tbody>
           </table>
-          {block.note && <p className="text-xs text-slate-400 mt-1">{block.note}</p>}
+          {block.note && <p className="text-xs text-slate-400 mt-1">{renderCmsInline(block.note)}</p>}
         </div>
       );
     case "pricing":
@@ -612,9 +555,9 @@ function PreviewBlock({ block }: { block: BlogBlock }) {
           <div className="border-t border-slate-200 dark:border-slate-800 pt-2 space-y-1">
             {block.rows.map((row, i) => (
               <div key={i} className="flex justify-between text-xs">
-                <span className="text-slate-600 dark:text-slate-300">{row.k}</span>
+                <span className="text-slate-600 dark:text-slate-300">{renderCmsInline(row.k)}</span>
                 <span className={`font-bold ${row.included ? "text-lime-600 dark:text-lime-400" : "text-slate-900 dark:text-white"}`}>
-                  {row.v}
+                  {renderCmsInline(row.v)}
                 </span>
               </div>
             ))}
@@ -626,8 +569,8 @@ function PreviewBlock({ block }: { block: BlogBlock }) {
         <div className="space-y-2">
           {block.items.map((faq, i) => (
             <div key={i} className="rounded-xl border border-slate-200 dark:border-slate-800 p-3">
-              <h3 className="font-bold text-sm mb-1">{faq.q}</h3>
-              <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">{faq.a}</p>
+              <h3 className="font-bold text-sm mb-1">{renderCmsInline(faq.q)}</h3>
+              <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">{renderCmsInline(faq.a)}</p>
             </div>
           ))}
         </div>

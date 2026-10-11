@@ -41,6 +41,8 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { CmsBlockEditor, CmsBlockPreviewDialog } from "@/components/admin/cms/CmsBlockEditor";
 import { CmsImageField } from "@/components/admin/cms/CmsImageField";
+import { RichField } from "@/components/admin/cms/RichField";
+import { CmsTextPreviewDialog } from "@/components/admin/cms/CmsTextPreviewDialog";
 import {
   CMS_API,
   slugifyTitle,
@@ -362,11 +364,9 @@ export default function AdminCmsPage() {
               {dirty && <span className="text-xs text-amber-600 dark:text-amber-400 font-semibold">Unsaved changes</span>}
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              {draft.section === "blog" && (
-                <Button type="button" variant="outline" size="sm" className="text-xs" onClick={() => setPreviewOpen(true)}>
-                  <Eye className="h-3.5 w-3.5" /> Preview
-                </Button>
-              )}
+              <Button type="button" variant="outline" size="sm" className="text-xs" onClick={() => setPreviewOpen(true)}>
+                <Eye className="h-3.5 w-3.5" /> Preview
+              </Button>
               {draft.status === "PUBLISHED" && (
                 <Button type="button" variant="outline" size="sm" className="text-xs" disabled={saving} onClick={handleUnpublish}>
                   <Undo2 className="h-3.5 w-3.5" /> Unpublish
@@ -408,6 +408,26 @@ export default function AdminCmsPage() {
             title={draft.title}
             excerpt={draft.excerpt}
             imageUrl={resolveCmsAssetUrl(draft.image)}
+          />
+        )}
+        {draft.section === "news" && (
+          <CmsTextPreviewDialog
+            open={previewOpen}
+            onOpenChange={setPreviewOpen}
+            title={draft.title}
+            metaLine={[draft.tag, draft.date].filter(Boolean).join(" · ")}
+            imageUrl={resolveCmsAssetUrl(draft.image)}
+            paragraphs={splitParagraphs(draft.bodyText)}
+          />
+        )}
+        {draft.section === "careers" && (
+          <CmsTextPreviewDialog
+            open={previewOpen}
+            onOpenChange={setPreviewOpen}
+            title={draft.title}
+            metaLine={[draft.type, draft.location].filter(Boolean).join(" · ")}
+            paragraphs={splitParagraphs(draft.bodyText)}
+            emptyHint="Nothing to preview yet — write the job description first."
           />
         )}
 
@@ -779,14 +799,16 @@ function NewsEditor({
         />
         <div className="space-y-1.5">
           <FieldLabel>Announcement text</FieldLabel>
-          <Textarea
+          <RichField
             value={draft.bodyText}
-            onChange={(e) => set({ bodyText: e.target.value })}
+            onChange={(bodyText) => set({ bodyText })}
+            multiline
             rows={10}
-            className="text-sm leading-relaxed"
             placeholder={"Write the announcement. Separate paragraphs with a blank line."}
           />
-          <p className="text-[10px] text-slate-400">Each blank line starts a new paragraph — just like writing an email.</p>
+          <p className="text-[10px] text-slate-400">
+            Each blank line starts a new paragraph — just like writing an email. Use the toolbar for bold, italic and links.
+          </p>
         </div>
       </div>
     </div>
@@ -854,14 +876,14 @@ function CareerEditor({
         </div>
         <div className="space-y-1.5">
           <FieldLabel>Job description</FieldLabel>
-          <Textarea
+          <RichField
             value={draft.bodyText}
-            onChange={(e) => set({ bodyText: e.target.value })}
+            onChange={(bodyText) => set({ bodyText })}
+            multiline
             rows={12}
-            className="text-sm leading-relaxed"
             placeholder={"The full posting. Separate paragraphs with a blank line."}
           />
-          <p className="text-[10px] text-slate-400">Each blank line starts a new paragraph.</p>
+          <p className="text-[10px] text-slate-400">Each blank line starts a new paragraph. Use the toolbar for bold, italic and links.</p>
         </div>
       </div>
     </div>
