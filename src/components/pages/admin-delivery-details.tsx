@@ -98,7 +98,8 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
-import { getUser, useDataMutation } from '@/lib/tanstack/dataQuery';
+import { getUser } from '@/lib/tanstack/dataQuery';
+import { RefundDialog } from '@/components/admin/RefundDialog';
 import { PhotoDialog, downloadImageAsFile } from '@/components/ui/photo-dialog';
 
 export default function AdminDeliveryDetailsPage({ deliveryId }: { deliveryId: string }) {
@@ -113,51 +114,28 @@ export default function AdminDeliveryDetailsPage({ deliveryId }: { deliveryId: s
   // Action mutations
   const deliveryActions = useDeliveryActions(deliveryId);
 
-  // Refund mutation
-  const refundMutation = useDataMutation({
-    apiEndPoint: `${import.meta.env.VITE_API_URL}/api/payments/stripe/refund/:paymentId`,
-    method: 'POST',
-    onSuccess: (data: any) => {
-      setShowRefundDialog(false);
-      setRefundReason('');
-      // Task 128: record the in-flight refund for the on-page banner, with the
-      // pre-refund refundedAmountCents as the baseline — the banner clears once
-      // the webhook bumps the DB past it (works for full AND partial refunds).
-      setLastRefund({
-        amount: data?.amount ?? Number(paymentRecord?.amount ?? 0),
-        baselineCents: paymentRecord?.refundedAmountCents ?? 0,
-      });
-      // Task 127: tell the admin what ACTUALLY happened. Stripe confirms most
-      // card refunds instantly; some sit in `pending` briefly — don't claim
-      // completion we don't have.
-      if (data?.status === 'pending') {
-        toast.success('Refund submitted', {
-          description: 'Stripe has the refund and is processing it. This page and the Payment Events timeline will update once Stripe confirms.',
-        });
-      } else {
-        toast.success('Refund processed', {
-          description: "Stripe accepted the refund — funds return to the dealer's card, typically appearing on their statement within 5-10 business days.",
-        });
-      }
-      refetch();
-      // Task 128: delayed refetches to pick up the webhook's DB update
-      // (payment status / refund badges / banner clearing).
-      setTimeout(() => refetch(), 3000);
-      setTimeout(() => refetch(), 8000);
-    },
-    onError: (error: any) => {
-      toast.error('Refund failed', { description: error?.message || 'Unknown error' });
-    },
-  });
-
+  // ── Refund (Task 132: shared RefundDialog) ──
+  // The dialog UI, validation, mutation and toasts live in the shared
+  // RefundDialog component — the exact same full + partial refund dialog
+  // the admin payment detail page uses. This page keeps only the open
+  // state, the "refund submitted" banner state, and post-success refetches.
   const [showRefundDialog, setShowRefundDialog] = useState(false);
-  // Task 127: optional free-text reason for the refund — written to the Stripe
-  // refund metadata and surfaced on the Payment Events timeline ("Reason: ...").
-  const [refundReason, setRefundReason] = useState('');
   // Task 128: "refund submitted" in-progress banner state — amount + the
   // pre-refund refundedAmountCents baseline (cleared by the React.useEffect
   // below once the webhook's DB update lands).
   const [lastRefund, setLastRefund] = useState<{ amount: number; baselineCents: number } | null>(null);
+
+  const handleRefundSuccess = (result: { amount: number; baselineCents: number }) => {
+    // Task 128: record the in-flight refund for the on-page banner, with the
+    // pre-refund refundedAmountCents as the baseline — the banner clears once
+    // the webhook bumps the DB past it (works for full AND partial refunds).
+    setLastRefund({ amount: result.amount, baselineCents: result.baselineCents });
+    refetch();
+    // Task 128: delayed refetches to pick up the webhook's DB update
+    // (payment status / refund badges / banner clearing).
+    setTimeout(() => refetch(), 3000);
+    setTimeout(() => refetch(), 8000);
+  };
   
   // Dialog states
   const [assignDriverOpen, setAssignDriverOpen] = useState(false);
@@ -1396,18 +1374,13 @@ export default function AdminDeliveryDetailsPage({ deliveryId }: { deliveryId: s
                       size="sm"
                       onClick={() => setShowRefundDialog(true)}
                       className="w-full rounded-xl border-orange-300 text-orange-700 hover:bg-orange-50 dark:border-orange-700 dark:text-orange-400 dark:hover:bg-orange-950/30 mt-1"
-                      disabled={refundMutation.isPending}
                     >
-                      {refundMutation.isPending ? (
-                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                      ) : (
-                        <Undo2 className="w-4 h-4 mr-2" />
-                      )}
+                      <Undo2 className="w-4 h-4 mr-2" />
                       Process Refund
                     </Button>
                     {refundedSoFar > 0 && refundRemaining != null && (
                       <p className="text-[10px] text-slate-500 mt-1">
-                        ${refundedSoFar.toFixed(2)} already refunded — ${refundRemaining.toFixed(2)} will be refunded now
+                        ${refundedSoFar.toFixed(2)} already refunded — ${refundRemaining.toFixed(2)} still refundable (full or partial)
                       </p>
                     )}
                   </>
@@ -2020,75 +1993,18 @@ export default function AdminDeliveryDetailsPage({ deliveryId }: { deliveryId: s
         </DialogContent>
       </Dialog>
 
-      {/* Refund Confirmation Dialog */}
-      <AlertDialog
+      {/* Task 132: Refund dialog — shared with the admin payment detail page.
+          Full + partial refund modes, remaining-balance math, note field and
+          toasts all live inside the component; this page only tracks open
+          state + the post-success banner/refetches. */}
+      <RefundDialog
         open={showRefundDialog}
-        onOpenChange={(open) => {
-          setShowRefundDialog(open);
-          if (!open) setRefundReason('');
-        }}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle className="flex items-center gap-2 text-orange-600">
-              <Undo2 className="w-5 h-5" />
-              Process Refund
-            </AlertDialogTitle>
-            <AlertDialogDescription>
-              This will issue a refund via Stripe for{' '}
-              {refundedSoFar > 0 && refundRemaining != null
-                ? `$${refundRemaining.toFixed(2)} (the remaining balance)`
-                : 'the full payment amount'}
-              . The funds will be returned to the customer's card within 5-10 business days.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          {delivery && (
-            <div className="p-3 rounded-xl bg-orange-50 dark:bg-orange-900/10 border border-orange-200 dark:border-orange-800">
-              <p className="text-xs text-orange-600 dark:text-orange-400">Payment Details</p>
-              <p className="text-sm text-orange-700 dark:text-orange-300">
-                Amount: {formatCurrency(delivery.financialSummary?.grossAmount)} · Status: {delivery.financialSummary?.paymentStatus}
-                {refundedSoFar > 0 && ` · PARTIALLY REFUNDED — ${formatCurrency(refundedSoFar)} already returned`}
-              </p>
-            </div>
-          )}
-          {/* Task 127: optional reason — recorded on the Stripe refund and shown
-              on the Payment Events timeline next to the refund entry. */}
-          <div>
-            <Label htmlFor="refund-reason" className="text-xs font-bold text-slate-600 dark:text-slate-400">
-              Reason (optional)
-            </Label>
-            <Textarea
-              id="refund-reason"
-              value={refundReason}
-              onChange={(e) => setRefundReason(e.target.value)}
-              placeholder="e.g. Dealer cancelled before pickup — appears in the payment events timeline"
-              className="mt-1.5 rounded-xl"
-              rows={2}
-              disabled={refundMutation.isPending}
-            />
-          </div>
-          <AlertDialogFooter>
-            <AlertDialogCancel className="rounded-xl" disabled={refundMutation.isPending}>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={() => {
-                if (delivery?.financialSummary?.paymentId) {
-                  refundMutation.mutate({
-                    pathParams: { paymentId: delivery.financialSummary.paymentId },
-                    // Task 127: send the admin-typed reason; when empty the
-                    // backend omits adminNote entirely (no fake default reason).
-                    note: refundReason.trim() || undefined,
-                  });
-                }
-              }}
-              disabled={refundMutation.isPending}
-              className="bg-orange-600 text-white hover:bg-orange-700 rounded-xl"
-            >
-              {refundMutation.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-              Confirm Full Refund
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+        onOpenChange={setShowRefundDialog}
+        paymentId={delivery?.financialSummary?.paymentId ?? ''}
+        totalCents={Math.round(Number(paymentRecord?.amount ?? delivery?.financialSummary?.grossAmount ?? 0) * 100)}
+        refundedCents={paymentRecord?.refundedAmountCents ?? 0}
+        onSuccess={handleRefundSuccess}
+      />
 
       {/* Driver Photo Dialog — uses the reusable PhotoDialog component */}
       <PhotoDialog
