@@ -64,6 +64,7 @@ import { StripeWebhookController } from "./payment/stripe-webhook.controller";
 import { InsurancePortalController } from "./insurance-portal/insurance-portal.controller";
 import { ContentController } from "./content/content.controller";
 import { CmsController } from "./cms/cms.controller";
+import { CmsService } from "./cms/cms.service";
 import { NotificationEventEngine } from "./domain/notificationEvent/notificationEvent.engine";
 import { MailService } from "./common/mail/mail.service";
 import { PostpaidBillingModule } from "./postpaidBilling/postpaidBilling.module";
@@ -145,6 +146,6 @@ import { PostpaidBillingModule } from "./postpaidBilling/postpaidBilling.module"
     }),
     EmailVerificationModule
   ],
-  providers: [NotificationEventEngine, MailService],
+  providers: [NotificationEventEngine, MailService, CmsService],
 })
 export class AppModule {}
