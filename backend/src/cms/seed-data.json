@@ -1,0 +1,1594 @@
+{
+  "generatedAt": "2026-10-11T09:43:49.040Z",
+  "blog": [
+    {
+      "slug": "how-flat-rate-pricing-works",
+      "title": "How our flat-rate pricing works",
+      "date": "2026-09-05",
+      "excerpt": "The price you see is the price you pay — how a flat-rate quote is built from pickup and drop-off zones, vehicle type, and service level, and why nobody renegotiates mid-delivery.",
+      "image": "/assets/angle-1-left-front.jpeg",
+      "imageAlt": "Vehicle ready for pickup — front-left inspection angle",
+      "body": [
+        {
+          "type": "p",
+          "text": "Every quote on 101 Drivers is flat-rate: the price you see is the price you pay, regardless of the traffic, the route the driver takes, or how many tolls show up on the way."
+        },
+        {
+          "type": "p",
+          "text": "The rate is built from the pickup and drop-off zones, the vehicle type, and the service level you choose. Because drivers see the full route and payout before accepting a job, nobody renegotiates mid-delivery — that is the whole point."
+        },
+        {
+          "type": "p",
+          "text": "If anything about your quote looks off, contact us before confirming. Changing a booked delivery later can change the price; changing it before booking never does."
+        }
+      ]
+    },
+    {
+      "slug": "best-car-delivery-service-california",
+      "title": "Best Car Delivery Service in California (2026)",
+      "date": "2026-08-27",
+      "kicker": "Updated August 2026",
+      "readingMinutes": 12,
+      "author": "101 Drivers Team",
+      "excerpt": "Comparing the top car delivery services in California for 2026. See how 101 Drivers beats Montway, uShip, and AmeriFreight on pricing, GPS tracking, insurance, and speed.",
+      "body": [
+        {
+          "type": "callout",
+          "label": "TL;DR:",
+          "text": "After comparing California's top car delivery services on pricing, tracking, insurance, and customer experience, **101 Drivers** ranks #1 for California residents thanks to transparent flat-rate pricing ($101 for the first 25 miles + $1.80/mile), real-time GPS tracking, photo proof of delivery, and full insurance included at no extra cost."
+        },
+        {
+          "type": "h2",
+          "text": "Why Trust This Comparison"
+        },
+        {
+          "type": "p",
+          "text": "We evaluated California's top car delivery services based on six criteria that matter most to customers: **pricing transparency**, **tracking capabilities**, **insurance coverage**, **delivery speed**, **booking experience**, and **customer support**. Each service was tested with real bookings and evaluated against publicly available data."
+        },
+        {
+          "type": "p",
+          "text": "This guide is for anyone who needs to move a vehicle in California — whether you're a dealership transporting inventory, an individual buying a car online, or someone moving a vehicle across the state. By the end, you'll know exactly which service is right for your situation."
+        },
+        {
+          "type": "h2",
+          "text": "The Top Car Delivery Services in California"
+        },
+        {
+          "type": "p",
+          "text": "California has dozens of car delivery services, but only a handful operate at scale with reliable service. Here are the top 5 we compared:"
+        },
+        {
+          "type": "ul",
+          "items": [
+            "**101 Drivers** — California-only, flat-rate, GPS tracking, photo proof",
+            "**Montway Auto Transport** — National broker, variable pricing",
+            "**uShip** — Auction marketplace, customer bids on shipments",
+            "**AmeriFreight** — National broker, discount-focused",
+            "**SGT Auto Transport** — National broker, standard service"
+          ]
+        },
+        {
+          "type": "h2",
+          "text": "#1 Pick: 101 Drivers — Best for California Residents"
+        },
+        {
+          "type": "p",
+          "text": "**101 Drivers** is our top pick for California residents for one simple reason: it's the only service that combines **transparent flat-rate pricing**, **real-time GPS tracking**, **photo proof of delivery**, and **full insurance coverage** — all included at no extra cost."
+        },
+        {
+          "type": "p",
+          "text": "Most national carriers quote a low base price then add fees for insurance, tracking, and expedited service. With 101 Drivers, the price you see is the price you pay. Period."
+        },
+        {
+          "type": "h3",
+          "text": "Key Features"
+        },
+        {
+          "type": "ul",
+          "items": [
+            "**Flat-rate pricing:** $101 for the first 25 miles, $1.80 per additional mile. Insurance included.",
+            "**Real-time GPS tracking:** Live map with driver location, ETA, and route.",
+            "**Photo proof of delivery:** Documented vehicle condition at pickup, transit, and delivery.",
+            "**Full insurance coverage:** Included at no extra cost. Covers from pickup to drop-off.",
+            "**Instant quote & booking:** See your price in 30 seconds. Book in 2 minutes.",
+            "**Same-day delivery:** Available for most Southern California routes.",
+            "**For dealerships & individuals:** Dealers get bulk delivery + dashboard. Individuals get instant booking — no account required.",
+            "**Direct customer support:** Call or text (424) 313-2168 — talk to a real person, not a call center."
+          ]
+        },
+        {
+          "type": "h3",
+          "text": "Best For"
+        },
+        {
+          "type": "p",
+          "text": "101 Drivers is ideal for:"
+        },
+        {
+          "type": "ul",
+          "items": [
+            "California residents who want a fast, local service",
+            "Dealerships needing regular vehicle transport",
+            "Individuals buying cars online who want transparent pricing",
+            "Anyone who wants real-time tracking and photo proof",
+            "Customers who hate hidden fees and surprise charges"
+          ]
+        },
+        {
+          "type": "h3",
+          "text": "Pricing"
+        },
+        {
+          "type": "p",
+          "text": "101 Drivers uses a simple flat-rate pricing model:"
+        },
+        {
+          "type": "pricing",
+          "big": "$101",
+          "label": "First 25 miles (flat rate)",
+          "rows": [
+            {
+              "k": "Each additional mile",
+              "v": "$1.80"
+            },
+            {
+              "k": "Insurance",
+              "v": "INCLUDED",
+              "included": true
+            },
+            {
+              "k": "GPS tracking",
+              "v": "INCLUDED",
+              "included": true
+            },
+            {
+              "k": "Photo proof",
+              "v": "INCLUDED",
+              "included": true
+            }
+          ]
+        },
+        {
+          "type": "callout",
+          "text": "**Example pricing:** A 60-mile delivery in Southern California costs approximately **$152** ($101 for first 25 miles + $63 for 35 additional miles). The same delivery with a national carrier would typically cost $250-$400 plus insurance fees."
+        },
+        {
+          "type": "h2",
+          "text": "#2: Montway Auto Transport — Best for Out-of-State Moves"
+        },
+        {
+          "type": "p",
+          "text": "Montway is one of the largest national auto transport brokers. They're a good option if you need to ship a vehicle across state lines, but they're not the best choice for in-state California deliveries."
+        },
+        {
+          "type": "h3",
+          "text": "Pros"
+        },
+        {
+          "type": "ul",
+          "marker": "check",
+          "items": [
+            "Nationwide coverage — can ship to/from any US state",
+            "Large network of carriers",
+            "Established reputation (15+ years)"
+          ]
+        },
+        {
+          "type": "h3",
+          "text": "Cons"
+        },
+        {
+          "type": "ul",
+          "marker": "cross",
+          "items": [
+            "Variable pricing — quotes change based on demand",
+            "Insurance often costs extra ($150-$300)",
+            "No real-time GPS tracking (estimated windows only)",
+            "Long booking process (request quotes, compare, negotiate)",
+            "Call center support — long hold times",
+            "Not California-focused — limited local knowledge"
+          ]
+        },
+        {
+          "type": "h2",
+          "text": "#3: uShip — Best for Budget-Bidders (with Caveats)"
+        },
+        {
+          "type": "p",
+          "text": "uShip is a marketplace where carriers bid on your shipment. It can be cheaper than traditional carriers, but the auction model has significant downsides."
+        },
+        {
+          "type": "h3",
+          "text": "Pros"
+        },
+        {
+          "type": "ul",
+          "marker": "check",
+          "items": [
+            "Potential for lower prices via bidding",
+            "Wide variety of carriers",
+            "Good for unusual shipments (boats, RVs, heavy equipment)"
+          ]
+        },
+        {
+          "type": "h3",
+          "text": "Cons"
+        },
+        {
+          "type": "ul",
+          "marker": "cross",
+          "items": [
+            "Auction model — you wait for bids, no instant pricing",
+            "Carrier quality varies widely — some are excellent, some are not",
+            "No standardized insurance — depends on individual carrier",
+            "No real-time GPS tracking on most shipments",
+            "Customer reviews often complain about no-shows and delays",
+            "Hard to predict final cost — bidding can drive price up"
+          ]
+        },
+        {
+          "type": "h2",
+          "text": "#4: AmeriFreight — Best for Discounts (with Trade-offs)"
+        },
+        {
+          "type": "h3",
+          "text": "Pros"
+        },
+        {
+          "type": "ul",
+          "marker": "check",
+          "items": [
+            "Offers military, student, and senior discounts",
+            "Nationwide coverage",
+            "Better Business Bureau accredited"
+          ]
+        },
+        {
+          "type": "h3",
+          "text": "Cons"
+        },
+        {
+          "type": "ul",
+          "marker": "cross",
+          "items": [
+            "Variable pricing — base quote often excludes fees",
+            "Insurance often costs extra",
+            "No real-time GPS tracking",
+            "Not California-focused",
+            "Quote-based — no instant pricing"
+          ]
+        },
+        {
+          "type": "h2",
+          "text": "#5: SGT Auto Transport — Decent, but Nothing Special"
+        },
+        {
+          "type": "p",
+          "text": "SGT Auto Transport is a standard national broker. They get the job done, but they don't stand out in any particular area. Similar pricing model to Montway with similar limitations for in-state California moves."
+        },
+        {
+          "type": "h2",
+          "text": "Head-to-Head Comparison"
+        },
+        {
+          "type": "p",
+          "text": "Here's how 101 Drivers compares to the national carriers across the criteria that matter most:"
+        },
+        {
+          "type": "table",
+          "head": [
+            "Feature",
+            "101 Drivers",
+            "National Carriers"
+          ],
+          "highlightCol": 1,
+          "rows": [
+            [
+              "Pricing model",
+              "Flat rate — $101 first 25mi, $1.80/mi",
+              "Variable — $300-$1500+ depending on route"
+            ],
+            [
+              "Insurance included",
+              "YES — full coverage, no extra cost",
+              "Often extra — $150-$300"
+            ],
+            [
+              "Real-time GPS tracking",
+              "YES — live map + SMS/email updates",
+              "Usually no — estimated windows only"
+            ],
+            [
+              "Photo proof of delivery",
+              "YES — documented at every step",
+              "Usually no — condition reports only"
+            ],
+            [
+              "Instant quote",
+              "YES — see price in 30 seconds",
+              "Often no — request quotes, wait for replies"
+            ],
+            [
+              "Booking time",
+              "2 minutes online",
+              "15-60 minutes (quote + negotiation)"
+            ],
+            [
+              "Same-day delivery",
+              "Available in Southern California",
+              "Rare — usually 3-7 day window"
+            ],
+            [
+              "Service area",
+              "California only (focused)",
+              "National (broader but less local)"
+            ],
+            [
+              "Customer support",
+              "Direct — call/text (424) 313-2168",
+              "Call center — long hold times"
+            ]
+          ]
+        },
+        {
+          "type": "h2",
+          "text": "How to Choose the Right Car Delivery Service"
+        },
+        {
+          "type": "p",
+          "text": "Choosing the right car delivery service comes down to your specific needs:"
+        },
+        {
+          "type": "h3",
+          "text": "Choose 101 Drivers if:"
+        },
+        {
+          "type": "ul",
+          "items": [
+            "You're shipping a vehicle within California",
+            "You want transparent, flat-rate pricing with no surprises",
+            "You want to track your vehicle in real-time",
+            "You want photo proof of pickup and delivery",
+            "You want insurance included at no extra cost",
+            "You want to book in 2 minutes, not 2 hours"
+          ]
+        },
+        {
+          "type": "h3",
+          "text": "Choose a national carrier if:"
+        },
+        {
+          "type": "ul",
+          "items": [
+            "You're shipping a vehicle across state lines",
+            "You don't mind waiting for quotes and negotiating",
+            "You don't need real-time tracking",
+            "You're OK with insurance as an add-on fee"
+          ]
+        },
+        {
+          "type": "h2",
+          "text": "What to Look for in a Car Delivery Service"
+        },
+        {
+          "type": "p",
+          "text": "Regardless of which service you choose, here are the key factors to evaluate:"
+        },
+        {
+          "type": "h3",
+          "text": "1. Pricing Transparency"
+        },
+        {
+          "type": "p",
+          "text": "The biggest complaint about car delivery services is hidden fees. Look for a service that shows you the full price upfront — including insurance, tracking, and any other fees. If a quote looks too good to be true, it probably is."
+        },
+        {
+          "type": "h3",
+          "text": "2. Insurance Coverage"
+        },
+        {
+          "type": "p",
+          "text": "Always ask what insurance is included. Standard carrier insurance covers $50,000-$100,000 of vehicle value, but some carriers charge extra for full coverage. 101 Drivers includes full insurance at no additional cost."
+        },
+        {
+          "type": "h3",
+          "text": "3. Tracking Capabilities"
+        },
+        {
+          "type": "p",
+          "text": "Real-time GPS tracking gives you peace of mind and helps you plan around the delivery. Most national carriers only provide estimated pickup and delivery windows — not real-time tracking. 101 Drivers provides live GPS on every delivery."
+        },
+        {
+          "type": "h3",
+          "text": "4. Delivery Speed"
+        },
+        {
+          "type": "p",
+          "text": "How fast do you need your vehicle delivered? 101 Drivers offers same-day delivery for most Southern California routes. National carriers typically take 3-7 days for in-state moves."
+        },
+        {
+          "type": "h3",
+          "text": "5. Customer Support"
+        },
+        {
+          "type": "p",
+          "text": "When something goes wrong, you want to talk to a real person who can help. 101 Drivers offers direct phone and text support. National carriers route you through call centers with long hold times."
+        },
+        {
+          "type": "h2",
+          "text": "Frequently Asked Questions"
+        },
+        {
+          "type": "faq",
+          "items": [
+            {
+              "q": "What is the best car delivery service in California?",
+              "a": "101 Drivers is the best car delivery service in California for 2026 because it offers transparent flat-rate pricing ($101 for the first 25 miles + $1.80/mile), real-time GPS tracking, photo proof of delivery, and full insurance coverage — all included at no extra cost. Unlike auction-based platforms, you see your price instantly and book in 2 minutes."
+            },
+            {
+              "q": "How much does car delivery cost in California?",
+              "a": "Car delivery in California costs an average of $150-$400 depending on distance, vehicle type, and service level. 101 Drivers offers flat-rate pricing at $101 for the first 25 miles plus $1.80 per additional mile, with insurance included. National carriers typically charge $300-$800 for similar distances with extra fees for insurance, tracking, and expedited service."
+            },
+            {
+              "q": "Is car shipping cheaper than driving?",
+              "a": "For short distances (under 500 miles), car shipping is often more expensive than driving yourself. However, when you factor in gas, hotels, food, wear and tear on your vehicle, time off work, and the risk of road hazards, professional car delivery can save you money and stress. For distances over 500 miles, car shipping is usually cheaper than driving."
+            },
+            {
+              "q": "How long does car delivery take in California?",
+              "a": "Most car deliveries within California are completed within 1-3 days. 101 Drivers offers same-day delivery for most Southern California routes, with cross-state deliveries (LA to San Francisco, San Diego to Sacramento) typically completed in 1-2 days. National carriers usually take 3-7 days for the same routes."
+            },
+            {
+              "q": "Is my vehicle insured during car delivery?",
+              "a": "Reputable car delivery services include insurance coverage. 101 Drivers includes full insurance at no additional cost — your vehicle is covered from pickup to drop-off. Some national carriers charge extra for insurance ($150-$300), so always ask what is included in your quote."
+            },
+            {
+              "q": "Can I track my car delivery in real-time?",
+              "a": "101 Drivers provides real-time GPS tracking on every delivery — you receive a tracking link via SMS and email and can see your vehicle on a live map. Most national carriers only provide estimated pickup and delivery windows, not real-time tracking."
+            }
+          ]
+        },
+        {
+          "type": "h2",
+          "text": "The Verdict"
+        },
+        {
+          "type": "p",
+          "text": "For California residents, **101 Drivers is the clear winner**. It's the only service that combines transparent flat-rate pricing, real-time GPS tracking, photo proof of delivery, and full insurance coverage — all included at no extra cost."
+        },
+        {
+          "type": "p",
+          "text": "National carriers like Montway, AmeriFreight, and SGT Auto Transport are fine for cross-country moves, but they fall short on the features that matter most to California residents: local knowledge, fast delivery, transparent pricing, and real-time tracking."
+        },
+        {
+          "type": "p",
+          "text": "uShip's auction model can work for unusual shipments, but the unpredictable pricing and variable carrier quality make it a poor choice for most California car deliveries."
+        },
+        {
+          "type": "p",
+          "text": "**The bottom line:** If you're shipping a vehicle in California, 101 Drivers offers the best combination of price, features, and customer experience. Get an instant quote and book in 2 minutes — no account required."
+        },
+        {
+          "type": "related",
+          "items": [
+            {
+              "to": "/",
+              "label": "Car Delivery in Los Angeles",
+              "description": "Flat-rate car delivery throughout LA County — $101 for first 25 miles."
+            },
+            {
+              "to": "/about",
+              "label": "About 101 Drivers",
+              "description": "Learn about our compliance-first, flat-rate vehicle delivery service."
+            },
+            {
+              "to": "/help-customer",
+              "label": "Customer Help & FAQs",
+              "description": "Answers to common questions about car delivery, tracking, and insurance."
+            },
+            {
+              "to": "/driver-onboarding",
+              "label": "Drive for 101 Drivers",
+              "description": "Earn money delivering vehicles in California. Weekly payouts."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "slug": "car-delivery-vs-driving-yourself",
+      "title": "Car Delivery vs. Driving It Yourself",
+      "date": "2026-08-27",
+      "kicker": "Updated August 2026",
+      "readingMinutes": 10,
+      "excerpt": "Car delivery vs. driving — cost, time, safety, and convenience compared. See when shipping your car is cheaper, safer, and faster than driving.",
+      "body": [
+        {
+          "type": "callout",
+          "label": "Quick answer:",
+          "text": "For distances under 200 miles, driving yourself is often cheaper. For distances over 500 miles, **car shipping is usually cheaper, safer, and faster** — especially when you factor in gas, hotels, food, wear and tear, and time off work."
+        },
+        {
+          "type": "h2",
+          "text": "The Real Cost of Driving Yourself"
+        },
+        {
+          "type": "p",
+          "text": "Most people underestimate the true cost of driving a long distance. It's not just gas — there are hidden costs that add up quickly:"
+        },
+        {
+          "type": "table",
+          "head": [
+            "Expense",
+            "1,000 miles",
+            "2,000 miles"
+          ],
+          "rows": [
+            [
+              "Gas (25 mpg, $3.50/gal)",
+              "$140",
+              "$280"
+            ],
+            [
+              "Hotels (2-4 nights)",
+              "$200-$400",
+              "$400-$800"
+            ],
+            [
+              "Food (2-4 days)",
+              "$100-$200",
+              "$200-$400"
+            ],
+            [
+              "Wear & tear ($0.15/mi)",
+              "$150",
+              "$300"
+            ],
+            [
+              "Time off work (2-4 days)",
+              "$200-$800",
+              "$400-$1,600"
+            ],
+            [
+              "Depreciation",
+              "$100",
+              "$200"
+            ],
+            [
+              "Total",
+              "$890-$1,790",
+              "$1,780-$3,580"
+            ]
+          ],
+          "note": "*Plus risk of accidents, fatigue, weather delays, and unexpected breakdowns."
+        },
+        {
+          "type": "h2",
+          "text": "The Cost of Shipping Your Car"
+        },
+        {
+          "type": "p",
+          "text": "With 101 Drivers flat-rate pricing:"
+        },
+        {
+          "type": "ul",
+          "items": [
+            "**1,000 miles:** $1,871 ($101 + 975 × $1.80) — insurance included",
+            "**2,000 miles:** $3,671 ($101 + 1,975 × $1.80) — insurance included"
+          ]
+        },
+        {
+          "type": "p",
+          "text": "**Compare:** Driving 1,000 miles yourself costs $890-$1,790 + risk. Shipping costs $1,871 with zero risk and zero effort. For 2,000+ miles, shipping is almost always cheaper AND you save 3-4 days of your time."
+        },
+        {
+          "type": "h2",
+          "text": "Time Comparison"
+        },
+        {
+          "type": "table",
+          "head": [
+            "Distance",
+            "Driving Time",
+            "Shipping Time"
+          ],
+          "highlightCol": 2,
+          "rows": [
+            [
+              "200 miles",
+              "4-5 hours driving",
+              "1-2 days (no effort)"
+            ],
+            [
+              "500 miles",
+              "10-12 hours (1-2 days)",
+              "2-3 days (no effort)"
+            ],
+            [
+              "1,000 miles",
+              "16-20 hours (2-3 days)",
+              "2-4 days (no effort)"
+            ],
+            [
+              "2,000 miles",
+              "32-40 hours (4-5 days)",
+              "3-5 days (no effort)"
+            ]
+          ]
+        },
+        {
+          "type": "p",
+          "text": "**Key difference:** When you drive, those hours/days are YOUR time. When you ship, your vehicle moves while you work, relax, or fly to your destination."
+        },
+        {
+          "type": "h2",
+          "text": "Safety Comparison"
+        },
+        {
+          "type": "p",
+          "text": "Long-distance driving has real risks:"
+        },
+        {
+          "type": "ul",
+          "marker": "cross",
+          "items": [
+            "Fatigue-related accidents (especially after 8+ hours)",
+            "Road hazards (debris, potholes, construction)",
+            "Weather risks (rain, snow, ice)",
+            "Vehicle breakdown far from home",
+            "Theft or vandalism at hotels",
+            "Adds 1,000-2,000 miles to your vehicle"
+          ]
+        },
+        {
+          "type": "p",
+          "text": "**Car shipping with 101 Drivers:**"
+        },
+        {
+          "type": "ul",
+          "marker": "check",
+          "items": [
+            "Vetted professional drivers",
+            "Full insurance from pickup to drop-off",
+            "Real-time GPS tracking",
+            "Photo proof of condition",
+            "No miles added to your vehicle",
+            "No fatigue or safety risk to you"
+          ]
+        },
+        {
+          "type": "h2",
+          "text": "When to Drive vs. Ship"
+        },
+        {
+          "type": "h3",
+          "text": "Drive if:"
+        },
+        {
+          "type": "ul",
+          "items": [
+            "Distance is under 200 miles",
+            "You enjoy road trips and have time",
+            "You want to bring belongings in the car",
+            "You need the car the same day"
+          ]
+        },
+        {
+          "type": "h3",
+          "text": "Ship if:"
+        },
+        {
+          "type": "ul",
+          "items": [
+            "Distance is over 500 miles",
+            "You value your time (working, family, etc.)",
+            "You're buying a car online and need it delivered",
+            "You're moving cross-country",
+            "You have a luxury, classic, or valuable vehicle",
+            "You don't want to add miles to your car",
+            "You want to fly to your destination in hours, not drive for days"
+          ]
+        },
+        {
+          "type": "h2",
+          "text": "Frequently Asked Questions"
+        },
+        {
+          "type": "faq",
+          "items": [
+            {
+              "q": "Is it cheaper to ship a car or drive it yourself?",
+              "a": "For short distances under 200 miles, driving yourself is often cheaper — but factor in gas ($30-$60), wear and tear on your vehicle, time off work, and the risk of road hazards. For distances over 500 miles, professional car shipping is usually cheaper. When you include all costs (gas, hotels, food, time, depreciation), driving a car 1,000 miles costs roughly $700-$1,200 — often more than shipping."
+            },
+            {
+              "q": "How much does it cost to drive a car 1,000 miles?",
+              "a": "Driving a car 1,000 miles costs approximately: Gas ($150-$250 at 25 mpg + $3.50/gal), Hotels ($200-$400 for 2 nights), Food ($100-$200), Wear and tear ($100-$200 at $0.10-$0.20/mile), Time off work ($200-$800). Total: $700-$1,850. Compare to 101 Drivers flat-rate of approximately $1,871 ($101 + 975 × $1.80) for the same distance, with insurance included."
+            },
+            {
+              "q": "How long does it take to drive 1,000 miles vs. ship a car?",
+              "a": "Driving 1,000 miles takes 16-20 hours of driving — typically 2-3 days with stops for sleep, food, and rest. Shipping a car with 101 Drivers for the same distance typically takes 2-4 days, but you don't have to be present — your vehicle moves while you work or relax."
+            },
+            {
+              "q": "Is car shipping safer than driving long distance?",
+              "a": "Yes — professional car shipping is generally safer than driving long distances. Long-distance driving has risks: accidents, fatigue, road hazards, weather, and vehicle breakdown. 101 Drivers uses vetted, professional drivers who transport vehicles for a living. Plus, your vehicle is fully insured from pickup to drop-off."
+            },
+            {
+              "q": "Should I drive or ship my car when moving cross-country?",
+              "a": "For cross-country moves (2,000+ miles), shipping is almost always better. Driving 2,000 miles takes 4-5 days, costs $1,500-$2,500 in gas/hotels/food/wear, and adds 2,000 miles to your vehicle. Shipping with 101 Drivers costs roughly $3,700 with insurance included, and you can fly to your destination in 5 hours."
+            }
+          ]
+        },
+        {
+          "type": "h2",
+          "text": "The Bottom Line"
+        },
+        {
+          "type": "p",
+          "text": "For most people shipping distances over 500 miles, **car shipping with 101 Drivers is cheaper, safer, and faster** than driving yourself. You save time, avoid risk, and your vehicle is fully insured from pickup to drop-off."
+        },
+        {
+          "type": "p",
+          "text": "Get an instant flat-rate quote in 30 seconds — see exactly what your delivery will cost before you decide."
+        }
+      ]
+    },
+    {
+      "slug": "dealership-vehicle-transport-guide",
+      "title": "Dealership Vehicle Transport Guide",
+      "date": "2026-08-27",
+      "kicker": "For dealerships",
+      "readingMinutes": 12,
+      "excerpt": "Everything dealerships need to know about vehicle transport in California — bulk delivery, auctions, trade-ins, and customer home delivery.",
+      "body": [
+        {
+          "type": "callout",
+          "label": "For dealership owners and managers:",
+          "text": "101 Drivers offers California dealerships a modern, transparent alternative to traditional auto transport brokers. Get **flat-rate pricing, real-time GPS tracking, a dealer dashboard, and 20-30% savings** vs. national carriers — with insurance included on every delivery."
+        },
+        {
+          "type": "h2",
+          "text": "Why Dealerships Choose 101 Drivers"
+        },
+        {
+          "type": "p",
+          "text": "Running a dealership means moving vehicles constantly — from auctions, trade-ins, customer home deliveries, dealer-to-dealer transfers, and inventory repositioning. Traditional auto transport brokers make this painful with variable pricing, hidden fees, and no real-time visibility."
+        },
+        {
+          "type": "p",
+          "text": "101 Drivers is built for dealerships. Here's what makes us different:"
+        },
+        {
+          "type": "ul",
+          "marker": "check",
+          "items": [
+            "**Flat-rate pricing** — $101 first 25 miles + $1.80/mile. Same rate regardless of vehicle type.",
+            "**Real-time GPS tracking** — track all your vehicles on one dashboard.",
+            "**Photo proof of condition** — protect yourself from damage claims.",
+            "**Insurance included** — no extra fees. Full coverage from pickup to drop-off.",
+            "**Bulk delivery discounts** — save 10-15% on high-volume accounts.",
+            "**Dealer dashboard** — manage all your transports, drivers, and deliveries in one place.",
+            "**Priority booking** — dealers get first access to available drivers.",
+            "**No SUV/truck surcharge** — same rate for sedans, SUVs, trucks, vans."
+          ]
+        },
+        {
+          "type": "h2",
+          "text": "5 Common Dealership Vehicle Transport Scenarios"
+        },
+        {
+          "type": "h3",
+          "text": "1. Auction Purchases"
+        },
+        {
+          "type": "p",
+          "text": "Buying vehicles at auction? 101 Drivers picks up from major California auction houses (Manheim, Adesa, Copart, IAA) and delivers to your dealership. Get an instant quote, book in 2 minutes, and track your purchase in real-time. No more waiting for broker callbacks."
+        },
+        {
+          "type": "h3",
+          "text": "2. Trade-In Vehicle Transport"
+        },
+        {
+          "type": "p",
+          "text": "When a customer trades in a vehicle, you often need to move it between lots or to a wholesale auction. 101 Drivers handles trade-in transport with photo documentation of condition — protecting you from disputes about pre-existing damage."
+        },
+        {
+          "type": "h3",
+          "text": "3. Customer Home Delivery"
+        },
+        {
+          "type": "p",
+          "text": "Modern customers expect home delivery. With 101 Drivers, you can offer free or paid home delivery to your customers — we deliver their new vehicle to their driveway with photo proof and GPS tracking. Your customer gets a tracking link and you get delivery confirmation."
+        },
+        {
+          "type": "h3",
+          "text": "4. Dealer-to-Dealer Transfers"
+        },
+        {
+          "type": "p",
+          "text": "Need to move inventory between your dealership locations or trade vehicles with another dealer? 101 Drivers handles dealer-to-dealer transfers across California with the same flat-rate pricing and real-time tracking."
+        },
+        {
+          "type": "h3",
+          "text": "5. Inventory Repositioning"
+        },
+        {
+          "type": "p",
+          "text": "Sometimes you need to move vehicles between lots to balance inventory. 101 Drivers makes this fast and affordable — book a single vehicle or multiple vehicles in one batch through your dealer dashboard."
+        },
+        {
+          "type": "h2",
+          "text": "How 101 Drivers Compares to National Brokers"
+        },
+        {
+          "type": "table",
+          "head": [
+            "Feature",
+            "101 Drivers",
+            "National Brokers"
+          ],
+          "highlightCol": 1,
+          "rows": [
+            [
+              "Pricing model",
+              "Flat rate",
+              "Variable"
+            ],
+            [
+              "SUV/truck surcharge",
+              "No",
+              "Yes (10-20%)"
+            ],
+            [
+              "Insurance included",
+              "Yes",
+              "Often extra ($150-$300)"
+            ],
+            [
+              "Real-time GPS tracking",
+              "Yes — all vehicles",
+              "Usually no"
+            ],
+            [
+              "Photo proof of condition",
+              "Yes",
+              "Sometimes"
+            ],
+            [
+              "Bulk delivery discount",
+              "10-15% off",
+              "Varies"
+            ],
+            [
+              "Dealer dashboard",
+              "Yes",
+              "Some have it"
+            ],
+            [
+              "Booking time",
+              "2 minutes",
+              "15-60 minutes"
+            ],
+            [
+              "California knowledge",
+              "Local expert",
+              "National scope"
+            ]
+          ]
+        },
+        {
+          "type": "h2",
+          "text": "How to Set Up a Dealership Account"
+        },
+        {
+          "type": "p",
+          "text": "Setting up a dealership account with 101 Drivers is free and takes 5 minutes:"
+        },
+        {
+          "type": "ol",
+          "items": [
+            "Go to [101drivers.com/auth/dealer-signup](/auth/dealer-signup)",
+            "Enter your dealership name, address, and contact info",
+            "Verify your email address",
+            "Submit your dealership license (DMV dealer license number)",
+            "Get approved (usually within 24 hours)",
+            "Start booking deliveries through your dealer dashboard"
+          ]
+        },
+        {
+          "type": "p",
+          "text": "Once approved, you get immediate access to:"
+        },
+        {
+          "type": "ul",
+          "items": [
+            "Bulk delivery pricing (10-15% off standard rates)",
+            "Real-time dealer dashboard",
+            "Priority booking — your deliveries get first access to drivers",
+            "Direct customer support line",
+            "Monthly billing (instead of per-delivery payment)",
+            "Delivery history and reporting"
+          ]
+        },
+        {
+          "type": "h2",
+          "text": "Dealership Pricing Example"
+        },
+        {
+          "type": "p",
+          "text": "Let's say your dealership needs to move 10 vehicles from an auction in LA to your lot in Orange County (about 50 miles):"
+        },
+        {
+          "type": "pricing",
+          "big": "$1,395",
+          "label": "10 vehicles, ~50 miles each (bulk)",
+          "rows": [
+            {
+              "k": "Per vehicle (50 miles)",
+              "v": "$155"
+            },
+            {
+              "k": "10 vehicles × $155",
+              "v": "$1,550"
+            },
+            {
+              "k": "Bulk discount (10%)",
+              "v": "-$155",
+              "included": true
+            },
+            {
+              "k": "Total",
+              "v": "$1,395"
+            }
+          ]
+        },
+        {
+          "type": "p",
+          "text": "**Compare to national carriers:** The same 10-vehicle delivery would cost $2,500-$4,000 with national brokers, plus $1,500-$3,000 in insurance fees. **You save $2,600-$4,600 with 101 Drivers.**"
+        },
+        {
+          "type": "h2",
+          "text": "Frequently Asked Questions"
+        },
+        {
+          "type": "faq",
+          "items": [
+            {
+              "q": "How much does dealership vehicle transport cost in California?",
+              "a": "Dealership vehicle transport costs in California depend on volume and distance. With 101 Drivers, single deliveries start at $101 for the first 25 miles + $1.80/mile. Dealerships that sign up for an account get bulk delivery discounts (10-15% off), a dashboard to manage all transports, and streamlined booking. Most dealerships save 20-30% vs. national carriers."
+            },
+            {
+              "q": "How do I set up a dealership account with 101 Drivers?",
+              "a": "Setting up a dealership account is free and takes 5 minutes. Go to 101drivers.com/auth/dealer-signup, enter your dealership information, and verify your email. Once approved, you get a dealer dashboard, bulk delivery pricing, and priority booking."
+            },
+            {
+              "q": "Can 101 Drivers handle bulk vehicle transport for dealerships?",
+              "a": "Yes. 101 Drivers works with automotive dealerships of all sizes — from single-location used car lots to multi-location new car franchises. We handle bulk deliveries, auction purchases, trade-ins, customer home deliveries, and dealer-to-dealer transfers. Contact us for custom pricing on high-volume accounts."
+            },
+            {
+              "q": "Does 101 Drivers provide proof of vehicle condition for dealership inventory?",
+              "a": "Yes. 101 Drivers documents your vehicle's condition with photos at pickup, transit stops, and delivery. This protects your dealership from damage claims and provides documentation for your records. Every delivery includes a condition report and photo proof."
+            },
+            {
+              "q": "Can I track multiple dealership vehicles in transit?",
+              "a": "Yes. Dealership accounts include a dashboard that shows all your in-transit vehicles on a single map. You can track every delivery in real-time, see ETAs, and receive delivery confirmations. No more calling dispatchers for status updates."
+            },
+            {
+              "q": "What types of vehicles can 101 Drivers transport for dealerships?",
+              "a": "101 Drivers transports all types of vehicles including sedans, SUVs, trucks, vans, luxury vehicles, EVs, and classics. We do not charge SUV/truck surcharges like many national carriers — the same flat rate applies regardless of vehicle type."
+            },
+            {
+              "q": "Does 101 Drivers offer home delivery for dealership customers?",
+              "a": "Yes. Many dealerships use 101 Drivers to deliver vehicles directly to their customers' homes. When a customer buys a car, you book delivery through your dealer dashboard, and we deliver the vehicle to their address with photo proof and GPS tracking."
+            }
+          ]
+        },
+        {
+          "type": "h2",
+          "text": "Get Started with 101 Drivers for Your Dealership"
+        },
+        {
+          "type": "p",
+          "text": "If you're a California dealership looking for transparent, affordable vehicle transport with real-time tracking, 101 Drivers is your solution. Set up your free dealer account in 5 minutes and start saving 20-30% on every delivery."
+        }
+      ]
+    },
+    {
+      "slug": "how-much-does-vehicle-transport-cost-california",
+      "title": "How Much Does Vehicle Transport Cost in California?",
+      "date": "2026-08-27",
+      "kicker": "Updated August 2026",
+      "readingMinutes": 10,
+      "excerpt": "A complete 2026 pricing guide — average costs, factors that affect price, and how to save money on car delivery.",
+      "body": [
+        {
+          "type": "callout",
+          "label": "Quick answer:",
+          "text": "Vehicle transport in California costs an average of **$150-$400 for in-state deliveries** and **$500-$1,500 for cross-country**. **101 Drivers** offers flat-rate pricing at **$101 for the first 25 miles + $1.80/mile** after that, with insurance included at no extra cost."
+        },
+        {
+          "type": "h2",
+          "text": "Average Vehicle Transport Costs in California (2026)"
+        },
+        {
+          "type": "p",
+          "text": "Here's what you can expect to pay for vehicle transport in California in 2026:"
+        },
+        {
+          "type": "table",
+          "head": [
+            "Distance",
+            "National Carriers (Avg)",
+            "101 Drivers"
+          ],
+          "highlightCol": 2,
+          "rows": [
+            [
+              "Under 25 miles",
+              "$200-$400",
+              "$101 (flat rate)"
+            ],
+            [
+              "25-100 miles",
+              "$250-$500",
+              "$170-$236"
+            ],
+            [
+              "100-300 miles",
+              "$400-$700",
+              "$236-$596"
+            ],
+            [
+              "300-500 miles",
+              "$600-$900",
+              "$596-$956"
+            ],
+            [
+              "500+ miles (cross-state)",
+              "$800-$1,500",
+              "$956+"
+            ]
+          ],
+          "note": "*National carrier prices typically exclude insurance ($150-$300 extra) and tracking fees. 101 Drivers prices include full insurance and GPS tracking."
+        },
+        {
+          "type": "h2",
+          "text": "5 Factors That Affect Vehicle Transport Cost"
+        },
+        {
+          "type": "h3",
+          "text": "1. Distance"
+        },
+        {
+          "type": "p",
+          "text": "Distance is the biggest cost factor. Longer distances cost more in total, but the per-mile rate decreases. 101 Drivers charges $101 for the first 25 miles ($4.04/mile effective), then $1.80/mile for additional miles — so longer trips have a lower per-mile cost."
+        },
+        {
+          "type": "h3",
+          "text": "2. Vehicle Type"
+        },
+        {
+          "type": "p",
+          "text": "Larger vehicles (SUVs, trucks, vans) cost 10-20% more because they take up more space on transport trucks. Standard sedans are the cheapest to ship. 101 Drivers charges the same flat rate regardless of vehicle type — no SUV surcharge."
+        },
+        {
+          "type": "h3",
+          "text": "3. Service Type: Open vs. Enclosed"
+        },
+        {
+          "type": "p",
+          "text": "Open transport is the standard and cheapest option — your vehicle is on an open trailer. Enclosed transport protects your vehicle from weather and road debris, but costs 30-50% more. Enclosed is recommended for luxury, classic, or exotic cars."
+        },
+        {
+          "type": "h3",
+          "text": "4. Season and Timing"
+        },
+        {
+          "type": "p",
+          "text": "Auto transport prices fluctuate by season. Summer (June-August) and end-of-month are peak times with 15-25% higher prices. Winter (December-February) is cheaper. Booking 1-2 weeks in advance also gets better rates than last-minute bookings."
+        },
+        {
+          "type": "h3",
+          "text": "5. Insurance Coverage"
+        },
+        {
+          "type": "p",
+          "text": "Insurance is critical — but many carriers charge extra for it. Standard carrier insurance covers $50,000-$100,000 of vehicle value. Full coverage often costs $150-$300 extra. **101 Drivers includes full insurance at no additional cost** on every delivery."
+        },
+        {
+          "type": "h2",
+          "text": "101 Drivers Pricing Breakdown"
+        },
+        {
+          "type": "p",
+          "text": "101 Drivers uses a simple, transparent flat-rate pricing model:"
+        },
+        {
+          "type": "pricing",
+          "big": "$101",
+          "label": "First 25 miles (flat rate)",
+          "rows": [
+            {
+              "k": "Each additional mile",
+              "v": "$1.80"
+            },
+            {
+              "k": "Insurance",
+              "v": "INCLUDED",
+              "included": true
+            },
+            {
+              "k": "GPS tracking",
+              "v": "INCLUDED",
+              "included": true
+            },
+            {
+              "k": "Photo proof",
+              "v": "INCLUDED",
+              "included": true
+            }
+          ]
+        },
+        {
+          "type": "h3",
+          "text": "Example Pricing"
+        },
+        {
+          "type": "ul",
+          "items": [
+            "**LA to Santa Monica (15 miles):** $101 (flat rate)",
+            "**LA to Anaheim (30 miles):** $128 ($101 + 5 miles × $1.80)",
+            "**LA to San Diego (130 miles):** $308 ($101 + 105 × $1.80)",
+            "**LA to San Francisco (380 miles):** $656 ($101 + 355 × $1.80)",
+            "**LA to Sacramento (400 miles):** $692 ($101 + 375 × $1.80)"
+          ]
+        },
+        {
+          "type": "h2",
+          "text": "Hidden Fees to Watch For"
+        },
+        {
+          "type": "p",
+          "text": "Hidden fees are the #1 complaint in the auto transport industry. Common fees to ask about:"
+        },
+        {
+          "type": "ul",
+          "items": [
+            "**Insurance surcharge:** $150-$300 (often not in base quote)",
+            "**Fuel surcharge:** $50-$150 (varies with gas prices)",
+            "**Residential pickup fee:** $75-$150 (avoid terminal-to-terminal)",
+            "**Expedited service fee:** $200-$500 (for guaranteed dates)",
+            "**Cancellation fee:** $100-$300 (if you cancel after booking)",
+            "**Vehicle size surcharge:** 10-20% for SUVs and trucks"
+          ]
+        },
+        {
+          "type": "p",
+          "text": "**101 Drivers charges none of these fees** — the price you see is the price you pay."
+        },
+        {
+          "type": "h2",
+          "text": "How to Save Money on Car Delivery"
+        },
+        {
+          "type": "ol",
+          "items": [
+            "**Book early** — last-minute bookings cost 20-30% more",
+            "**Use open transport** — saves 30-50% vs. enclosed",
+            "**Choose flat-rate pricing** — avoid hidden fees with 101 Drivers",
+            "**Avoid peak season** — December-February is cheapest",
+            "**Bundle multiple vehicles** — dealerships save 10-15%",
+            "**Be flexible with dates** — mid-week pickups cost less"
+          ]
+        },
+        {
+          "type": "h2",
+          "text": "Frequently Asked Questions"
+        },
+        {
+          "type": "faq",
+          "items": [
+            {
+              "q": "How much does vehicle transport cost in California?",
+              "a": "The average cost of vehicle transport in California is $150-$400 for in-state deliveries and $500-$1,500 for cross-country. 101 Drivers offers flat-rate pricing at $101 for the first 25 miles plus $1.80 per additional mile, with insurance included. National carriers typically charge $300-$800 for in-state deliveries, with extra fees for insurance, tracking, and expedited service."
+            },
+            {
+              "q": "What factors affect car delivery cost in California?",
+              "a": "The five main factors are: (1) Distance — longer distances cost more but the per-mile rate decreases, (2) Vehicle type — larger vehicles (SUVs, trucks) cost 10-20% more, (3) Service type — enclosed transport costs 30-50% more than open, (4) Season — summer and end-of-month are pricier, (5) Insurance — some carriers charge $150-$300 extra. 101 Drivers includes insurance at no extra cost."
+            },
+            {
+              "q": "Is car shipping cheaper than driving in California?",
+              "a": "For short distances under 200 miles, driving yourself is often cheaper — but factor in gas ($30-$60), wear and tear, time off work, and stress. For distances over 500 miles, professional car shipping is usually cheaper and safer. 101 Drivers' $101 flat rate for the first 25 miles is competitive with driving costs when you include all factors."
+            },
+            {
+              "q": "How can I save money on car delivery in California?",
+              "a": "To save money: (1) Book early — last-minute bookings cost 20-30% more, (2) Use open transport instead of enclosed — saves 30-50%, (3) Choose a flat-rate service like 101 Drivers to avoid hidden fees, (4) Bundle multiple vehicles if you're a dealership, (5) Avoid peak season (June-August) when prices surge 15-25%."
+            },
+            {
+              "q": "Does 101 Drivers charge extra for insurance?",
+              "a": "No. 101 Drivers includes full insurance coverage at no additional cost on every delivery. Your vehicle is covered from pickup to drop-off. Many national carriers charge $150-$300 extra for insurance — always ask what is included in your quote."
+            },
+            {
+              "q": "How much does it cost to ship a car from Los Angeles to San Francisco?",
+              "a": "Shipping a car from Los Angeles to San Francisco (approximately 380 miles) typically costs $400-$800 with national carriers. With 101 Drivers flat-rate pricing, the cost is approximately $656 ($101 for first 25 miles + $555 for 355 additional miles at $1.80/mile), with insurance included."
+            },
+            {
+              "q": "Are there hidden fees with car delivery services?",
+              "a": "Yes — hidden fees are the #1 complaint in the auto transport industry. Common hidden fees include insurance surcharges ($150-$300), fuel surcharges, residential pickup fees, expedited service fees, and cancellation fees. 101 Drivers offers transparent flat-rate pricing — the price you see is the price you pay, with no hidden fees."
+            }
+          ]
+        },
+        {
+          "type": "h2",
+          "text": "The Bottom Line"
+        },
+        {
+          "type": "p",
+          "text": "Vehicle transport in California costs an average of $150-$400 for in-state deliveries, but prices vary widely based on the factors above. The most important thing is to choose a service with transparent pricing — no hidden fees."
+        },
+        {
+          "type": "p",
+          "text": "**101 Drivers offers flat-rate pricing at $101 for the first 25 miles + $1.80/mile, with insurance, GPS tracking, and photo proof included.** No hidden fees, no surprises. Get an instant quote in 30 seconds and book in 2 minutes."
+        }
+      ]
+    },
+    {
+      "slug": "transport-car-los-angeles-to-san-diego",
+      "title": "How to Transport a Car from Los Angeles to San Diego",
+      "date": "2026-08-27",
+      "kicker": "Route guide",
+      "readingMinutes": 8,
+      "excerpt": "The complete 2026 guide — cost, timing, options, and tips for the LA → SD route.",
+      "body": [
+        {
+          "type": "callout",
+          "label": "Quick answer:",
+          "text": "Transporting a car from Los Angeles to San Diego (about 130 miles) costs **$308 with 101 Drivers** flat-rate (insurance + GPS included). The drive takes 2-3 hours; shipping takes 4-6 hours total with no effort on your part."
+        },
+        {
+          "type": "h2",
+          "text": "Route Overview: LA to San Diego"
+        },
+        {
+          "type": "p",
+          "text": "The Los Angeles to San Diego route is one of the most popular car transport routes in California. The drive is approximately 130 miles via I-5 South or I-405 S to I-5 S, and typically takes 2-3 hours depending on traffic."
+        },
+        {
+          "type": "ul",
+          "items": [
+            "**Distance:** ~130 miles",
+            "**Drive time:** 2-3 hours (without traffic)",
+            "**Major routes:** I-5 S, I-405 S to I-5 S",
+            "**101 Drivers cost:** $308 (flat rate, insurance included)",
+            "**101 Drivers time:** 4-6 hours total (pickup + transit + drop-off)"
+          ]
+        },
+        {
+          "type": "h2",
+          "text": "Cost Comparison: LA to San Diego Car Transport"
+        },
+        {
+          "type": "table",
+          "head": [
+            "Service",
+            "Cost",
+            "Time",
+            "Insurance"
+          ],
+          "highlightRow": 0,
+          "rows": [
+            [
+              "101 Drivers",
+              "$308",
+              "4-6 hours",
+              "INCLUDED"
+            ],
+            [
+              "National carriers",
+              "$400-$700",
+              "1-3 days",
+              "+$150-$300"
+            ],
+            [
+              "uShip (auction)",
+              "$200-$500",
+              "Varies",
+              "Varies"
+            ],
+            [
+              "Drive yourself",
+              "$40-$60 (gas)",
+              "2-3 hours",
+              "Your policy"
+            ]
+          ]
+        },
+        {
+          "type": "h2",
+          "text": "How 101 Drivers Pricing Works for LA → San Diego"
+        },
+        {
+          "type": "pricing",
+          "big": "$308",
+          "label": "Total cost (insurance + tracking included)",
+          "rows": [
+            {
+              "k": "First 25 miles (flat rate)",
+              "v": "$101"
+            },
+            {
+              "k": "Next 105 miles × $1.80/mile",
+              "v": "$189"
+            },
+            {
+              "k": "Insurance (full coverage)",
+              "v": "INCLUDED",
+              "included": true
+            },
+            {
+              "k": "GPS tracking",
+              "v": "INCLUDED",
+              "included": true
+            },
+            {
+              "k": "Photo proof of delivery",
+              "v": "INCLUDED",
+              "included": true
+            }
+          ]
+        },
+        {
+          "type": "h2",
+          "text": "Step-by-Step: How to Ship Your Car from LA to San Diego"
+        },
+        {
+          "type": "h3",
+          "text": "Step 1: Get an Instant Quote"
+        },
+        {
+          "type": "p",
+          "text": "Go to [101drivers.com](/) and enter your LA pickup address and San Diego drop-off address. You'll see a flat-rate quote of $308 in 30 seconds — no waiting, no quotes needed."
+        },
+        {
+          "type": "h3",
+          "text": "Step 2: Book Online"
+        },
+        {
+          "type": "p",
+          "text": "Choose your pickup time and date. Book in 2 minutes — no account required for individuals. Dealerships can create a free account for streamlined booking."
+        },
+        {
+          "type": "h3",
+          "text": "Step 3: Meet Your Driver in LA"
+        },
+        {
+          "type": "p",
+          "text": "Your vetted driver arrives at your LA location, photographs your vehicle's condition, and begins the journey. You receive a tracking link via SMS and email."
+        },
+        {
+          "type": "h3",
+          "text": "Step 4: Track in Real-Time"
+        },
+        {
+          "type": "p",
+          "text": "Watch your vehicle move from LA to San Diego on a live map. See driver location, ETA, and route. Get notified when your vehicle is picked up and when it's approaching the destination."
+        },
+        {
+          "type": "h3",
+          "text": "Step 5: Receive in San Diego"
+        },
+        {
+          "type": "p",
+          "text": "Your driver arrives at your San Diego address, photographs the vehicle condition at delivery, and you confirm receipt. Payment is processed only after successful delivery."
+        },
+        {
+          "type": "h2",
+          "text": "Tips for LA to San Diego Car Transport"
+        },
+        {
+          "type": "ul",
+          "items": [
+            "**Book in advance:** Book 1-2 days ahead for best availability, though same-day is often available.",
+            "**Avoid rush hour:** LA traffic is worst 7-10 AM and 4-7 PM. Mid-morning or early afternoon pickups save time.",
+            "**Take photos:** Take your own photos of your vehicle before pickup for your records.",
+            "**Remove valuables:** Remove personal items from the vehicle before transport.",
+            "**Check fuel level:** Keep fuel between 1/4 and 1/2 tank — enough for loading/unloading.",
+            "**Disable alarms:** Disable car alarms before pickup to avoid issues during transport."
+          ]
+        },
+        {
+          "type": "h2",
+          "text": "San Diego Service Areas"
+        },
+        {
+          "type": "p",
+          "text": "101 Drivers delivers to all of San Diego County, including:"
+        },
+        {
+          "type": "chips",
+          "items": [
+            "Downtown San Diego",
+            "La Jolla",
+            "Pacific Beach",
+            "Mission Valley",
+            "Chula Vista",
+            "Carlsbad",
+            "Escondido",
+            "Oceanside",
+            "El Cajon",
+            "San Marcos",
+            "Vista",
+            "Encinitas",
+            "National City",
+            "Imperial Beach",
+            "Coronado",
+            "Spring Valley",
+            "Santee",
+            "Lemon Grove"
+          ]
+        },
+        {
+          "type": "h2",
+          "text": "Frequently Asked Questions"
+        },
+        {
+          "type": "faq",
+          "items": [
+            {
+              "q": "How much does it cost to ship a car from Los Angeles to San Diego?",
+              "a": "Shipping a car from Los Angeles to San Diego (approximately 130 miles) costs $308 with 101 Drivers flat-rate pricing ($101 for first 25 miles + $1.80/mile for 105 additional miles). Insurance, GPS tracking, and photo proof are included. National carriers typically charge $400-$700 for the same route."
+            },
+            {
+              "q": "How long does it take to transport a car from LA to San Diego?",
+              "a": "101 Drivers typically completes LA to San Diego deliveries within 4-6 hours, including pickup and drop-off. The drive itself takes about 2-3 hours depending on traffic. National carriers often take 1-3 days for the same route."
+            },
+            {
+              "q": "What is the cheapest way to ship a car from Los Angeles to San Diego?",
+              "a": "The cheapest way to ship a car from LA to San Diego is using 101 Drivers flat-rate service at $308, which includes insurance and tracking. Avoid auction-based platforms and national carriers with hidden fees. Driving yourself costs about $40-$60 in gas + your time, but adds 130 miles to your vehicle."
+            },
+            {
+              "q": "Can I track my car during transport from LA to San Diego?",
+              "a": "Yes. 101 Drivers provides real-time GPS tracking on every LA to San Diego delivery. You receive a tracking link via SMS and email and can see your vehicle on a live map, see the driver's location, ETA, and receive photo proof of pickup and delivery."
+            },
+            {
+              "q": "Is my vehicle insured during transport from LA to San Diego?",
+              "a": "Yes. 101 Drivers includes full insurance coverage at no additional cost on every delivery, including LA to San Diego. Your vehicle is covered from pickup to drop-off. Many national carriers charge $150-$300 extra for insurance."
+            },
+            {
+              "q": "What areas in San Diego do you deliver to?",
+              "a": "101 Drivers delivers to all of San Diego County including Downtown San Diego, La Jolla, Pacific Beach, Mission Valley, Chula Vista, Carlsbad, Escondido, Oceanside, El Cajon, San Marcos, Vista, Encinitas, National City, Imperial Beach, and all other San Diego neighborhoods."
+            },
+            {
+              "q": "Can I ship a car from LA to San Diego same-day?",
+              "a": "Yes. 101 Drivers offers same-day delivery for most LA to San Diego routes. Book before 11 AM for same-day pickup. Most deliveries are completed within 4-6 hours from booking."
+            }
+          ]
+        },
+        {
+          "type": "h2",
+          "text": "The Bottom Line"
+        },
+        {
+          "type": "p",
+          "text": "Shipping a car from Los Angeles to San Diego with 101 Drivers costs **$308 flat-rate**, includes insurance + GPS tracking, and takes 4-6 hours total. It's cheaper, safer, and faster than driving yourself or using national carriers with hidden fees."
+        }
+      ]
+    },
+    {
+      "slug": "key-handover-checklist",
+      "title": "5 things to check before handing over your keys",
+      "date": "2026-08-14",
+      "excerpt": "A five-point pre-pickup checklist: personal belongings, registration and insurance documents, fuel and odometer notes, a working key or fob, and who holds the delivery PIN.",
+      "image": "/assets/angle-3-passenger-side.jpeg",
+      "imageAlt": "Vehicle interior check — passenger-side inspection angle",
+      "body": [
+        {
+          "type": "p",
+          "text": "First: remove personal belongings from the cabin and trunk. Drivers photograph the interior state at pickup, but loose items cannot be insured."
+        },
+        {
+          "type": "p",
+          "text": "Second: have the registration and insurance documents accessible. Third: note your fuel and odometer readings — the driver records them too, and matching records make any later dispute trivial."
+        },
+        {
+          "type": "p",
+          "text": "Fourth: ensure there is a working key or fob for the car — rekeying delays are the most common cause of same-day cancellations. Fifth: if someone else is at the pickup location, share the delivery PIN with them in advance so the driver can verify authorization."
+        }
+      ]
+    },
+    {
+      "slug": "pickup-to-dropoff",
+      "title": "What happens between pickup and drop-off",
+      "date": "2026-07-09",
+      "excerpt": "Live tracking starts the moment the driver verifies the VIN. What gets GPS-stamped between pickup and drop-off, and when the full inspection report lands in your inbox.",
+      "image": "/assets/angle-6-driver-side.jpeg",
+      "imageAlt": "Vehicle en route — driver-side inspection angle",
+      "body": [
+        {
+          "type": "p",
+          "text": "Once the driver enters the last four digits of the VIN, live tracking starts. Every material event — inspection photos, route progress, arrival — is stamped with GPS coordinates and time."
+        },
+        {
+          "type": "p",
+          "text": "You can follow the delivery from the public tracking link or your dashboard. If a delivery is ever late, the tracking page is the first place the new ETA appears."
+        },
+        {
+          "type": "p",
+          "text": "At drop-off the driver repeats the inspection: photos of the car, final odometer reading, and keys handed to the authorized person. You receive the full report by email within minutes."
+        }
+      ]
+    }
+  ],
+  "news": [
+    {
+      "slug": "same-day-delivery-los-angeles",
+      "title": "Same-day delivery windows now bookable across Greater Los Angeles",
+      "date": "2026-09-18",
+      "tag": "Service Update",
+      "excerpt": "Same-day pickup windows can now be requested directly from the quote flow when a qualified driver is nearby — the earliest realistic window is always shown before you confirm.",
+      "body": [
+        "Customers can now request same-day pickup windows directly from the quote flow. When a qualified driver is nearby, the request is offered instantly instead of waiting for the next-day dispatch cycle.",
+        "Same-day availability depends on driver supply in your service district at the time of booking. The quote screen always shows the earliest realistic pickup window before you confirm."
+      ]
+    },
+    {
+      "slug": "richer-proof-of-delivery-reports",
+      "title": "Proof-of-delivery reports get richer photos and clearer timelines",
+      "date": "2026-08-30",
+      "tag": "Product",
+      "excerpt": "Every GPS-stamped photo — pickup inspection, odometer, VIN, and drop-off — now lives in one scannable timeline. Same sections, better ordering, no change to disputes or claims.",
+      "body": [
+        "Delivery reports now group every GPS-stamped photo — pickup inspection, odometer, VIN, and drop-off — into a single timeline that is easier to scan and share with your team.",
+        "Dealers reviewing multiple deliveries per day will find the report layout familiar: same sections, better ordering, no change to how disputes or claims are filed."
+      ]
+    },
+    {
+      "slug": "in-app-driver-onboarding",
+      "title": "Driver onboarding is now fully in-app, start to finish",
+      "date": "2026-07-22",
+      "tag": "Company",
+      "excerpt": "New drivers complete the entire onboarding flow — documents, vehicle details, and verification — without emailing anything to support, with status updates at every step.",
+      "body": [
+        "New drivers can complete the entire onboarding flow — documents, vehicle details, and verification — without emailing anything to support. Status updates arrive by email at every step.",
+        "Existing drivers are not affected. If you started onboarding before this change, simply continue where you left off; the app will carry your progress over."
+      ]
+    }
+  ],
+  "careers": [
+    {
+      "slug": "delivery-driver-contractor",
+      "title": "Delivery Driver (Independent Contractor)",
+      "location": "Greater Los Angeles, CA",
+      "type": "Contractor",
+      "employmentType": "CONTRACTOR",
+      "excerpt": "Drive different cars across the LA area. Pick your own jobs, see the route and pay before you accept, and get paid weekly.",
+      "body": [
+        "Drive different cars from one location to another across the LA area. Pick your own jobs, see the route and pay before you accept, and get paid weekly. Requires an eligible vehicle, a clean record, and completed in-app onboarding.",
+        "Independent contractor driving is not employment — drivers join through the in-app onboarding flow at /driver-signin rather than by applying on this page."
+      ],
+      "applyEmail": "support@101drivers.com"
+    },
+    {
+      "slug": "operations-coordinator",
+      "title": "Operations Coordinator",
+      "location": "Greater Los Angeles, CA",
+      "type": "Full-time",
+      "employmentType": "FULL_TIME",
+      "excerpt": "Keep daily dispatch running smoothly: monitor active deliveries, unblock drivers and customers, and flag patterns the product team should fix.",
+      "body": [
+        "Keep daily dispatch running smoothly: monitor active deliveries, help drivers and customers unblock issues, and flag patterns the product team should fix. Strong communication and calm-under-pressure are must-haves."
+      ],
+      "applyEmail": "support@101drivers.com"
+    },
+    {
+      "slug": "customer-support-specialist",
+      "title": "Customer Support Specialist",
+      "location": "Remote (California)",
+      "type": "Part-time",
+      "employmentType": "PART_TIME",
+      "excerpt": "Own the WhatsApp and email queues — quote questions, delivery status checks, and post-delivery reports. Write like a human, resolve like a pro.",
+      "body": [
+        "Own the WhatsApp and email queues: answer quote questions, delivery status checks, and post-delivery reports. You are the voice customers quote back at us — write like a human, resolve like a pro."
+      ],
+      "applyEmail": "support@101drivers.com"
+    }
+  ]
+}

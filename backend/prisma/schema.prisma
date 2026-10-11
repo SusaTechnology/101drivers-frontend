@@ -1197,6 +1197,102 @@ model AppSetting {
   value     Json
 }
 
+// ── CMS (blog / news / careers) ──────────────────────────────────────────────
+// Public marketing content edited from the admin panel (admin-cms). The shapes
+// mirror the FE registry types in src/content/types.ts 1:1 — the public
+// renderers (blog/news/careers detail pages) consume DB rows through the same
+// typed interfaces, so rendering, SEO metadata and JSON-LD are unchanged.
+// `body` is JSONB holding the section's body shape:
+//   CmsBlogPost.body  = BlogBlock[]   (typed block union, never raw HTML)
+//   CmsNewsPost.body  = string[]      (paragraphs)
+//   CmsJobPosting.body = string[]     (paragraphs)
+// `date` stays TEXT (yyyy-mm-dd) to match the public contract — ordering is
+// lexicographic, which is correct for ISO dates.
+// Drafts are only visible through the admin endpoints; the public GETs filter
+// to PUBLISHED exclusively. The static registries stay in the bundle as a
+// fallback (and as the seed source — see cms.service.ts seedIfEmpty).
+
+enum EnumCmsContentStatus {
+  DRAFT
+  PUBLISHED
+}
+
+model CmsBlogPost {
+  author          String?
+  body            Json
+  createdAt       DateTime             @default(now())
+  createdByUserId String?
+  date            String
+  excerpt         String
+  id              String               @id @default(cuid())
+  image           String?
+  imageAlt        String?
+  kicker          String?
+  publishedAt     DateTime?
+  readingMinutes  Int?
+  slug            String               @unique
+  status          EnumCmsContentStatus @default(DRAFT)
+  title           String
+  updatedAt       DateTime             @updatedAt
+
+  @@index([status, date])
+}
+
+model CmsNewsPost {
+  body            Json
+  createdAt       DateTime             @default(now())
+  createdByUserId String?
+  date            String
+  excerpt         String
+  id              String               @id @default(cuid())
+  image           String?
+  imageAlt        String?
+  publishedAt     DateTime?
+  slug            String               @unique
+  status          EnumCmsContentStatus @default(DRAFT)
+  tag             String
+  title           String
+  updatedAt       DateTime             @updatedAt
+
+  @@index([status, date])
+}
+
+model CmsJobPosting {
+  applyEmail      String
+  body            Json
+  createdAt       DateTime             @default(now())
+  createdByUserId String?
+  employmentType  String
+  excerpt         String
+  id              String               @id @default(cuid())
+  location        String
+  publishedAt     DateTime?
+  slug            String               @unique
+  status          EnumCmsContentStatus @default(DRAFT)
+  title           String
+  type            String
+  updatedAt       DateTime             @updatedAt
+
+  @@index([status, title])
+}
+
+// Uploaded cover/inline images. Files live on disk (CMS_UPLOAD_DIR, defaults
+// to <cwd>/uploads) and are served back through GET /api/cms/media/file/:name;
+// only the metadata row lives here. Flat filenames (no directory component) —
+// generated server-side, never derived from user input.
+model CmsMediaAsset {
+  createdAt       DateTime @default(now())
+  createdByUserId String?
+  filename        String   @unique
+  id              String   @id @default(cuid())
+  mimeType        String
+  originalName    String
+  sizeBytes       Int
+  updatedAt       DateTime @updatedAt
+
+  @@index([createdAt])
+}
+
 // DailyUsageCounter: per-identity per-day usage counters for metered
 // operations. Today the only scope is "quote_preview" — the quote
 // calculation endpoints that trigger billed Google Maps API calls

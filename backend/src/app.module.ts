@@ -63,11 +63,12 @@ import { ReferralModule } from "./referral/referral.module";
 import { StripeWebhookController } from "./payment/stripe-webhook.controller";
 import { InsurancePortalController } from "./insurance-portal/insurance-portal.controller";
 import { ContentController } from "./content/content.controller";
+import { CmsController } from "./cms/cms.controller";
 import { NotificationEventEngine } from "./domain/notificationEvent/notificationEvent.engine";
 import { MailService } from "./common/mail/mail.service";
 import { PostpaidBillingModule } from "./postpaidBilling/postpaidBilling.module";
 @Module({
-  controllers: [StripeWebhookController, InsurancePortalController, ContentController],
+  controllers: [StripeWebhookController, InsurancePortalController, ContentController, CmsController],
   imports: [
     ACLModule,
     AuthModule,
