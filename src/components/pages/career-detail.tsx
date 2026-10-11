@@ -5,19 +5,38 @@ import { NavBar } from "../shared/layout/navbar";
 import { SEOHead } from "../shared/SEOHead";
 import { SiteFooter } from "../shared/SiteFooter";
 import { ContentNotFound } from "../shared/ContentNotFound";
-import { getJobPosting } from "@/content/careers";
+import { useCmsJobPosting } from "@/lib/cms";
 
 /**
- * Job posting — /careers/$slug. The role comes from the
- * src/content/careers registry; unknown slugs render a friendly
- * not-found state (an SPA serves index.html for every path, so 404s
- * are handled in-page).
+ * Job posting — /careers/$slug. The role comes from the CMS (Postgres via
+ * /api/cms/careers/:slug; the bundled registry is the fallback while
+ * loading or if the API is unreachable — a 404 from the API is
+ * authoritative, so a removed role never resurrects from the registry);
+ * unknown slugs render a friendly not-found state (an SPA serves
+ * index.html for every path, so 404s are handled in-page).
  *
  * The Apply flow routes to the support inbox already used across the
  * site (mailto with a pre-filled subject per role).
  */
 export default function CareerDetailPage({ slug }: { slug: string }) {
-  const role = getJobPosting(slug);
+  const { post: role, isLoading } = useCmsJobPosting(slug);
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-background-light dark:bg-background-dark">
+        <SEOHead
+          title="Loading… | 101 Drivers Careers"
+          description="Loading this job posting."
+          canonicalUrl={`https://101drivers.com/careers/${slug}`}
+        />
+        <NavBar />
+        <main className="w-full max-w-[1440px] mx-auto px-6 lg:px-8 py-20 flex items-center justify-center">
+          <div className="h-10 w-10 animate-spin rounded-full border-4 border-lime-500 border-t-transparent" />
+        </main>
+        <SiteFooter />
+      </div>
+    );
+  }
 
   if (!role) {
     return (

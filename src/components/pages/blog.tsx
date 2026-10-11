@@ -9,17 +9,18 @@ import {
   ContentCardGrid,
 } from "../shared/ContentCard";
 import { ContentEmptyState } from "../shared/ContentEmptyState";
-import { BLOG_POSTS } from "@/content/blog";
+import { resolveCmsAssetUrl, useCmsBlogList } from "@/lib/cms";
 import { formatContentDate } from "@/lib/format-date";
 
 /**
- * Blog index — renders a card for every post registered in
- * src/content/blog/. Adding a post (a new file + one line in that
- * folder's index.ts) automatically adds its card here and creates its
- * /blog/$slug detail page — nothing on this page is hard-coded per
- * post.
+ * Blog index — renders a card for every PUBLISHED post in the CMS
+ * (Postgres via /api/cms/blog; the bundled registry is the fallback while
+ * loading or if the API is unreachable). Publishing from the admin panel
+ * adds its card here and creates its /blog/$slug detail page — nothing on
+ * this page is hard-coded per post.
  */
 function BlogPage() {
+  const { items: posts } = useCmsBlogList();
   return (
     <div className="min-h-screen bg-background-light dark:bg-background-dark">
       <SEOHead
@@ -53,10 +54,10 @@ function BlogPage() {
           </p>
         </section>
 
-        {/* Post cards — generated from the src/content/blog registry;
-            empty registry renders the shared empty state */}
+        {/* Post cards — generated from the CMS blog list;
+            empty list renders the shared empty state */}
         <section>
-          {BLOG_POSTS.length === 0 ? (
+          {posts.length === 0 ? (
             <ContentEmptyState
               icon={BookOpen}
               title="No posts yet"
@@ -66,14 +67,14 @@ function BlogPage() {
             />
           ) : (
             <ContentCardGrid>
-              {BLOG_POSTS.map((post) => (
+              {posts.map((post) => (
                 <ContentCard
                   key={post.slug}
                   to="/blog/$slug"
                   params={{ slug: post.slug }}
                   title={post.title}
                   description={post.excerpt}
-                  image={post.image}
+                  image={resolveCmsAssetUrl(post.image)}
                   imageAlt={post.imageAlt}
                   meta={[{ label: formatContentDate(post.date) }]}
                   fallbackIcon={BookOpen}

@@ -5,17 +5,40 @@ import { NavBar } from "../shared/layout/navbar";
 import { SEOHead } from "../shared/SEOHead";
 import { SiteFooter } from "../shared/SiteFooter";
 import { ContentNotFound } from "../shared/ContentNotFound";
-import { getNewsPost } from "@/content/news";
+import {
+  resolveCmsAssetAbsoluteUrl,
+  resolveCmsAssetUrl,
+  useCmsNewsPost,
+} from "@/lib/cms";
 import { formatContentDate } from "@/lib/format-date";
 
 /**
- * News announcement — /news/$slug. The post comes from the
- * src/content/news registry; unknown slugs render a friendly not-found
- * state (an SPA serves index.html for every path, so 404s are handled
- * in-page).
+ * News announcement — /news/$slug. The post comes from the CMS (Postgres
+ * via /api/cms/news/:slug; the bundled registry is the fallback while
+ * loading or if the API is unreachable — a 404 from the API is
+ * authoritative, so a deleted/unpublished announcement never resurrects
+ * from the registry); unknown slugs render a friendly not-found state (an
+ * SPA serves index.html for every path, so 404s are handled in-page).
  */
 export default function NewsDetailPage({ slug }: { slug: string }) {
-  const post = getNewsPost(slug);
+  const { post, isLoading } = useCmsNewsPost(slug);
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-background-light dark:bg-background-dark">
+        <SEOHead
+          title="Loading… | 101 Drivers News"
+          description="Loading this announcement."
+          canonicalUrl={`https://101drivers.com/news/${slug}`}
+        />
+        <NavBar />
+        <main className="w-full max-w-[1440px] mx-auto px-6 lg:px-8 py-20 flex items-center justify-center">
+          <div className="h-10 w-10 animate-spin rounded-full border-4 border-lime-500 border-t-transparent" />
+        </main>
+        <SiteFooter />
+      </div>
+    );
+  }
 
   if (!post) {
     return (
@@ -39,9 +62,7 @@ export default function NewsDetailPage({ slug }: { slug: string }) {
         description={post.excerpt}
         canonicalUrl={`https://101drivers.com/news/${post.slug}`}
         ogType="article"
-        ogImage={
-          post.image ? `https://101drivers.com${post.image}` : undefined
-        }
+        ogImage={resolveCmsAssetAbsoluteUrl(post.image)}
         ogImageAlt={post.imageAlt}
         schema={{
           "@context": "https://schema.org",
@@ -50,7 +71,7 @@ export default function NewsDetailPage({ slug }: { slug: string }) {
           description: post.excerpt,
           datePublished: post.date,
           url: `https://101drivers.com/news/${post.slug}`,
-          image: post.image ? `https://101drivers.com${post.image}` : undefined,
+          image: resolveCmsAssetAbsoluteUrl(post.image),
           publisher: {
             "@type": "Organization",
             name: "101 Drivers Inc.",
@@ -74,7 +95,7 @@ export default function NewsDetailPage({ slug }: { slug: string }) {
           {/* Cover */}
           {post.image && (
             <img
-              src={post.image}
+              src={resolveCmsAssetUrl(post.image)}
               alt={post.imageAlt ?? ""}
               className="mt-6 aspect-video w-full rounded-2xl object-cover border border-slate-200 dark:border-slate-800"
             />

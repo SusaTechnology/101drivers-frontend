@@ -94,6 +94,7 @@ import { Route as AdminDealerDetailIndexRouteImport } from './routes/admin-deale
 import { Route as AdminDashboardIndexRouteImport } from './routes/admin-dashboard/index'
 import { Route as AdminContentIndexRouteImport } from './routes/admin-content/index'
 import { Route as AdminConfigIndexRouteImport } from './routes/admin-config/index'
+import { Route as AdminCmsIndexRouteImport } from './routes/admin-cms/index'
 import { Route as AdminBillingHealthIndexRouteImport } from './routes/admin-billing-health/index'
 import { Route as AdminAuditLogsIndexRouteImport } from './routes/admin-audit-logs/index'
 import { Route as AboutIndexRouteImport } from './routes/about/index'
@@ -584,6 +585,11 @@ const AdminConfigIndexRoute = AdminConfigIndexRouteImport.update({
   path: '/admin-config/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AdminCmsIndexRoute = AdminCmsIndexRouteImport.update({
+  id: '/admin-cms/',
+  path: '/admin-cms/',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AdminBillingHealthIndexRoute = AdminBillingHealthIndexRouteImport.update({
   id: '/admin-billing-health/',
   path: '/admin-billing-health/',
@@ -812,6 +818,7 @@ export interface FileRoutesByFullPath {
   '/about/': typeof AboutIndexRoute
   '/admin-audit-logs/': typeof AdminAuditLogsIndexRoute
   '/admin-billing-health/': typeof AdminBillingHealthIndexRoute
+  '/admin-cms/': typeof AdminCmsIndexRoute
   '/admin-config/': typeof AdminConfigIndexRoute
   '/admin-content/': typeof AdminContentIndexRoute
   '/admin-dashboard/': typeof AdminDashboardIndexRoute
@@ -936,6 +943,7 @@ export interface FileRoutesByTo {
   '/about': typeof AboutIndexRoute
   '/admin-audit-logs': typeof AdminAuditLogsIndexRoute
   '/admin-billing-health': typeof AdminBillingHealthIndexRoute
+  '/admin-cms': typeof AdminCmsIndexRoute
   '/admin-config': typeof AdminConfigIndexRoute
   '/admin-content': typeof AdminContentIndexRoute
   '/admin-dashboard': typeof AdminDashboardIndexRoute
@@ -1062,6 +1070,7 @@ export interface FileRoutesById {
   '/about/': typeof AboutIndexRoute
   '/admin-audit-logs/': typeof AdminAuditLogsIndexRoute
   '/admin-billing-health/': typeof AdminBillingHealthIndexRoute
+  '/admin-cms/': typeof AdminCmsIndexRoute
   '/admin-config/': typeof AdminConfigIndexRoute
   '/admin-content/': typeof AdminContentIndexRoute
   '/admin-dashboard/': typeof AdminDashboardIndexRoute
@@ -1189,6 +1198,7 @@ export interface FileRouteTypes {
     | '/about/'
     | '/admin-audit-logs/'
     | '/admin-billing-health/'
+    | '/admin-cms/'
     | '/admin-config/'
     | '/admin-content/'
     | '/admin-dashboard/'
@@ -1313,6 +1323,7 @@ export interface FileRouteTypes {
     | '/about'
     | '/admin-audit-logs'
     | '/admin-billing-health'
+    | '/admin-cms'
     | '/admin-config'
     | '/admin-content'
     | '/admin-dashboard'
@@ -1438,6 +1449,7 @@ export interface FileRouteTypes {
     | '/about/'
     | '/admin-audit-logs/'
     | '/admin-billing-health/'
+    | '/admin-cms/'
     | '/admin-config/'
     | '/admin-content/'
     | '/admin-dashboard/'
@@ -1543,6 +1555,7 @@ export interface RootRouteChildren {
   AboutIndexRoute: typeof AboutIndexRoute
   AdminAuditLogsIndexRoute: typeof AdminAuditLogsIndexRoute
   AdminBillingHealthIndexRoute: typeof AdminBillingHealthIndexRoute
+  AdminCmsIndexRoute: typeof AdminCmsIndexRoute
   AdminConfigIndexRoute: typeof AdminConfigIndexRoute
   AdminContentIndexRoute: typeof AdminContentIndexRoute
   AdminDashboardIndexRoute: typeof AdminDashboardIndexRoute
@@ -2231,6 +2244,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminConfigIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/admin-cms/': {
+      id: '/admin-cms/'
+      path: '/admin-cms'
+      fullPath: '/admin-cms/'
+      preLoaderRoute: typeof AdminCmsIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/admin-billing-health/': {
       id: '/admin-billing-health/'
       path: '/admin-billing-health'
@@ -2566,6 +2586,7 @@ const rootRouteChildren: RootRouteChildren = {
   AboutIndexRoute: AboutIndexRoute,
   AdminAuditLogsIndexRoute: AdminAuditLogsIndexRoute,
   AdminBillingHealthIndexRoute: AdminBillingHealthIndexRoute,
+  AdminCmsIndexRoute: AdminCmsIndexRoute,
   AdminConfigIndexRoute: AdminConfigIndexRoute,
   AdminContentIndexRoute: AdminContentIndexRoute,
   AdminDashboardIndexRoute: AdminDashboardIndexRoute,

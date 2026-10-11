@@ -16,16 +16,23 @@ import { NavBar } from "../shared/layout/navbar";
 import { SEOHead } from "../shared/SEOHead";
 import { SiteFooter } from "../shared/SiteFooter";
 import { ContentNotFound } from "../shared/ContentNotFound";
-import { getBlogPost } from "@/content/blog";
+import {
+  resolveCmsAssetAbsoluteUrl,
+  resolveCmsAssetUrl,
+  useCmsBlogPost,
+} from "@/lib/cms";
 import { formatContentDate } from "@/lib/format-date";
 import type { BlogBlock } from "@/content/types";
 
 /**
- * Blog article — /blog/$slug. The post comes from the src/content/blog
- * registry (rich blocks: paragraphs, headings, lists, callouts, tables,
- * pricing cards, FAQs, chips, related links); unknown slugs render a
- * friendly not-found state (an SPA serves index.html for every path, so
- * 404s are handled in-page).
+ * Blog article — /blog/$slug. The post comes from the CMS (Postgres via
+ * /api/cms/blog/:slug; the bundled registry is the fallback while loading
+ * or if the API is unreachable — a 404 from the API is authoritative, so a
+ * deleted/unpublished post never resurrects from the registry). Rich
+ * blocks: paragraphs, headings, lists, callouts, tables, pricing cards,
+ * FAQs, chips, related links. Unknown slugs render a friendly not-found
+ * state (an SPA serves index.html for every path, so 404s are handled
+ * in-page).
  *
  * SEO: BlogPosting JSON-LD for every post, plus FAQPage and
  * BreadcrumbList when the post contains FAQs.
@@ -267,7 +274,24 @@ function Block({ block }: { block: BlogBlock }) {
 }
 
 export default function BlogDetailPage({ slug }: { slug: string }) {
-  const post = getBlogPost(slug);
+  const { post, isLoading } = useCmsBlogPost(slug);
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-background-light dark:bg-background-dark">
+        <SEOHead
+          title="Loading… | 101 Drivers Blog"
+          description="Loading this blog post."
+          canonicalUrl={`https://101drivers.com/blog/${slug}`}
+        />
+        <NavBar />
+        <main className="w-full max-w-[1440px] mx-auto px-6 lg:px-8 py-20 flex items-center justify-center">
+          <div className="h-10 w-10 animate-spin rounded-full border-4 border-lime-500 border-t-transparent" />
+        </main>
+        <SiteFooter />
+      </div>
+    );
+  }
 
   if (!post) {
     return (
@@ -285,6 +309,7 @@ export default function BlogDetailPage({ slug }: { slug: string }) {
   }
 
   const postUrl = `https://101drivers.com/blog/${post.slug}`;
+  const absoluteImage = resolveCmsAssetAbsoluteUrl(post.image);
   const faqs = post.body.flatMap((b) => (b.type === "faq" ? b.items : []));
   const schemas: Record<string, unknown>[] = [
     {
@@ -294,7 +319,7 @@ export default function BlogDetailPage({ slug }: { slug: string }) {
       description: post.excerpt,
       datePublished: post.date,
       url: postUrl,
-      image: post.image ? `https://101drivers.com${post.image}` : undefined,
+      image: absoluteImage,
       author: { "@type": "Organization", name: "101 Drivers", url: "https://101drivers.com" },
       publisher: {
         "@type": "Organization",
@@ -332,9 +357,7 @@ export default function BlogDetailPage({ slug }: { slug: string }) {
         description={post.excerpt}
         canonicalUrl={postUrl}
         ogType="article"
-        ogImage={
-          post.image ? `https://101drivers.com${post.image}` : undefined
-        }
+        ogImage={absoluteImage}
         ogImageAlt={post.imageAlt}
         schema={schemas}
       />
@@ -354,7 +377,7 @@ export default function BlogDetailPage({ slug }: { slug: string }) {
           {/* Cover */}
           {post.image && (
             <img
-              src={post.image}
+              src={resolveCmsAssetUrl(post.image)}
               alt={post.imageAlt ?? ""}
               className="mt-6 aspect-video w-full rounded-2xl object-cover border border-slate-200 dark:border-slate-800"
             />

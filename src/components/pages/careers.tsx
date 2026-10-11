@@ -9,7 +9,7 @@ import {
   ContentCardGrid,
 } from "../shared/ContentCard";
 import { ContentEmptyState } from "../shared/ContentEmptyState";
-import { OPEN_ROLES } from "@/content/careers";
+import { useCmsCareersList } from "@/lib/cms";
 
 /**
  * Why-101-Drivers panels — page copy, not per-role content, so these
@@ -38,13 +38,14 @@ const WHY_SECTIONS = [
 
 /**
  * Careers index — the "why us" panels below are page copy, while the
- * open roles are rendered as cards from the src/content/careers
- * registry. Adding a role (a new file + one line in that folder's
- * index.ts) automatically adds its card here and creates its
- * /careers/$slug detail page — nothing on this page is hard-coded per
- * role.
+ * open roles are rendered as cards from the CMS (Postgres via
+ * /api/cms/careers; the bundled registry is the fallback while loading or
+ * if the API is unreachable). Publishing a role from the admin panel
+ * automatically adds its card here and creates its /careers/$slug detail
+ * page — nothing on this page is hard-coded per role.
  */
 function CareersPage() {
+  const { items: roles } = useCmsCareersList();
   return (
     <div className="min-h-screen bg-background-light dark:bg-background-dark">
       <SEOHead
@@ -108,7 +109,7 @@ function CareersPage() {
             Sample listings — contact us even if your role is not listed.
           </p>
           <ContentCardGrid>
-            {OPEN_ROLES.map((role) => (
+            {roles.map((role) => (
               <ContentCard
                 key={role.slug}
                 to="/careers/$slug"
@@ -124,7 +125,7 @@ function CareersPage() {
               />
             ))}
           </ContentCardGrid>
-          {OPEN_ROLES.length === 0 && (
+          {roles.length === 0 && (
             <ContentEmptyState
               icon={Briefcase}
               title="No open roles right now"

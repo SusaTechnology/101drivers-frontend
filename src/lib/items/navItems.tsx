@@ -7,6 +7,7 @@ export const navItems = [
   { href: '/admin-scheduling-policy', label: 'Scheduling' },
   { href: '/admin-disputes', label: 'Disputes' },
   { href: '/admin-payments', label: 'Payments' },
+  { href: '/admin-cms', label: 'Content' },
   // Billing Health deliberately NOT in the navbar — the admin nav is
   // already overcrowded (items start collapsing). The page stays
   // reachable from the Payments page header button + the failed-payments

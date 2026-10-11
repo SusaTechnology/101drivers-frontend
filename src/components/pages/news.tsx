@@ -9,17 +9,18 @@ import {
   ContentCardGrid,
 } from "../shared/ContentCard";
 import { ContentEmptyState } from "../shared/ContentEmptyState";
-import { NEWS_POSTS } from "@/content/news";
+import { resolveCmsAssetUrl, useCmsNewsList } from "@/lib/cms";
 import { formatContentDate } from "@/lib/format-date";
 
 /**
- * News index — renders a card for every announcement registered in
- * src/content/news/. Adding an announcement (a new file + one line in
- * that folder's index.ts) automatically adds its card here and creates
- * its /news/$slug detail page — nothing on this page is hard-coded per
- * post.
+ * News index — renders a card for every PUBLISHED announcement in the CMS
+ * (Postgres via /api/cms/news; the bundled registry is the fallback while
+ * loading or if the API is unreachable). Publishing from the admin panel
+ * adds its card here and creates its /news/$slug detail page — nothing on
+ * this page is hard-coded per post.
  */
 function NewsPage() {
+  const { items: posts } = useCmsNewsList();
   return (
     <div className="min-h-screen bg-background-light dark:bg-background-dark">
       <SEOHead
@@ -53,10 +54,10 @@ function NewsPage() {
           </p>
         </section>
 
-        {/* Announcement cards — generated from the src/content/news
-            registry; empty registry renders the shared empty state */}
+        {/* Announcement cards — generated from the CMS news list;
+            empty list renders the shared empty state */}
         <section>
-          {NEWS_POSTS.length === 0 ? (
+          {posts.length === 0 ? (
             <ContentEmptyState
               icon={Newspaper}
               title="No announcements yet"
@@ -66,14 +67,14 @@ function NewsPage() {
             />
           ) : (
             <ContentCardGrid>
-              {NEWS_POSTS.map((post) => (
+              {posts.map((post) => (
                 <ContentCard
                   key={post.slug}
                   to="/news/$slug"
                   params={{ slug: post.slug }}
                   title={post.title}
                   description={post.excerpt}
-                  image={post.image}
+                  image={resolveCmsAssetUrl(post.image)}
                   imageAlt={post.imageAlt}
                   badge={post.tag}
                   meta={[{ label: formatContentDate(post.date) }]}
