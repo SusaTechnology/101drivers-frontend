@@ -22,6 +22,20 @@ import {
   WhatsAppIcon,
   WHATSAPP_SUPPORT_URL,
 } from "@/components/shared/WhatsAppSupportButton";
+import {
+  FacebookIcon,
+  InstagramIcon,
+  LinkedinIcon,
+  MediumIcon,
+  PinterestIcon,
+  SubstackIcon,
+  ThreadsIcon,
+  TiktokIcon,
+  XIcon,
+  YelpIcon,
+  YoutubeIcon,
+  BRAND_COLORS,
+} from "@/components/shared/BrandIcons";
 
 const API_BASE = import.meta.env.VITE_API_URL;
 
@@ -32,21 +46,78 @@ const ALLOWED_HOSTS = ["wa.me", "api.whatsapp.com", "chat.whatsapp.com"];
 // ── Optional social media profiles ───────────────────────────────────
 // Mirrors SOCIAL_LINK_PLATFORMS in backend appSetting.dto.ts. Every field
 // is OPTIONAL: an empty field means "we don't use this platform" and it
-// is omitted everywhere a link would render (customer email footer, etc.).
+// is omitted everywhere a link would render. Each row carries the
+// platform's real brand logo (Icon) + its brand color class so the admin
+// recognizes the platform at a glance.
 // The full American-company set lives here so ops never needs a code
 // change to add a profile — paste the link, save, done.
 const SOCIAL_FIELDS = [
-  { key: "instagram", label: "Instagram", placeholder: "https://instagram.com/101drivers" },
-  { key: "facebook", label: "Facebook", placeholder: "https://facebook.com/101drivers" },
-  { key: "x", label: "X (Twitter)", placeholder: "https://x.com/101drivers" },
-  { key: "youtube", label: "YouTube", placeholder: "https://youtube.com/@101drivers" },
-  { key: "linkedin", label: "LinkedIn", placeholder: "https://linkedin.com/company/101drivers" },
-  { key: "tiktok", label: "TikTok", placeholder: "https://tiktok.com/@101drivers" },
-  { key: "threads", label: "Threads", placeholder: "https://threads.net/@101drivers" },
-  { key: "pinterest", label: "Pinterest", placeholder: "https://pinterest.com/101drivers" },
-  { key: "medium", label: "Medium", placeholder: "https://medium.com/@101drivers" },
-  { key: "substack", label: "Substack", placeholder: "https://101drivers.substack.com" },
-  { key: "yelp", label: "Yelp", placeholder: "https://yelp.com/biz/101-drivers" },
+  {
+    key: "instagram",
+    label: "Instagram",
+    placeholder: "https://instagram.com/101drivers",
+    Icon: InstagramIcon,
+  },
+  {
+    key: "facebook",
+    label: "Facebook",
+    placeholder: "https://facebook.com/101drivers",
+    Icon: FacebookIcon,
+  },
+  {
+    key: "x",
+    label: "X (Twitter)",
+    placeholder: "https://x.com/101drivers",
+    Icon: XIcon,
+  },
+  {
+    key: "youtube",
+    label: "YouTube",
+    placeholder: "https://youtube.com/@101drivers",
+    Icon: YoutubeIcon,
+  },
+  {
+    key: "linkedin",
+    label: "LinkedIn",
+    placeholder: "https://linkedin.com/company/101drivers",
+    Icon: LinkedinIcon,
+  },
+  {
+    key: "tiktok",
+    label: "TikTok",
+    placeholder: "https://tiktok.com/@101drivers",
+    Icon: TiktokIcon,
+  },
+  {
+    key: "threads",
+    label: "Threads",
+    placeholder: "https://threads.net/@101drivers",
+    Icon: ThreadsIcon,
+  },
+  {
+    key: "pinterest",
+    label: "Pinterest",
+    placeholder: "https://pinterest.com/101drivers",
+    Icon: PinterestIcon,
+  },
+  {
+    key: "medium",
+    label: "Medium",
+    placeholder: "https://medium.com/@101drivers",
+    Icon: MediumIcon,
+  },
+  {
+    key: "substack",
+    label: "Substack",
+    placeholder: "https://101drivers.substack.com",
+    Icon: SubstackIcon,
+  },
+  {
+    key: "yelp",
+    label: "Yelp",
+    placeholder: "https://yelp.com/biz/101-drivers",
+    Icon: YelpIcon,
+  },
 ] as const;
 
 type SocialKey = (typeof SOCIAL_FIELDS)[number]["key"];
@@ -105,14 +176,21 @@ interface WhatsAppSupportLinkDialogProps {
 }
 
 /**
- * Dialog for viewing and changing the WhatsApp support link AND the
+ * Wide dialog for viewing and changing the WhatsApp support link AND the
  * company's optional social media profile links (the admin Config Hub
  * "WhatsApp & Social Links" card).
+ *
+ * Layout: the title is pinned to the top and the action buttons are
+ * pinned to the bottom of the dialog; only the middle section scrolls,
+ * and only when the viewport is too short (small screens) — on a normal
+ * desktop everything fits without scrolling.
  *
  * The WhatsApp link backs every "Message us on WhatsApp" button in the
  * app AND the ready-to-open deep link in the customer delivery emails —
  * the base link always comes from the DB (never hardcoded), so rotating
- * it here instantly re-targets every button and future emails.
+ * it here instantly re-targets every button and future emails. Social
+ * profiles are admin-side settings only; customer emails stay
+ * WhatsApp-only.
  *
  * Both are read from GET /api/appSettings/whatsapp-support and saved via
  * PATCH (admin-only). The public link is not secret, but only admins can
@@ -216,120 +294,142 @@ export function WhatsAppSupportLinkDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg max-h-[85vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
+      {/* Wide dialog: title pinned top, buttons pinned bottom, only the
+          middle scrolls when the viewport is too short. */}
+      <DialogContent className="sm:max-w-4xl flex flex-col max-h-[92vh] overflow-hidden p-0 gap-0">
+        {/* ── Fixed header ── */}
+        <DialogHeader className="shrink-0 border-b border-slate-200 dark:border-slate-800 px-6 py-5 pr-14">
+          <DialogTitle className="flex items-center gap-2.5">
             <WhatsAppIcon className="w-5 h-5 text-[#25D366]" />
             WhatsApp &amp; Social Links
           </DialogTitle>
           <DialogDescription>
             The WhatsApp link powers every "Message us on WhatsApp" button and
-            the ready-to-open chat link in customer delivery emails. Social
-            profiles are optional — only the ones you fill in appear anywhere.
+            the ready-to-open chat link in customer delivery emails (emails
+            are WhatsApp-only). Social profiles are optional and internal.
             Change any of it here — no code changes or redeploy needed.
           </DialogDescription>
         </DialogHeader>
 
-        {isLoading ? (
-          <div className="flex justify-center py-8">
-            <Loader2 className="w-6 h-6 animate-spin text-slate-400" />
-          </div>
-        ) : (
-          <div className="space-y-5">
-            {/* ── WhatsApp support link (required, backs every button) ── */}
-            <div className="space-y-1.5">
-              <Label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                WhatsApp Support Link
-              </Label>
-              <Input
-                type="url"
-                value={supportUrl}
-                onChange={(e) => setSupportUrl(e.target.value)}
-                placeholder="https://wa.me/15551234567"
-                className="h-10 text-sm rounded-xl"
-                autoComplete="off"
-                name="whatsapp-support-url"
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") handleSave();
-                }}
-              />
-              <p className="text-[10px] text-slate-400">
-                Accepted: wa.me, api.whatsapp.com, or chat.whatsapp.com links.
-                For the customer emails use a wa.me number link (e.g.
-                https://wa.me/14243132168) so the pre-filled question message
-                opens with your pickup address.
-              </p>
+        {/* ── Scrollable body (scrolls only on short/small screens) ── */}
+        <div className="flex-1 min-h-0 overflow-y-auto px-6 py-5">
+          {isLoading ? (
+            <div className="flex justify-center py-10">
+              <Loader2 className="w-6 h-6 animate-spin text-slate-400" />
             </div>
-
-            {supportUrl.trim() && !supportUrlError && (
-              <a
-                href={supportUrl.trim()}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-1.5 text-xs font-bold text-primary hover:underline"
-              >
-                <ExternalLink className="w-3.5 h-3.5" />
-                Test this link before saving
-              </a>
-            )}
-
-            {supportUrl.trim() === WHATSAPP_SUPPORT_URL && (
-              <p className="flex items-center gap-1.5 text-[11px] text-slate-500 dark:text-slate-400">
-                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
-                This is the current default link.
-              </p>
-            )}
-
-            {/* ── Social media profiles (all optional) ── */}
-            <div className="border-t border-slate-200 dark:border-slate-800 pt-4">
+          ) : (
+            <div className="space-y-5">
+              {/* ── WhatsApp support link (required, backs every button) ── */}
               <div className="space-y-1.5">
                 <Label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                  Social Media Profiles — optional
+                  WhatsApp Support Link
                 </Label>
+                <div className="relative">
+                  <WhatsAppIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-[#25D366] pointer-events-none" />
+                  <Input
+                    type="url"
+                    value={supportUrl}
+                    onChange={(e) => setSupportUrl(e.target.value)}
+                    placeholder="https://wa.me/15551234567"
+                    className="h-11 pl-10 text-sm rounded-xl"
+                    autoComplete="off"
+                    name="whatsapp-support-url"
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") handleSave();
+                    }}
+                  />
+                </div>
                 <p className="text-[10px] text-slate-400">
-                  Paste the full https:// link for each platform your company
-                  uses — they appear in places like the customer email footer.
-                  Leave a field empty if you don't use that platform.
+                  Accepted: wa.me, api.whatsapp.com, or chat.whatsapp.com links.
+                  For the customer emails use a wa.me number link (e.g.
+                  https://wa.me/14243132168) so the pre-filled question message
+                  opens with your pickup address.
                 </p>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-3 gap-y-3 mt-3">
-                {SOCIAL_FIELDS.map((field) => (
-                  <div key={field.key} className="space-y-1">
-                    <Label
-                      htmlFor={`social-${field.key}`}
-                      className="text-[11px] font-bold text-slate-600 dark:text-slate-300"
-                    >
-                      {field.label}
-                    </Label>
-                    <Input
-                      id={`social-${field.key}`}
-                      type="url"
-                      value={social[field.key] ?? ""}
-                      onChange={(e) =>
-                        setSocial((prev) => ({
-                          ...prev,
-                          [field.key]: e.target.value,
-                        }))
-                      }
-                      placeholder={field.placeholder}
-                      className="h-9 text-xs rounded-xl"
-                      autoComplete="off"
-                      name={`social-${field.key}`}
-                    />
-                    {socialErrors[field.key] && (
-                      <p className="text-[10px] text-red-500">
-                        {socialErrors[field.key]}
-                      </p>
-                    )}
-                  </div>
-                ))}
+              {supportUrl.trim() && !supportUrlError && (
+                <a
+                  href={supportUrl.trim()}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-1.5 text-xs font-bold text-primary hover:underline"
+                >
+                  <ExternalLink className="w-3.5 h-3.5" />
+                  Test this link before saving
+                </a>
+              )}
+
+              {supportUrl.trim() === WHATSAPP_SUPPORT_URL && (
+                <p className="flex items-center gap-1.5 text-[11px] text-slate-500 dark:text-slate-400">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
+                  This is the current default link.
+                </p>
+              )}
+
+              {/* ── Social media profiles (all optional) ── */}
+              <div className="border-t border-slate-200 dark:border-slate-800 pt-4">
+                <div className="space-y-1.5">
+                  <Label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                    Social Media Profiles — optional
+                  </Label>
+                  <p className="text-[10px] text-slate-400">
+                    Paste the full https:// link for each platform your company
+                    uses. Leave a field empty if you don't use that platform.
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-3.5 mt-3">
+                  {SOCIAL_FIELDS.map((field) => {
+                    const { Icon } = field;
+                    return (
+                      <div key={field.key} className="space-y-1">
+                        <Label
+                          htmlFor={`social-${field.key}`}
+                          className="text-[11px] font-bold text-slate-600 dark:text-slate-300 flex items-center gap-1.5"
+                        >
+                          <Icon
+                            className={`w-3.5 h-3.5 ${BRAND_COLORS[field.key] ?? ""}`}
+                          />
+                          {field.label}
+                        </Label>
+                        <div className="relative">
+                          <Icon
+                            className={`absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none ${
+                              BRAND_COLORS[field.key] ?? "text-slate-400"
+                            }`}
+                          />
+                          <Input
+                            id={`social-${field.key}`}
+                            type="url"
+                            value={social[field.key] ?? ""}
+                            onChange={(e) =>
+                              setSocial((prev) => ({
+                                ...prev,
+                                [field.key]: e.target.value,
+                              }))
+                            }
+                            placeholder={field.placeholder}
+                            className="h-10 pl-9 text-sm rounded-xl"
+                            autoComplete="off"
+                            name={`social-${field.key}`}
+                          />
+                        </div>
+                        {socialErrors[field.key] && (
+                          <p className="text-[10px] text-red-500">
+                            {socialErrors[field.key]}
+                          </p>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             </div>
-          </div>
-        )}
+          )}
+        </div>
 
-        <DialogFooter className="flex gap-2">
+        {/* ── Fixed footer (buttons stay visible even when the body scrolls) ── */}
+        <DialogFooter className="shrink-0 border-t border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-900/40 px-6 py-4">
           <Button
             variant="outline"
             onClick={() => onOpenChange(false)}

@@ -20,7 +20,6 @@ import {
   WHATSAPP_SUPPORT_SETTINGS_KEY,
   buildWhatsappDeepLink,
 } from "../../appSetting/appSetting.service";
-import { SOCIAL_LINK_PLATFORMS } from "../../appSetting/dto/appSetting.dto";
 
 type Tx = Prisma.TransactionClient;
 
@@ -557,10 +556,9 @@ export class NotificationEventEngine {
     // pre-filled message carries the pickup address so support instantly
     // knows which delivery the question is about. A settings-read failure
     // falls back to the default link instead of breaking the email.
-    // Same read also yields the optional "Follow us" footer lines.
-    const { waLink, socialLines } = await this.buildDeliveryContact(
-      delivery.pickupAddress
-    );
+    // WhatsApp ONLY in the email — social profiles stay an admin-side
+    // setting and are never sent to customers.
+    const waLink = await this.buildDeliveryContact(delivery.pickupAddress);
 
     const bodyLines = [
       `Hi ${firstName},`,
@@ -580,10 +578,6 @@ export class NotificationEventEngine {
       "",
       "Or email info@101drivers.com",
     ];
-
-    if (socialLines.length > 0) {
-      bodyLines.push("", "Follow us:", ...socialLines);
-    }
 
     bodyLines.push("", "— 101 Drivers Inc");
 
@@ -605,28 +599,22 @@ export class NotificationEventEngine {
   }
 
   /**
-   * Task 139: contact block for customer delivery emails.
-   *
-   * waLink — the ready-to-open WhatsApp deep link. The base link is the
-   * admin-editable AppSetting value (WHATSAPP_SUPPORT_SETTINGS.supportUrl,
-   * falling back to the shared default when no admin has saved one yet);
-   * the pre-filled message carries the delivery's pickup address, e.g.
+   * Task 139: the ready-to-open WhatsApp deep link for customer delivery
+   * emails. The base link is the admin-editable AppSetting value
+   * (WHATSAPP_SUPPORT_SETTINGS.supportUrl, falling back to the shared
+   * default when no admin has saved one yet); the pre-filled message
+   * carries the delivery's pickup address, e.g.
    *   https://wa.me/14243132168?text=Hi%2C%20I%20have%20a%20question%20
    *   about%20my%20delivery%20request%20%28pickup%3A%20...%29
    * wrapSimpleHtml() turns the URL into a clickable <a> in the HTML part.
    *
-   * socialLines — one "Label: url" line per social platform the admin
-   * saved in the Config Hub (all optional; unset platforms are omitted,
-   * so the footer never shows a dead link).
-   *
-   * A settings-read failure downgrades to the default WhatsApp link and
-   * an empty footer — it must never break sending the delivery email.
+   * A settings-read failure downgrades to the default WhatsApp link —
+   * it must never break sending the delivery email.
    */
   private async buildDeliveryContact(
     pickupAddress: string | null
-  ): Promise<{ waLink: string; socialLines: string[] }> {
+  ): Promise<string> {
     let supportUrl = DEFAULT_WHATSAPP_SUPPORT_URL;
-    let socialLines: string[] = [];
 
     try {
       const row = await this.prisma.appSetting.findUnique({
@@ -642,10 +630,9 @@ export class NotificationEventEngine {
           : "";
 
       if (storedSupportUrl) supportUrl = storedSupportUrl;
-      socialLines = this.socialFooterLinesFrom(row?.value);
     } catch (error) {
       this.logger.warn(
-        `Failed to read WHATSAPP_SUPPORT_SETTINGS for the delivery email; using defaults: ${
+        `Failed to read WHATSAPP_SUPPORT_SETTINGS for the delivery email; using default link: ${
           error instanceof Error ? error.message : String(error)
         }`
       );
@@ -656,41 +643,7 @@ export class NotificationEventEngine {
       : "";
     const message = `Hi, I have a question about my delivery request${pickupPart}`;
 
-    return {
-      waLink: buildWhatsappDeepLink(supportUrl, message),
-      socialLines,
-    };
-  }
-
-  /** "Label: url" lines per configured platform — email footer helper. */
-  private socialFooterLinesFrom(value: Prisma.JsonValue | null | undefined): string[] {
-    const storedSocial =
-      value && typeof value === "object" && !Array.isArray(value)
-        ? ((value as Record<string, unknown>).social ?? {})
-        : {};
-
-    const labels: Record<string, string> = {
-      instagram: "Instagram",
-      facebook: "Facebook",
-      x: "X (Twitter)",
-      youtube: "YouTube",
-      linkedin: "LinkedIn",
-      tiktok: "TikTok",
-      threads: "Threads",
-      pinterest: "Pinterest",
-      medium: "Medium",
-      substack: "Substack",
-      yelp: "Yelp",
-    };
-
-    const lines: string[] = [];
-    for (const platform of SOCIAL_LINK_PLATFORMS) {
-      const raw = (storedSocial as Record<string, unknown>)[platform];
-      if (typeof raw === "string" && raw.trim()) {
-        lines.push(`${labels[platform] ?? platform}: ${raw.trim()}`);
-      }
-    }
-    return lines;
+    return buildWhatsappDeepLink(supportUrl, message);
   }
 
   async notifyDriverBooked(input: {
