@@ -1,9 +1,40 @@
 // src/routes/about/index.tsx
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useState } from "react";
+import { useState, type MouseEvent } from "react";
 import { ArrowRight as ArrowForward, Menu } from "lucide-react";
 import { RightHemisphereNav } from "./rightHemisphereNav";
 import { useRequestDelivery } from "@/hooks/useRequestDelivery";
+
+/**
+ * Smooth-scroll to a landing-page section when we're ALREADY on it.
+ *
+ * These tabs are hash links to /home — clicking one while the landing
+ * page is open changes no route, so nothing re-scrolled and the tab felt
+ * dead (the user's report: "clicking does nothing... over and over").
+ * When we're on the landing page (it lives at both "/" and "/home") we
+ * take over: glide to the section and keep the URL hash in sync. From
+ * any other page we do nothing here and let the <Link> navigate
+ * normally — the landing page handles the section on arrival.
+ *
+ * Each tab has its own DISTINCT section (the old markup pointed Business
+ * and Personal at the same #dealers anchor and Drivers at #drivers,
+ * which exists nowhere):
+ *   How it works → #how              (step-by-step cards)
+ *   Business     → #dealers          ("Choose your delivery type" signup)
+ *   Personal     → #quote            (instant quote form)
+ *   Drivers      → #jointhewaitlist  ("Be Your Own Boss" recruitment)
+ */
+const makeSectionNavHandler = (sectionId: string) => (e: MouseEvent<HTMLAnchorElement>) => {
+  const { pathname } = window.location;
+  if (pathname !== "/" && pathname !== "/home") return;
+  e.preventDefault();
+  document
+    .getElementById(sectionId)
+    ?.scrollIntoView({ behavior: "smooth", block: "start" });
+  try {
+    history.replaceState(null, "", `${pathname}#${sectionId}`);
+  } catch { /* ignore */ }
+};
 
 export const NavBar = () => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -34,24 +65,28 @@ export const NavBar = () => {
           <nav className="hidden md:flex items-center gap-8">
             <Link
               to="/home#how"
+              onClick={makeSectionNavHandler("how")}
               className="text-sm font-semibold text-slate-600 dark:text-slate-400 hover:text-primary transition-colors"
             >
               How it works
             </Link>
             <Link
               to="/home#dealers"
+              onClick={makeSectionNavHandler("dealers")}
               className="text-sm font-semibold text-slate-600 dark:text-slate-400 hover:text-primary transition-colors"
             >
               Business
             </Link>
             <Link
-              to="/home#dealers"
+              to="/home#quote"
+              onClick={makeSectionNavHandler("quote")}
               className="text-sm font-semibold text-slate-600 dark:text-slate-400 hover:text-primary transition-colors"
             >
               Personal
             </Link>
             <Link
-              to="/home#drivers"
+              to="/home#jointhewaitlist"
+              onClick={makeSectionNavHandler("jointhewaitlist")}
               className="text-sm font-semibold text-slate-600 dark:text-slate-400 hover:text-primary transition-colors"
             >
               Drivers
@@ -75,29 +110,29 @@ export const NavBar = () => {
           <div className="max-w-[1440px] mx-auto px-6 py-4 flex flex-col gap-3">
             <Link
               to="/home#how"
+              onClick={(e) => { setMobileMenuOpen(false); makeSectionNavHandler("how")(e); }}
               className="text-sm font-semibold text-slate-700 dark:text-slate-300 hover:text-primary transition-colors"
-              onClick={() => setMobileMenuOpen(false)}
             >
               How it works
             </Link>
             <Link
               to="/home#dealers"
+              onClick={(e) => { setMobileMenuOpen(false); makeSectionNavHandler("dealers")(e); }}
               className="text-sm font-semibold text-slate-700 dark:text-slate-300 hover:text-primary transition-colors"
-              onClick={() => setMobileMenuOpen(false)}
             >
               Business
             </Link>
             <Link
-              to="/home#dealers"
+              to="/home#quote"
+              onClick={(e) => { setMobileMenuOpen(false); makeSectionNavHandler("quote")(e); }}
               className="text-sm font-semibold text-slate-700 dark:text-slate-300 hover:text-primary transition-colors"
-              onClick={() => setMobileMenuOpen(false)}
             >
               Personal
             </Link>
             <Link
-              to="/home#drivers"
+              to="/home#jointhewaitlist"
+              onClick={(e) => { setMobileMenuOpen(false); makeSectionNavHandler("jointhewaitlist")(e); }}
               className="text-sm font-semibold text-slate-700 dark:text-slate-300 hover:text-primary transition-colors"
-              onClick={() => setMobileMenuOpen(false)}
             >
               Drivers
             </Link>

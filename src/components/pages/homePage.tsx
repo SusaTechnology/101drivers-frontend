@@ -56,6 +56,7 @@ import {
   ClipboardCheck,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { ACTIVATE_QUOTE_EVENT } from "@/hooks/useRequestDelivery";
 import { NavBar } from "../shared/layout/navbar";
 import { DealerSignupForm } from "../auth/DealerSignupForm";
 import RouteMap from '@/components/map/RouteMap';
@@ -648,21 +649,54 @@ export default function LandingPage() {
     }
   }, [quoteResult, deliveryType, pickupAddress, dropoffAddress, pickupCoords, dropoffCoords, handleCalculateEstimate, quoteCapReached, handleContinueAfterCap, navigate]);
 
-  // "If a type is already selected, it skips straight to the address
-  // fields": when the visitor arrives via "Request a Delivery" (#quote)
-  // and we remember their delivery type, scroll past the type cards to
-  // the address inputs. First-time visitors stay on the type question.
+  // ─── "Request a Delivery" arrival — the form must ACTIVATE ──────────
+  // The CTA used to only scroll to #quote with no other feedback, which
+  // read as broken. There is now ONE activation behavior with two
+  // triggers:
+  //   • in-page CTAs (navbar / right nav / mobile menu) dispatch the
+  //     "101drivers:activate-quote" event (useRequestDelivery)
+  //   • cross-page arrivals land on /home#quote and the mount pass below
+  //     routes through the same routine
+  // With a delivery type on file: glide to the address card and FOCUS
+  // "From Where" — its lime focus ring is the visible activation.
+  // Without one: glow the type chooser (ring + pulsing wash) — the
+  // address fields are disabled until a type is picked, so the chooser
+  // IS the next step, and the glow makes the scroll impossible to miss.
+  const activateQuoteForm = useCallback(() => {
+    if (deliveryType) {
+      document
+        .getElementById("quote-inputs")
+        ?.scrollIntoView({ behavior: "smooth", block: "start" });
+      // preventScroll: the smooth glide above owns the viewport; a plain
+      // focus() would jump-scroll and cut it short. The short delay lets
+      // the glide get going, then the ring paints on arrival.
+      setTimeout(() => {
+        document.getElementById("quote-from-input")?.focus({ preventScroll: true });
+      }, 350);
+    } else {
+      promptDeliveryType();
+    }
+  }, [deliveryType, promptDeliveryType]);
+
+  // In-page CTA trigger (same-page "Request a Delivery" clicks).
+  useEffect(() => {
+    const onActivateQuote = () => activateQuoteForm();
+    window.addEventListener(ACTIVATE_QUOTE_EVENT, onActivateQuote);
+    return () => window.removeEventListener(ACTIVATE_QUOTE_EVENT, onActivateQuote);
+  }, [activateQuoteForm]);
+
+  // Cross-page arrival (privacy/terms CTA → /home#quote) and the
+  // same-hash re-run when the visitor answers the chooser: deps follow
+  // activateQuoteForm, so picking a delivery type while the URL still
+  // says #quote glides straight to the freshly-enabled address card —
+  // the form activates the moment the chooser is answered.
   useEffect(() => {
     try {
       if (window.location.hash !== "#quote") return;
-      const saved = readHomeQuotePrefill();
-      if (saved.deliveryType) {
-        setTimeout(() => {
-          document.getElementById("quote-inputs")?.scrollIntoView({ behavior: "smooth", block: "start" });
-        }, 150);
-      }
+      const t = setTimeout(activateQuoteForm, 150);
+      return () => clearTimeout(t);
     } catch { /* ignore */ }
-  }, []);
+  }, [activateQuoteForm]);
 
   // ─── Dealer / investor lead submissions ─────────────────────────────
   const submitDealerLead = useCreate(`${import.meta.env.VITE_API_URL}/api/dealerLeads/public`, {
@@ -1044,6 +1078,7 @@ export default function LandingPage() {
                   <div className="relative">
                     <LocationAutocomplete
                       key="pickup"
+                      id="quote-from-input"
                       value={pickupAddress}
                       onChange={setPickupAddress}
                       onPlaceSelect={handlePickupSelect}
@@ -1480,7 +1515,7 @@ export default function LandingPage() {
         </section>
 
         {/* ===== SECTION 5 — How the Service Works ===== */}
-        <section id="how" className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 py-10 lg:py-14">
+        <section id="how" className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 py-10 lg:py-14 scroll-mt-24">
           <div>
             <h2 className="text-2xl sm:text-3xl lg:text-4xl font-black text-slate-900 dark:text-white leading-tight">
               How It Works
@@ -1523,7 +1558,7 @@ export default function LandingPage() {
         </section>
 
         {/* ===== SECTION 6 — Signup Choice (Business / Personal) ===== */}
-        <section id="dealers" className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 py-10 lg:py-14">
+        <section id="dealers" className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 py-10 lg:py-14 scroll-mt-24">
           <div className="max-w-2xl mx-auto text-center">
             <h2 className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white mb-2">
               Choose your delivery type.
@@ -1596,7 +1631,7 @@ export default function LandingPage() {
         </section>
 
         {/* ===== SECTION 7 — Driver Recruitment ===== */}
-        <section id="jointhewaitlist" className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 py-10 lg:py-14">
+        <section id="jointhewaitlist" className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 py-10 lg:py-14 scroll-mt-24">
           <div className="max-w-3xl mx-auto">
             <Card className="rounded-3xl border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
               <CardContent className="p-6 sm:p-8">

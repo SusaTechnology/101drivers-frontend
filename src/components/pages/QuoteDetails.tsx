@@ -508,7 +508,7 @@ export function QuoteDetails() {
               <a href="/home#how" className="text-sm font-semibold text-slate-600 dark:text-slate-400 hover:text-primary transition-colors">How it works</a>
               <a href="/home#standard" className="text-sm font-semibold text-slate-600 dark:text-slate-400 hover:text-primary transition-colors">Compliance</a>
               <a href="/home#dealers" className="text-sm font-semibold text-slate-600 dark:text-slate-400 hover:text-primary transition-colors">Dealers</a>
-              <a href="/home#drivers" className="text-sm font-semibold text-slate-600 dark:text-slate-400 hover:text-primary transition-colors">Drivers</a>
+              <a href="/home#jointhewaitlist" className="text-sm font-semibold text-slate-600 dark:text-slate-400 hover:text-primary transition-colors">Drivers</a>
             </nav>
           </div>
           <div className="flex items-center gap-4">
@@ -528,7 +528,7 @@ export function QuoteDetails() {
               <a className="text-sm font-semibold text-slate-700 dark:text-slate-300 hover:text-primary transition-colors py-2" href="/home#how" onClick={() => setMobileMenuOpen(false)}>How it works</a>
               <a className="text-sm font-semibold text-slate-700 dark:text-slate-300 hover:text-primary transition-colors py-2" href="/home#standard" onClick={() => setMobileMenuOpen(false)}>Compliance</a>
               <a className="text-sm font-semibold text-slate-700 dark:text-slate-300 hover:text-primary transition-colors py-2" href="/home#dealers" onClick={() => setMobileMenuOpen(false)}>Dealers</a>
-              <a className="text-sm font-semibold text-slate-700 dark:text-slate-300 hover:text-primary transition-colors py-2" href="/home#drivers" onClick={() => setMobileMenuOpen(false)}>Drivers</a>
+              <a className="text-sm font-semibold text-slate-700 dark:text-slate-300 hover:text-primary transition-colors py-2" href="/home#jointhewaitlist" onClick={() => setMobileMenuOpen(false)}>Drivers</a>
               <div className="pt-3 border-t border-slate-200 dark:border-slate-800 flex flex-col gap-2">
                 <Link to="/home#estimate" className="text-sm font-bold text-slate-700 dark:text-slate-200 hover:text-primary transition-colors py-1" onClick={() => setMobileMenuOpen(false)}>
                   Back to Estimate

@@ -3,6 +3,13 @@ import { useUserLocation } from '@/hooks/useUserLocation';
 
 interface LocationAutocompleteProps {
   value: string;
+  /**
+   * Optional DOM id for the underlying <input> — lets a parent scroll to
+   * and .focus() the field programmatically (e.g. the landing page's
+   * "Request a Delivery" activation focuses "From Where"). Optional;
+   * callers that don't need it are unaffected.
+   */
+  id?: string;
   onChange: (value: string) => void;
   onPlaceSelect: (place: google.maps.places.PlaceResult) => void;
   onClear?: () => void;
@@ -87,6 +94,7 @@ function filterToCA(
 
 export default function LocationAutocomplete({
   value,
+  id,
   onChange,
   onPlaceSelect,
   onClear,
@@ -299,6 +307,7 @@ export default function LocationAutocomplete({
       {icon && <div className="absolute left-4 top-1/2 -translate-y-1/2 z-10">{icon}</div>}
       <input
         ref={inputRef}
+        id={id}
         type="text"
         value={inputValue}
         onChange={handleInputChange}

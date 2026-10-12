@@ -8,11 +8,19 @@
  *    ("/dealer-create-delivery") — skip any signup step.
  *  • Logged-in DRIVER / ADMIN → they cannot place deliveries; land them on
  *    their own dashboard instead of a page that would error out.
- *  • Logged-out → the landing page's delivery-type chooser (#quote) IS the
- *    gate. If the chooser is on the current page, smooth-scroll to it (same
- *    idiom the landing page uses internally); from any other page, go to
- *    "/home#quote". Addresses live on the landing page, so nothing can be
- *    "carried" from here — the chooser + quoteDraft flow handles carry-over.
+ *  • Logged-out → the landing page's quote form (#quote) IS the gate.
+ *    On the landing page we dispatch the "101drivers:activate-quote"
+ *    event and homePage owns the visible response: with a delivery type
+ *    on file it smooth-scrolls to the address card and FOCUSES the
+ *    "From Where" input (its lime focus ring shows the form activate);
+ *    without one it glows the delivery-type chooser instead (the address
+ *    fields are disabled until a type is picked, so the chooser IS the
+ *    next step). A bare scrollIntoView here used to be the whole story —
+ *    it moved the page with zero other feedback, which read as broken.
+ *    From any other page, go to "/home#quote"; the landing page runs the
+ *    same activation on arrival. Addresses live on the landing page, so
+ *    nothing can be "carried" from here — the chooser + quoteDraft flow
+ *    handles carry-over.
  *  • Never navigates back to a generic home state, never burns a quote.
  */
 import { useCallback } from "react";
@@ -21,10 +29,16 @@ import { getUser, isAuthenticated } from "@/lib/tanstack/dataQuery";
 
 export const CUSTOMER_ROLES = ["BUSINESS_CUSTOMER", "PRIVATE_CUSTOMER"];
 
-function scrollToQuoteChooser() {
-  document
-    .getElementById("quote")
-    ?.scrollIntoView({ behavior: "smooth", block: "center" });
+/** Event homePage listens for to run the type-aware form activation. */
+export const ACTIVATE_QUOTE_EVENT = "101drivers:activate-quote";
+
+/**
+ * The landing page is mounted (its #quote section exists) and therefore
+ * listens for the activation event — let IT decide what the visitor sees,
+ * based on whether a delivery type is already on file.
+ */
+function activateQuoteFormOnLanding() {
+  window.dispatchEvent(new CustomEvent(ACTIVATE_QUOTE_EVENT));
 }
 
 export function useRequestDelivery() {
@@ -41,14 +55,20 @@ export function useRequestDelivery() {
         navigate({ to: "/admin-dashboard" });
       } else {
         // Unknown role combination — the chooser is a safe fallback.
-        scrollToQuoteChooser();
-        navigate({ to: "/home#quote" });
+        if (document.getElementById("quote")) {
+          activateQuoteFormOnLanding();
+        } else {
+          navigate({ to: "/home#quote" });
+        }
       }
       return;
     }
-    // Logged out — the chooser on the landing page is step 1 of the gate.
+    // Logged out — the quote form on the landing page is step 1 of the
+    // gate. On the landing page, activate it (scroll + focus/glow); from
+    // any other page, navigate there — the landing page runs the same
+    // activation when it mounts with the #quote hash.
     if (document.getElementById("quote")) {
-      scrollToQuoteChooser();
+      activateQuoteFormOnLanding();
       return;
     }
     navigate({ to: "/home#quote" });
