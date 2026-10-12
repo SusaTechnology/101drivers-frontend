@@ -234,8 +234,31 @@ export default function DriverOnboardingPage() {
   const [selectedDistricts, setSelectedDistricts] = useState<string[]>([]);
   const [registrationComplete, setRegistrationComplete] = useState(false);
   const [draftLoaded, setDraftLoaded] = useState(false);
-  const [phoneDisplay, setPhoneDisplay] = useState("");
-  const [dobDisplay, setDobDisplay] = useState("");
+
+  // Parse the saved signup draft ONCE per mount, synchronously BEFORE the
+  // first paint. The form-value restore itself happens in the mount effect
+  // (reset() below), but three pieces of UI read NON-form state and would
+  // otherwise come back blank after "← Back to registration":
+  //   - phoneDisplay / dobDisplay (display-only masks for the phone input
+  //     and the DOB picker button — reset() updates form values, not these)
+  //   - ReferralCodeInput's initial value (its own internal state)
+  //   - the middle-name warning dismissal flag
+  const [restoredDraft] = useState(() => {
+    const draftStr = safeLocalStorage.get(DRIVER_SIGNUP_DRAFT_KEY);
+    if (!draftStr) return null;
+    try {
+      return JSON.parse(draftStr);
+    } catch {
+      return null;
+    }
+  });
+  const restoredDraftPhone = (restoredDraft?.formData?.phone as string) ?? "";
+  const restoredDraftDob = (restoredDraft?.formData?.dateOfBirth as string) ?? "";
+  const restoredReferralCode = (restoredDraft?.referralCode as string) ?? "";
+  // Draft stores the phone as digits-only (the form value) — re-apply the
+  // display mask so the input shows (555) 123-4567 again.
+  const [phoneDisplay, setPhoneDisplay] = useState(() => formatPhoneNumber(restoredDraftPhone));
+  const [dobDisplay, setDobDisplay] = useState(restoredDraftDob);
   const [calendarOpen, setCalendarOpen] = useState(false);
   
   // Password visibility states
@@ -407,7 +430,12 @@ export default function DriverOnboardingPage() {
             // referralCode is sourced from the validated state captured by
             // ReferralCodeInput (which auto-fills from ?ref= on mount) — NOT
             // from the URL here, because the user may have edited/cleared it
-            // in the visible input before navigating away.
+            // in the visible input before navigating away. On this email-link
+            // path the input unmounts before its async resolve completes, so
+            // the state is null — fall back to the code persisted in the
+            // draft at submit time.
+            const payloadReferral =
+              referralCode ?? ((draft.referralCode as string) || undefined);
             const payload: DriverSignupPayload = {
               email: draft.formData.email,
               password: draft.formData.password,
@@ -419,7 +447,7 @@ export default function DriverOnboardingPage() {
               districts: draft.formData.districts,
               emailAlerts: draft.formData.alerts,
               agreementAcceptedAt: new Date().toISOString(),
-              ...(referralCode ? { referralCode } : {}),
+              ...(payloadReferral ? { referralCode: payloadReferral } : {}),
             };
             // Store payload and redirect to verify page (with OTP in URL)
             safeSessionStorage.set(DRIVER_PENDING_PAYLOAD_KEY, JSON.stringify(payload));
@@ -512,6 +540,12 @@ export default function DriverOnboardingPage() {
     const draft = {
       formData: data,
       haveInsurance: haveInsurance === true,
+      // Remembered across "← Back to registration": the middle-name nudge
+      // stays dismissed and the validated referral code re-seeds the
+      // referral input (which re-validates it against the API). Both are
+      // wiped with the whole draft on successful signup (driver-verify-email).
+      nameWarningDismissed,
+      ...(referralCode ? { referralCode } : {}),
     };
     safeLocalStorage.set(DRIVER_SIGNUP_DRAFT_KEY, JSON.stringify(draft));
 
@@ -546,17 +580,39 @@ export default function DriverOnboardingPage() {
   // people legally have no middle name) — the driver just has to tell us
   // so by dismissing the warning. Checkmark policy:
   //   - 3+ words  → passed (green checkmark, no warning)
-  //   - 2 words   → red warning; checkmark only after the driver
+  //   - 1–2 words → red nudge "If your license shows a middle name,
+  //                 include it here."; checkmark only after the driver
   //                 dismisses it ("I don't have a middle name")
-  //   - 0–1 words → neither checkmark nor warning (empty/invalid)
+  //   - empty     → neither checkmark nor nudge (nothing typed yet)
   // The name is stored backend-side as a single verbatim string — no
   // normalization — so casing/spacing here is what Stripe will see.
-  const [nameWarningDismissed, setNameWarningDismissed] = useState(false);
+  // Dismissal survives "← Back to registration" and reloads (persisted in
+  // the draft, see onClick below) — but only until the signup actually
+  // completes: the verify page wipes the whole draft on success, so the
+  // next driver starts fresh.
+  const [nameWarningDismissed, setNameWarningDismissed] = useState(
+    () => restoredDraft?.nameWarningDismissed === true
+  );
   const fullNameWordCount = (watchFullName ?? "").trim().split(/\s+/).filter(Boolean).length;
-  const showFullNameWarning = fullNameWordCount === 2 && !nameWarningDismissed;
+  // Anything short of three words gets the nudge (1 word is still being
+  // typed or a single-word entry — both need the middle-name reminder);
+  // it clears itself the moment the third word lands. An empty field says
+  // nothing — there's nothing typed to nudge about.
+  const showFullNameWarning =
+    fullNameWordCount >= 1 && fullNameWordCount < 3 && !nameWarningDismissed;
   const fullNamePasses =
     (fullNameWordCount >= 3 || (fullNameWordCount === 2 && nameWarningDismissed)) &&
     !errors.fullName;
+
+  // ── Email — blur-gated format feedback (mirrors the ZIP field) ──────
+  // While the driver is on the field, an invalid email stays neutral —
+  // it's work-in-progress. Leaving the field with something that isn't a
+  // valid email turns the border red + shows a helper below, exactly like
+  // phone and ZIP do. Re-focusing clears the red until the next blur.
+  const [emailFocused, setEmailFocused] = useState(false);
+  const [emailBlurred, setEmailBlurred] = useState(false);
+  const emailFormatOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test((watchEmail ?? "").trim());
+  const emailBlurRed = emailBlurred && !emailFocused && !emailFormatOk;
 
   // Age gate: compute actual age from DOB
   const computedAge = useMemo(() => {
@@ -1103,7 +1159,20 @@ export default function DriverOnboardingPage() {
                           </p>
                           <button
                             type="button"
-                            onClick={() => setNameWarningDismissed(true)}
+                            onClick={() => {
+                              setNameWarningDismissed(true);
+                              // Persist immediately — read-modify-write in
+                              // case a draft already exists; create a
+                              // minimal one if the driver dismisses before
+                              // ever submitting the form.
+                              let draftObj: Record<string, unknown> = {};
+                              const raw = safeLocalStorage.get(DRIVER_SIGNUP_DRAFT_KEY);
+                              if (raw) {
+                                try { draftObj = JSON.parse(raw); } catch { draftObj = {}; }
+                              }
+                              draftObj.nameWarningDismissed = true;
+                              safeLocalStorage.set(DRIVER_SIGNUP_DRAFT_KEY, JSON.stringify(draftObj));
+                            }}
                             className="text-[11px] font-bold text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 underline underline-offset-2 whitespace-nowrap flex-shrink-0 transition-colors"
                           >
                             I don't have a middle name
@@ -1115,7 +1184,7 @@ export default function DriverOnboardingPage() {
                     {/* Email */}
                     <div className={cn(
                       "space-y-2 p-4 rounded-2xl border transition-all duration-300",
-                      errors.email
+                      (errors.email || emailBlurRed)
                         ? "border-red-400 dark:border-red-600 bg-red-50 dark:bg-red-950/20"
                         : "border-transparent"
                     )}>
@@ -1126,11 +1195,16 @@ export default function DriverOnboardingPage() {
                         <Input
                           id="email"
                           {...register("email")}
+                          onFocus={() => setEmailFocused(true)}
+                          onBlur={() => {
+                            setEmailFocused(false);
+                            setEmailBlurred(true);
+                          }}
                           className={cn(
                             "h-14 rounded-2xl pr-10 transition-colors",
-                            errors.email
+                            errors.email || emailBlurRed
                               ? "border-red-400 dark:border-red-500"
-                              : watchEmail?.trim() && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(watchEmail)
+                              : emailFormatOk
                                 ? "border-green-300 dark:border-green-700"
                                 : ""
                           )}
@@ -1148,6 +1222,11 @@ export default function DriverOnboardingPage() {
                       {errors.email && (
                         <p className="text-xs text-red-500 font-medium">
                           {errors.email.message}
+                        </p>
+                      )}
+                      {!errors.email && emailBlurRed && (
+                        <p className="text-xs text-red-500 dark:text-red-400 font-medium">
+                          Please enter a valid email address — e.g. jane@example.com.
                         </p>
                       )}
                     </div>
@@ -1355,6 +1434,7 @@ export default function DriverOnboardingPage() {
                         decided by the backend role matrix (admin-tunable). */}
                     <ReferralCodeInput
                       onChange={setReferralCode}
+                      initialValue={restoredReferralCode}
                       disabled={isPending}
                       referralTargetRole="DRIVER"
                     />
