@@ -61,6 +61,8 @@ import { SupportRequestNoteModule } from "./supportRequestNote/supportRequestNot
 import { StripeModule } from "./providers/stripe/stripe.module";
 import { ReferralModule } from "./referral/referral.module";
 import { StripeWebhookController } from "./payment/stripe-webhook.controller";
+import { RefundSyncService } from "./payment/refund-sync.service";
+import { RefundReconciliationService } from "./payment/refund-reconciliation.service";
 import { InsurancePortalController } from "./insurance-portal/insurance-portal.controller";
 import { ContentController } from "./content/content.controller";
 import { CmsController } from "./cms/cms.controller";
@@ -146,6 +148,15 @@ import { PostpaidBillingModule } from "./postpaidBilling/postpaidBilling.module"
     }),
     EmailVerificationModule
   ],
-  providers: [NotificationEventEngine, MailService, CmsService],
+  providers: [
+    NotificationEventEngine,
+    MailService,
+    CmsService,
+    // Task 19: shared refund state-transition (webhook + reconciler) and
+    // the self-healing sweep for refunds whose charge.refunded webhook
+    // never landed.
+    RefundSyncService,
+    RefundReconciliationService,
+  ],
 })
 export class AppModule {}

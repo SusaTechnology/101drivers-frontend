@@ -2306,6 +2306,271 @@ async notifyTripCompleted(input: {
     });
   }
 
+  // ── Task 19: money-visibility alerts to ADMINS ────────────────────
+  //
+  // Three admin-facing notifications that close the "we didn't know money
+  // moved" gaps the owner hit in production:
+  //   1. notifyAdminsRefundProcessed   — a refund COMPLETED (webhook or
+  //      reconciler). Previously a refund only updated the Payment row;
+  //      nobody was told, and if the webhook was lost nothing happened
+  //      at all until someone noticed the missing REFUNDED badge.
+  //   2. notifyAdminsPayoutRunFailed   — the weekly sweep finished with
+  //      FAILED batches or balance-skipped drivers. Previously the only
+  //      trace was the PayoutSweepRun report page; no email, no bell.
+  //   3. notifyAdminsPlatformPayout    — Stripe swept platform money to
+  //      the company bank (payout.paid / payout.failed). Previously the
+  //      ONLY untracked money rail: invisible to our app entirely.
+
+  /** Look up every admin user — shared by the three methods below. */
+  private async adminRecipients(): Promise<
+    { id: string; email: string | null; fullName: string | null; username: string | null }[]
+  > {
+    return this.prisma.user.findMany({
+      where: { roles: EnumUserRoles.ADMIN },
+      select: { id: true, email: true, fullName: true, username: true },
+    });
+  }
+
+  /**
+   * Notify all admins that a customer refund COMPLETED — i.e. the
+   * charge.refunded webhook (or reconciler) actually applied the state
+   * transition: Payment now carries refundedAmountCents / refundStatus /
+   * REFUNDED (full) and a proportional driver clawback was queued.
+   *
+   * Fired with source = "webhook" on the normal path, or "reconciler"
+   * when the sweep had to pull the charge from Stripe because the webhook
+   * never arrived — the reconciler variant tells admins to check
+   * Stripe → Developers → Webhooks, which is the real root cause.
+   */
+  async notifyAdminsRefundProcessed(input: {
+    paymentId: string;
+    deliveryId?: string | null;
+    refundAmount: number;
+    refundedToDate: number;
+    totalAmount: number;
+    isFullRefund: boolean;
+    refundId?: string | null;
+    refundedBy?: string | null;
+    adminNote?: string | null;
+    source: "webhook" | "reconciler";
+  }) {
+    const admins = await this.adminRecipients();
+    if (admins.length === 0) {
+      this.logger.warn(
+        "notifyAdminsRefundProcessed: no admin users found in DB, skipping",
+      );
+      return;
+    }
+
+    const deliveryRef = input.deliveryId
+      ? `#${input.deliveryId.slice(-6).toUpperCase()}`
+      : "(no delivery)";
+    const amountStr = `$${Number(input.refundAmount).toFixed(2)}`;
+    const totalStr = `$${Number(input.totalAmount).toFixed(2)}`;
+    const toDateString = `$${Number(input.refundedToDate).toFixed(2)}`;
+    const byLine = input.refundedBy ? ` Processed by ${input.refundedBy}.` : "";
+    const noteLine = input.adminNote ? ` Reason: "${input.adminNote}".` : "";
+    const sourceLine =
+      input.source === "reconciler"
+        ? " Confirmed via the refund reconciliation sweep — the Stripe charge.refunded webhook for this refund was NOT received. Please check Stripe Dashboard → Developers → Webhooks endpoint health."
+        : "";
+
+    const subject = `Refund completed — ${amountStr} for delivery ${deliveryRef}`;
+    const body = [
+      "Refund completed on Stripe.",
+      "",
+      `Delivery: ${deliveryRef}`,
+      `Refunded this time: ${amountStr} (${input.isFullRefund ? "FULL" : "PARTIAL"} refund)`,
+      `Refunded to date: ${toDateString} of ${totalStr}`,
+      `Stripe refund ID: ${input.refundId ?? "n/a"}`,
+      "",
+      `The payment record now carries the refund state (the delivery page and the payments report show the Refunded badge with date).${byLine}${noteLine}`,
+      input.isFullRefund
+        ? "A proportional clawback adjustment was created against the driver's payout."
+        : "A proportional clawback adjustment (refund share) was created against the driver's payout.",
+      sourceLine,
+    ]
+      .filter(Boolean)
+      .join("\n");
+
+    for (const admin of admins) {
+      await this.queueAndSend({
+        actorUserId: admin.id,
+        toUserId: admin.id,
+        deliveryId: input.deliveryId ?? null,
+        channel: EnumNotificationEventChannel.EMAIL,
+        type: EnumNotificationEventType.PAYMENT_REFUNDED,
+        templateCode: "admin-refund-processed",
+        toEmail: admin.email,
+        subject,
+        body,
+        payload: {
+          paymentId: input.paymentId,
+          deliveryId: input.deliveryId ?? null,
+          refundAmount: input.refundAmount,
+          refundedToDate: input.refundedToDate,
+          totalAmount: input.totalAmount,
+          isFullRefund: input.isFullRefund,
+          refundId: input.refundId ?? null,
+          refundedBy: input.refundedBy ?? null,
+          adminNote: input.adminNote ?? null,
+          source: input.source,
+        },
+      });
+    }
+  }
+
+  /**
+   * Notify all admins that a weekly sweep run finished with FAILED batches
+   * and/or drivers skipped because the platform Stripe balance could not
+   * cover their batch. Includes the actual Stripe failure text and the
+   * two remediations: enable manual payouts (Dashboard link) and the
+   * admin re-run endpoint.
+   */
+  async notifyAdminsPayoutRunFailed(input: {
+    runId: string | null;
+    trigger: "CRON" | "MANUAL";
+    failed: { driverId: string; driverName?: string | null; amount: number; reason: string }[];
+    balanceSkipped: { driverId: string; driverName?: string | null; amount: number }[];
+    availableBalanceUsd?: number | null;
+  }) {
+    const admins = await this.adminRecipients();
+    if (admins.length === 0) return;
+
+    const runRef = input.runId ? input.runId.slice(-6).toUpperCase() : "n/a";
+    const lines: string[] = [];
+
+    if (input.failed.length > 0) {
+      lines.push(
+        `${input.failed.length} driver payout${input.failed.length === 1 ? "" : "s"} FAILED this run:`,
+      );
+      for (const f of input.failed) {
+        lines.push(
+          `• ${f.driverName || f.driverId} — $${Number(f.amount).toFixed(2)}: ${f.reason}`,
+        );
+      }
+      lines.push("");
+    }
+
+    if (input.balanceSkipped.length > 0) {
+      const skippedTotal = input.balanceSkipped.reduce((s, d) => s + d.amount, 0);
+      lines.push(
+        `${input.balanceSkipped.length} driver${input.balanceSkipped.length === 1 ? "" : "s"} SKIPPED — the platform Stripe balance could not cover their batch ($${skippedTotal.toFixed(2)} needed):`,
+      );
+      for (const d of input.balanceSkipped) {
+        lines.push(`• ${d.driverName || d.driverId} — $${Number(d.amount).toFixed(2)}`);
+      }
+      lines.push("");
+      if (input.availableBalanceUsd != null) {
+        lines.push(
+          `Available platform balance at sweep start: $${input.availableBalanceUsd.toFixed(2)}.`,
+        );
+      }
+      lines.push(
+        "Most likely cause: Stripe's automatic payouts swept the available balance to the company bank before this run. Fix once in Stripe Dashboard → Settings → Balance → Payout schedule → set to Manual, then re-run:",
+      );
+      lines.push(
+        "POST /driverPayouts/admin/process-weekly-payouts (or the Re-run button on the sweep run page).",
+      );
+      lines.push("");
+    }
+
+    if (lines.length === 0) return;
+
+    lines.push(
+      "Affected balances were automatically restored to ELIGIBLE — drivers are still owed their money and will be picked up by the next sweep or a manual re-run.",
+    );
+
+    const subject = `Driver payout sweep ${input.failed.length > 0 ? "failed" : "skipped"} for ${input.failed.length + input.balanceSkipped.length} driver(s) — run #${runRef}`;
+
+    for (const admin of admins) {
+      await this.queueAndSend({
+        actorUserId: admin.id,
+        toUserId: admin.id,
+        channel: EnumNotificationEventChannel.EMAIL,
+        type: EnumNotificationEventType.ADMIN_PAYOUT_RUN_FAILED,
+        templateCode: "admin-payout-run-failed",
+        toEmail: admin.email,
+        subject,
+        body: lines.join("\n"),
+        payload: {
+          runId: input.runId,
+          trigger: input.trigger,
+          failedCount: input.failed.length,
+          balanceSkippedCount: input.balanceSkipped.length,
+          availableBalanceUsd: input.availableBalanceUsd ?? null,
+        },
+      });
+    }
+  }
+
+  /**
+   * Notify all admins that Stripe moved platform money to/from the company
+   * bank account (payout.paid / payout.failed webhooks). This is the rail
+   * that used to be completely invisible: Stripe's automatic payouts sweep
+   * the balance to the bank, and until now our app had no idea.
+   */
+  async notifyAdminsPlatformPayout(input: {
+    payoutId: string;
+    status: "PAID" | "FAILED" | string;
+    amount: number;
+    currency: string;
+    method?: string | null;
+    arrivalDate?: string | null;
+    failureMessage?: string | null;
+    automatic?: boolean | null;
+  }) {
+    const admins = await this.adminRecipients();
+    if (admins.length === 0) return;
+
+    const amountStr = `$${Number(input.amount).toFixed(2)} ${input.currency.toUpperCase()}`;
+    const isFailed = input.status === "FAILED";
+    const subject = isFailed
+      ? `Stripe bank payout FAILED — ${amountStr} (po_${input.payoutId.slice(-8)})`
+      : `Stripe paid out ${amountStr} to the company bank (po_${input.payoutId.slice(-8)})`;
+
+    const body = [
+      isFailed
+        ? "A Stripe payout TO YOUR BANK ACCOUNT failed."
+        : "Stripe moved platform money to the company bank account.",
+      "",
+      `Stripe payout ID: ${input.payoutId}`,
+      `Amount: ${amountStr}`,
+      `Status: ${input.status}`,
+      input.method ? `Destination: ${input.method}` : null,
+      input.arrivalDate ? `Expected arrival: ${input.arrivalDate}` : null,
+      input.automatic != null ? `Trigger: ${input.automatic ? "Stripe automatic payout schedule" : "manual payout"}` : null,
+      input.failureMessage ? `Failure reason: ${input.failureMessage}` : null,
+      "",
+      isFailed
+        ? "If automatic payouts are still enabled, consider switching to manual payouts (Dashboard → Settings → Balance) so platform money stays available for driver transfers."
+        : "This balance is no longer available for driver transfers or refunds — keep it in mind when reviewing sweep failures.",
+    ]
+      .filter(Boolean)
+      .join("\n");
+
+    for (const admin of admins) {
+      await this.queueAndSend({
+        actorUserId: admin.id,
+        toUserId: admin.id,
+        channel: EnumNotificationEventChannel.EMAIL,
+        type: EnumNotificationEventType.ADMIN_PLATFORM_PAYOUT,
+        templateCode: "admin-platform-payout",
+        toEmail: admin.email,
+        subject,
+        body,
+        payload: {
+          payoutId: input.payoutId,
+          status: input.status,
+          amount: input.amount,
+          currency: input.currency,
+          automatic: input.automatic ?? null,
+          failureMessage: input.failureMessage ?? null,
+        },
+      });
+    }
+  }
+
   /**
    * Notify customer that their payment failed asynchronously.
    * Triggered by the `payment_intent.payment_failed` webhook — this fires

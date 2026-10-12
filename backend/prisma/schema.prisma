@@ -1645,6 +1645,12 @@ enum EnumPaymentEventStatus {
   PAID
   VOIDED
   REFUNDED
+  // Written by the admin refund endpoint the moment Stripe accepts the
+  // refund request — upgraded to REFUNDED by the charge.refunded webhook
+  // or the reconciliation sweep. If a refund event is still PROCESSING
+  // after 15 minutes the webhook was lost; the reconciler pulls the
+  // charge from Stripe and applies the state transition itself.
+  PROCESSING
 }
 
 enum EnumPaymentEventType {
@@ -1763,6 +1769,18 @@ enum EnumNotificationEventType {
   SUPPORT_REQUEST_REPLIED
   SUPPORT_REQUEST_RESOLVED
   SUPPORT_REQUEST_CLOSED
+  // ── Money-visibility alerts (Task 19) ──
+  // PAYMENT_REFUNDED: a customer refund COMPLETED (charge.refunded webhook
+  //   or reconciler) — tells admins the delivery/payment now carry refund
+  //   state and a driver clawback adjustment was created.
+  // ADMIN_PAYOUT_RUN_FAILED: the weekly sweep finished with FAILED batches
+  //   or drivers skipped for insufficient platform balance — the exact
+  //   "insufficient funds" failure the run report shows.
+  // ADMIN_PLATFORM_PAYOUT: Stripe moved platform money to the company bank
+  //   (payout.paid / payout.failed) — closes the last untracked money rail.
+  PAYMENT_REFUNDED
+  ADMIN_PAYOUT_RUN_FAILED
+  ADMIN_PLATFORM_PAYOUT
 }
 
 enum EnumAdminAuditLogAction {

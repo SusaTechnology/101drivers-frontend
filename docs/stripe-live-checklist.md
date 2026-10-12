@@ -41,6 +41,8 @@ migrates automatically.
   | `payment_intent.succeeded` | Prepaid capture flow |
   | `payment_intent.payment_failed` | Prepaid failure states |
   | `payment_intent.canceled` | Prepaid cancel cleanup |
+  | `payout.paid` | **Task 19:** Stripe moved platform money to the company bank — admin alert (bell + email) |
+  | `payout.failed` | **Task 19:** bank payout FAILED — admin alert; likely cause of driver-sweep "insufficient funds" |
   | `setup_intent.succeeded` | **Critical:** sets + verifies the Stripe invoice default card; triggers the open-invoice pay-kick |
   | `transfer.created` | Driver payout tracking |
 
@@ -91,3 +93,36 @@ is env-driven; test mode stays intact for staging under the old keys.
   now").
 - The nightly reconciliation + backfill + digest run in live mode exactly as
   described in `docs/billing-runbook.md`.
+
+## 7. Payout schedule — set MANUAL (Task 19, required)
+
+Stripe's default payout schedule sweeps the platform **available balance to
+the company bank automatically (daily)**. The Monday 06:00 PT driver sweep
+runs `transfers.create`, which debits the SAME available balance — when the
+auto-payout lands first, every transfer fails with `insufficient_funds`
+(this happened 2026-10-12: Maz Siam's $33.22 payout failed this way).
+
+Fix once in the Dashboard:
+
+- **Settings → Balance → Payout schedule → set to Manual** (or via API:
+  `stripe accounts update --settings[payouts][schedule][interval]=manual`).
+- Pay the company out deliberately via **Balance → Pay out now** when
+  wanted. Money stays available for driver transfers and refunds until then.
+- Refunds debit the same balance — with manual payouts a refund after a bank
+  payout shows as a negative balance that future payments restore; keep a
+  small cushion if refunds are common.
+- Card payments are only transferable once Stripe marks them available
+  (rolling, typically T+2). Manual payouts don't change that — the sweep
+  only ever spends AVAILABLE funds.
+- After switching, re-run the failed drivers:
+  `POST /driverPayouts/admin/process-weekly-payouts`.
+
+## 8. Refund webhook safety net (Task 19)
+
+The admin refund endpoint writes a PROCESSING PaymentEvent row the moment
+Stripe accepts a refund; the `charge.refunded` webhook (or the built-in
+reconciliation sweep, every 10 min after a 15-min grace window) applies the
+state transition and notifies admins. If a refund ever stays "processing":
+check **Developers → Webhooks → endpoint → charge.refunded deliveries** —
+the reconciler notification says explicitly when the webhook was missed.
+

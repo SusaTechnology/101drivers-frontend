@@ -1665,6 +1665,29 @@ export class PaymentPayoutEngine {
   }> {
     const settings = await this.getPayoutSettingsSafe();
 
+    // ── Task 19: platform-balance guard ──
+    // transfers.create debits the PLATFORM's available Stripe balance at
+    // call time. If Stripe's automatic payouts already swept that balance
+    // to the company bank (the Monday 2026-10-12 run starved exactly this
+    // way), every transfer fails with a cryptic "insufficient funds"
+    // error. Read the spendable balance ONCE at sweep start and track the
+    // local spend as batches complete; drivers whose batch exceeds it are
+    // SKIPPED (balance stays ELIGIBLE, retried next run) with a clear
+    // admin notification instead of a failed-transfer mystery.
+    let availableUsd: number | null = null;
+    try {
+      if (this.stripeService) {
+        const bal = await this.stripeService.stripe.balance.retrieve();
+        const usd = (bal.available as any[]).find((a) => a.currency === "usd");
+        availableUsd = usd ? usd.amount / 100 : 0;
+      }
+    } catch (err: any) {
+      this.logger.warn(
+        `Weekly sweep: platform balance pre-check failed — proceeding WITHOUT the balance guard: ${err.message}`,
+      );
+    }
+    const availableAtStartUsd = availableUsd;
+
     // Run report record (admin dashboard: how many transfers succeeded /
     // failed this week and why). Reporting must NEVER block payouts — if
     // the run row cannot be created (e.g. migration not applied yet) the
@@ -1722,6 +1745,9 @@ export class PaymentPayoutEngine {
     let skipped = 0;
     let succeeded = 0;
     let failed = 0;
+    // Task 19: drivers skipped because the platform balance could not cover
+    // their batch (reported to admins after the run finalizes).
+    const balanceSkipped: { driverId: string; amount: number }[] = [];
 
     // Finalize the run report no matter how the loop ends (crashes leave
     // the row RUNNING — visible as an interrupted run on the dashboard).
@@ -1803,6 +1829,17 @@ export class PaymentPayoutEngine {
           continue;
         }
 
+        // Task 19: balance guard — don't create a batch whose transfer is
+        // doomed to fail on insufficient funds.
+        if (availableUsd != null && totalAmount > availableUsd) {
+          this.logger.warn(
+            `Weekly sweep: skipping driver ${candidate.driverId} ($${totalAmount.toFixed(2)}) — platform available balance $${availableUsd.toFixed(2)} is too low (Stripe auto-payout may have swept it). Balance stays ELIGIBLE for the next run.`,
+          );
+          balanceSkipped.push({ driverId: candidate.driverId, amount: totalAmount });
+          skipped++;
+          continue;
+        }
+
         const batch = await this.prisma.$transaction(async (tx) => {
           const newBatch = await tx.payoutBatch.create({
             data: {
@@ -1852,8 +1889,15 @@ export class PaymentPayoutEngine {
         // and shows up on the run's detail page).
         const outcome = await this.processBatchTransfer(batch);
         processed++;
-        if (outcome === 'COMPLETED') succeeded++;
-        else if (outcome === 'FAILED') failed++;
+        if (outcome === 'COMPLETED') {
+          succeeded++;
+          // The transfer debited the platform balance — track it locally.
+          if (availableUsd != null) {
+            availableUsd = Math.max(0, availableUsd - totalAmount);
+          }
+        } else if (outcome === 'FAILED') {
+          failed++;
+        }
       } catch (err: any) {
         this.logger.error(`Weekly auto-payout failed for driver ${candidate.driverId}: ${err.message}`);
         skipped++;
@@ -1861,6 +1905,56 @@ export class PaymentPayoutEngine {
     }
 
     await finalizeRun();
+
+    // ── Task 19: tell admins when a sweep leaves drivers unpaid ──
+    // Previously the ONLY trace of a failed sweep was the PayoutSweepRun
+    // report page — no email, no bell, nobody told. Now: pull the failed
+    // batches' failure reasons for this run and notify every admin (the
+    // driver-facing payout-failed email only fires from the transfer.failed
+    // webhook, which never fires when transfers.create fails synchronously).
+    if (runId && (failed > 0 || balanceSkipped.length > 0) && this.notificationEngine) {
+      try {
+        const failedBatches = await this.prisma.payoutBatch.findMany({
+          where: { runId, status: 'FAILED' },
+          select: { driverId: true, netPayoutAmount: true, failureMessage: true },
+        });
+        const nameIds = [
+          ...new Set([
+            ...failedBatches.map((b) => b.driverId),
+            ...balanceSkipped.map((b) => b.driverId),
+          ]),
+        ];
+        const nameRows = nameIds.length
+          ? await this.prisma.driver.findMany({
+              where: { id: { in: nameIds } },
+              select: { id: true, user: { select: { fullName: true } } },
+            })
+          : [];
+        const nameById = new Map(nameRows.map((d) => [d.id, d.user?.fullName ?? null]));
+
+        await this.notificationEngine.notifyAdminsPayoutRunFailed({
+          runId,
+          trigger,
+          failed: failedBatches.map((b) => ({
+            driverId: b.driverId,
+            driverName: nameById.get(b.driverId) ?? null,
+            amount: b.netPayoutAmount,
+            reason: b.failureMessage || 'Stripe transfer failed',
+          })),
+          balanceSkipped: balanceSkipped.map((b) => ({
+            driverId: b.driverId,
+            driverName: nameById.get(b.driverId) ?? null,
+            amount: b.amount,
+          })),
+          availableBalanceUsd: availableAtStartUsd,
+        });
+      } catch (err: any) {
+        // Non-fatal — the sweep itself is already finalized.
+        this.logger.error(
+          `notifyAdminsPayoutRunFailed failed for run ${runId} (non-fatal): ${err.message}`,
+        );
+      }
+    }
 
     this.logger.log(
       `Weekly auto-payouts: ${processed} processed (${succeeded} succeeded, ${failed} failed), ${skipped} skipped`,

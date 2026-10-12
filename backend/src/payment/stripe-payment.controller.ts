@@ -463,6 +463,50 @@ export class StripePaymentController {
         `(${isPartial ? `partial $${body!.amount!.toFixed(2)}` : 'full'})`,
       );
 
+      // ── Task 19: durable audit row the moment Stripe accepts the refund ──
+      // Previously this endpoint returned REFUND_PROCESSING and persisted
+      // NOTHING — if the charge.refunded webhook was ever lost, there was no
+      // trace in our DB that a refund had been attempted: no badge, no
+      // timeline entry, no report row, nothing to reconcile from. The
+      // PROCESSING row below is that trace:
+      //   • the Payment Events timeline shows the refund attempt immediately
+      //   • the webhook (or the RefundReconciliationService sweep) upgrades
+      //     it to REFUNDED when the state transition lands
+      //   • if it is still PROCESSING after 15 minutes, the reconciler pulls
+      //     the charge from Stripe and applies the transition itself
+      try {
+        await this.prisma.paymentEvent.create({
+          data: {
+            paymentId,
+            type: "REFUND",
+            status: "PROCESSING",
+            amount: refund.amount ? refund.amount / 100 : Number(payment.amount),
+            message:
+              `Refund ${isPartial ? `of $${body!.amount!.toFixed(2)}` : `(full $${Number(payment.amount).toFixed(2)})`} initiated by ${refundedBy} — ` +
+              "awaiting Stripe confirmation. The Refunded badge on the delivery and this row update automatically once confirmed.",
+            providerRef: refund.id,
+            raw: {
+              source: "admin-refund-endpoint",
+              chargeId: typeof charge === "string" ? charge : (charge as any).id,
+              refundId: refund.id,
+              paymentIntentId: payment.providerPaymentIntentId,
+              refundedBy,
+              adminNote: body?.note ?? null,
+              requestedAt: new Date().toISOString(),
+            } as any,
+            // stripeEventId stays NULL — the event id belongs to the
+            // charge.refunded webhook, which stamps it when it upgrades
+            // this row to REFUNDED.
+          },
+        });
+      } catch (auditErr: any) {
+        // Non-fatal: the refund itself succeeded on Stripe. The webhook is
+        // still the source of truth; the reconciler covers the gap.
+        this.logger.error(
+          `Refund audit PaymentEvent write failed for payment ${paymentId} (non-fatal): ${auditErr.message}`,
+        );
+      }
+
       // NOTE: We do NOT update the payment status here. The
       // `charge.refunded` webhook will fire and update the payment
       // (status, refundedAmountCents, refundStatus, driver clawback).

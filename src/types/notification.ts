@@ -28,6 +28,10 @@ export type NotificationEventType =
   | 'PAYMENT_AUTHORIZED'
   | 'PAYMENT_CAPTURED'
   | 'PAYMENT_FAILED'
+  // Money-visibility alerts (Task 19)
+  | 'PAYMENT_REFUNDED'
+  | 'ADMIN_PAYOUT_RUN_FAILED'
+  | 'ADMIN_PLATFORM_PAYOUT'
   // Disputes
   | 'DISPUTE_OPENED'
   | 'DISPUTE_UPDATED'
@@ -175,6 +179,13 @@ export const NOTIFICATION_TYPE_STYLES: Record<NotificationEventType, { icon: str
   PAYMENT_AUTHORIZED: { icon: 'CreditCard', color: 'amber', label: 'Payment Authorized' },
   PAYMENT_CAPTURED: { icon: 'DollarSign', color: 'green', label: 'Payment Captured' },
   PAYMENT_FAILED: { icon: 'AlertCircle', color: 'red', label: 'Payment Failed' },
+
+  // Money-visibility alerts (Task 19) — icons must exist in the bell's
+  // iconMap (NotificationBell.tsx) and colors in its color switch
+  // (blue/emerald/amber/red).
+  PAYMENT_REFUNDED: { icon: 'CreditCard', color: 'amber', label: 'Refund Completed' },
+  ADMIN_PAYOUT_RUN_FAILED: { icon: 'AlertTriangle', color: 'red', label: 'Payout Run Failed' },
+  ADMIN_PLATFORM_PAYOUT: { icon: 'DollarSign', color: 'blue', label: 'Stripe Bank Payout' },
 
   // Disputes
   DISPUTE_OPENED: { icon: 'AlertTriangle', color: 'red', label: 'Dispute Opened' },
