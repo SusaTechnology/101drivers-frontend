@@ -574,15 +574,101 @@ export class UpdateReferralProgramSettingsBody {
   @IsObject()
   referralRoleMatrix?: Partial<ReferralRoleMatrix>;
 }
-// ── WhatsApp support link ────────────────────────────────────────────
-// Single admin-editable field backing EVERY "Message us on WhatsApp"
-// button in the app (help center, support flows, urgent callouts).
-// Stored in AppSetting under WHATSAPP_SUPPORT_SETTINGS so operations
-// can rotate the link from the Config Hub without a frontend redeploy.
+// ── WhatsApp support link + social media profiles ────────────────────
+// supportUrl backs EVERY "Message us on WhatsApp" button in the app (help
+// center, support flows, urgent callouts) AND the WhatsApp deep link in the
+// customer delivery emails — the base link is stored here in AppSetting
+// under WHATSAPP_SUPPORT_SETTINGS so operations can rotate it from the
+// Config Hub without a frontend redeploy. The email flow appends the
+// pre-filled question message (pickup address included) at send time.
+// `social` holds the company's public social media profile links. All
+// platforms are OPTIONAL — unset ones stay null and are simply omitted
+// everywhere they'd render (email footer, future site sections).
 // Read publicly by the frontend via GET /api/appSettings/public/whatsapp-support.
+export const SOCIAL_LINK_PLATFORMS = [
+  "instagram",
+  "facebook",
+  "x",
+  "youtube",
+  "linkedin",
+  "tiktok",
+  "threads",
+  "pinterest",
+  "medium",
+  "substack",
+  "yelp",
+] as const;
+
+export type SocialLinkPlatformKey = (typeof SOCIAL_LINK_PLATFORMS)[number];
+
+/** The platform set every American company is expected to have — all optional. */
+export type SocialLinks = Partial<
+  Record<SocialLinkPlatformKey, string | null>
+>;
+
+export class SocialLinksDto {
+  @ApiPropertyOptional({ example: "https://instagram.com/101drivers" })
+  @IsOptional()
+  @IsString()
+  instagram?: string | null;
+
+  @ApiPropertyOptional({ example: "https://facebook.com/101drivers" })
+  @IsOptional()
+  @IsString()
+  facebook?: string | null;
+
+  @ApiPropertyOptional({ example: "https://x.com/101drivers" })
+  @IsOptional()
+  @IsString()
+  x?: string | null;
+
+  @ApiPropertyOptional({ example: "https://youtube.com/@101drivers" })
+  @IsOptional()
+  @IsString()
+  youtube?: string | null;
+
+  @ApiPropertyOptional({ example: "https://linkedin.com/company/101drivers" })
+  @IsOptional()
+  @IsString()
+  linkedin?: string | null;
+
+  @ApiPropertyOptional({ example: "https://tiktok.com/@101drivers" })
+  @IsOptional()
+  @IsString()
+  tiktok?: string | null;
+
+  @ApiPropertyOptional({ example: "https://threads.net/@101drivers" })
+  @IsOptional()
+  @IsString()
+  threads?: string | null;
+
+  @ApiPropertyOptional({ example: "https://pinterest.com/101drivers" })
+  @IsOptional()
+  @IsString()
+  pinterest?: string | null;
+
+  @ApiPropertyOptional({ example: "https://medium.com/@101drivers" })
+  @IsOptional()
+  @IsString()
+  medium?: string | null;
+
+  @ApiPropertyOptional({ example: "https://101drivers.substack.com" })
+  @IsOptional()
+  @IsString()
+  substack?: string | null;
+
+  @ApiPropertyOptional({ example: "https://yelp.com/biz/101-drivers" })
+  @IsOptional()
+  @IsString()
+  yelp?: string | null;
+}
+
 export class WhatsappSupportSettingsResponseDto {
   @ApiProperty({ example: "https://wa.me/message/YQXTDFV6STKUP1" })
   supportUrl!: string;
+
+  @ApiProperty({ type: SocialLinksDto })
+  social!: SocialLinks;
 }
 
 export class UpdateWhatsappSupportSettingsBody {
@@ -594,6 +680,14 @@ export class UpdateWhatsappSupportSettingsBody {
   )
   @MaxLength(500)
   supportUrl!: string;
+
+  // Partial by design: omitted keys keep their stored values, empty
+  // strings / nulls clear the platform. Every value is re-validated in
+  // the service (must be a https:// URL when non-empty).
+  @ApiPropertyOptional({ type: SocialLinksDto })
+  @IsOptional()
+  @IsObject()
+  social?: SocialLinks;
 }
 
 // ============================================================

@@ -29,6 +29,34 @@ const API_BASE = import.meta.env.VITE_API_URL;
 // backend re-validates, this just gives the admin a faster message.
 const ALLOWED_HOSTS = ["wa.me", "api.whatsapp.com", "chat.whatsapp.com"];
 
+// ── Optional social media profiles ───────────────────────────────────
+// Mirrors SOCIAL_LINK_PLATFORMS in backend appSetting.dto.ts. Every field
+// is OPTIONAL: an empty field means "we don't use this platform" and it
+// is omitted everywhere a link would render (customer email footer, etc.).
+// The full American-company set lives here so ops never needs a code
+// change to add a profile — paste the link, save, done.
+const SOCIAL_FIELDS = [
+  { key: "instagram", label: "Instagram", placeholder: "https://instagram.com/101drivers" },
+  { key: "facebook", label: "Facebook", placeholder: "https://facebook.com/101drivers" },
+  { key: "x", label: "X (Twitter)", placeholder: "https://x.com/101drivers" },
+  { key: "youtube", label: "YouTube", placeholder: "https://youtube.com/@101drivers" },
+  { key: "linkedin", label: "LinkedIn", placeholder: "https://linkedin.com/company/101drivers" },
+  { key: "tiktok", label: "TikTok", placeholder: "https://tiktok.com/@101drivers" },
+  { key: "threads", label: "Threads", placeholder: "https://threads.net/@101drivers" },
+  { key: "pinterest", label: "Pinterest", placeholder: "https://pinterest.com/101drivers" },
+  { key: "medium", label: "Medium", placeholder: "https://medium.com/@101drivers" },
+  { key: "substack", label: "Substack", placeholder: "https://101drivers.substack.com" },
+  { key: "yelp", label: "Yelp", placeholder: "https://yelp.com/biz/101-drivers" },
+] as const;
+
+type SocialKey = (typeof SOCIAL_FIELDS)[number]["key"];
+type SocialState = Partial<Record<SocialKey, string>>;
+
+interface WhatsappSocialSettings {
+  supportUrl: string;
+  social?: Partial<Record<SocialKey, string | null>>;
+}
+
 function validateSupportUrl(raw: string): string | null {
   const trimmed = raw.trim();
   if (!trimmed) return "Enter the WhatsApp link, e.g. https://wa.me/15551234567";
@@ -49,32 +77,60 @@ function validateSupportUrl(raw: string): string | null {
   return null;
 }
 
+/**
+ * Optional-field validator: empty = platform not used (always fine),
+ * otherwise the link must be a full https:// URL. The backend applies
+ * the same rule — this just surfaces it instantly in the dialog.
+ */
+function validateOptionalUrl(raw: string): string | null {
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+
+  let parsed: URL;
+  try {
+    parsed = new URL(trimmed);
+  } catch {
+    return "Enter a full link starting with https://";
+  }
+
+  if (parsed.protocol !== "https:") {
+    return "Must start with https://";
+  }
+  return null;
+}
+
 interface WhatsAppSupportLinkDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }
 
 /**
- * Dialog for viewing and changing the WhatsApp support link.
+ * Dialog for viewing and changing the WhatsApp support link AND the
+ * company's optional social media profile links (the admin Config Hub
+ * "WhatsApp & Social Links" card).
  *
- * Every "Message us on WhatsApp" button in the app reads the link from
- * GET /api/appSettings/public/whatsapp-support (admin-editable, no code
- * changes needed). The public link is not secret, but only admins can
- * save a new one — the save endpoint (PATCH /api/appSettings/whatsapp-support)
- * requires admin JWT auth.
+ * The WhatsApp link backs every "Message us on WhatsApp" button in the
+ * app AND the ready-to-open deep link in the customer delivery emails —
+ * the base link always comes from the DB (never hardcoded), so rotating
+ * it here instantly re-targets every button and future emails.
+ *
+ * Both are read from GET /api/appSettings/whatsapp-support and saved via
+ * PATCH (admin-only). The public link is not secret, but only admins can
+ * save a new one.
  */
 export function WhatsAppSupportLinkDialog({
   open,
   onOpenChange,
 }: WhatsAppSupportLinkDialogProps) {
   const [supportUrl, setSupportUrl] = useState("");
+  const [social, setSocial] = useState<SocialState>({});
 
-  // Fetch the current link whenever the dialog opens (authed endpoint —
-  // admin is signed in; token refresh handled by the data query layer).
+  // Fetch the current settings whenever the dialog opens (authed endpoint
+  // — admin is signed in; token refresh handled by the data query layer).
   const {
     data: current,
     isLoading,
-  } = useDataQuery<{ supportUrl: string }>({
+  } = useDataQuery<WhatsappSocialSettings>({
     apiEndPoint: `${API_BASE}/api/appSettings/whatsapp-support`,
     noFilter: true,
     enabled: open,
@@ -83,30 +139,46 @@ export function WhatsAppSupportLinkDialog({
   useEffect(() => {
     if (open && current?.supportUrl) {
       setSupportUrl(current.supportUrl);
+      const stored: SocialState = {};
+      for (const field of SOCIAL_FIELDS) {
+        const value = current.social?.[field.key];
+        stored[field.key] = typeof value === "string" ? value : "";
+      }
+      setSocial(stored);
     }
     if (!open) {
       setSupportUrl("");
+      setSocial({});
     }
   }, [open, current?.supportUrl]);
 
   // Save — invalidates both the public endpoint (drives every WhatsApp
   // button in the app) and the authed one this dialog reads.
   const saveMutation = useDataMutation<
-    { supportUrl: string },
-    { supportUrl: string }
+    WhatsappSocialSettings,
+    { supportUrl: string; social: SocialState }
   >({
     apiEndPoint: `${API_BASE}/api/appSettings/whatsapp-support`,
     method: "PATCH",
     onSuccess: (data) => {
-      toast.success("WhatsApp support link updated", {
-        description: "Every WhatsApp button now opens the new chat.",
+      toast.success("WhatsApp & social links updated", {
+        description:
+          "Every WhatsApp button and future customer delivery emails now use the new chat link.",
       });
       setSupportUrl(data.supportUrl);
+      const saved: SocialState = {};
+      for (const field of SOCIAL_FIELDS) {
+        const value = data.social?.[field.key];
+        saved[field.key] = typeof value === "string" ? value : "";
+      }
+      setSocial(saved);
       onOpenChange(false);
     },
-    onError: (error) => {
+    onError: (error: unknown) => {
       toast.error(
-        error.message || "Failed to update the WhatsApp support link",
+        error instanceof Error
+          ? error.message
+          : "Failed to update the links",
       );
     },
     invalidateQueryKey: [
@@ -115,27 +187,46 @@ export function WhatsAppSupportLinkDialog({
     ],
   });
 
+  const supportUrlError = validateSupportUrl(supportUrl);
+  const socialErrors: Partial<Record<SocialKey, string | null>> = {};
+  let hasSocialError = false;
+  for (const field of SOCIAL_FIELDS) {
+    const error = validateOptionalUrl(social[field.key] ?? "");
+    socialErrors[field.key] = error;
+    if (error) hasSocialError = true;
+  }
+
   const handleSave = () => {
     const validationError = validateSupportUrl(supportUrl);
     if (validationError) {
       toast.error(validationError);
       return;
     }
-    saveMutation.mutate({ supportUrl: supportUrl.trim() });
+    if (hasSocialError) {
+      toast.error("One or more social links are invalid — fix the red fields first");
+      return;
+    }
+
+    const payload: SocialState = {};
+    for (const field of SOCIAL_FIELDS) {
+      payload[field.key] = (social[field.key] ?? "").trim();
+    }
+    saveMutation.mutate({ supportUrl: supportUrl.trim(), social: payload });
   };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-lg max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <WhatsAppIcon className="w-5 h-5 text-[#25D366]" />
-            WhatsApp Support Link
+            WhatsApp &amp; Social Links
           </DialogTitle>
           <DialogDescription>
-            Set the WhatsApp click-to-chat link used by every "Message us on
-            WhatsApp" button across the app. Change it here whenever it
-            rotates — no code changes or redeploy needed.
+            The WhatsApp link powers every "Message us on WhatsApp" button and
+            the ready-to-open chat link in customer delivery emails. Social
+            profiles are optional — only the ones you fill in appear anywhere.
+            Change any of it here — no code changes or redeploy needed.
           </DialogDescription>
         </DialogHeader>
 
@@ -144,10 +235,11 @@ export function WhatsAppSupportLinkDialog({
             <Loader2 className="w-6 h-6 animate-spin text-slate-400" />
           </div>
         ) : (
-          <div className="space-y-4">
+          <div className="space-y-5">
+            {/* ── WhatsApp support link (required, backs every button) ── */}
             <div className="space-y-1.5">
               <Label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                Support Link
+                WhatsApp Support Link
               </Label>
               <Input
                 type="url"
@@ -162,12 +254,14 @@ export function WhatsAppSupportLinkDialog({
                 }}
               />
               <p className="text-[10px] text-slate-400">
-                Accepted: wa.me, api.whatsapp.com, or chat.whatsapp.com links
-                (wa.me short links, click-to-chat, or group invites).
+                Accepted: wa.me, api.whatsapp.com, or chat.whatsapp.com links.
+                For the customer emails use a wa.me number link (e.g.
+                https://wa.me/14243132168) so the pre-filled question message
+                opens with your pickup address.
               </p>
             </div>
 
-            {supportUrl.trim() && !validateSupportUrl(supportUrl) && (
+            {supportUrl.trim() && !supportUrlError && (
               <a
                 href={supportUrl.trim()}
                 target="_blank"
@@ -185,6 +279,53 @@ export function WhatsAppSupportLinkDialog({
                 This is the current default link.
               </p>
             )}
+
+            {/* ── Social media profiles (all optional) ── */}
+            <div className="border-t border-slate-200 dark:border-slate-800 pt-4">
+              <div className="space-y-1.5">
+                <Label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                  Social Media Profiles — optional
+                </Label>
+                <p className="text-[10px] text-slate-400">
+                  Paste the full https:// link for each platform your company
+                  uses — they appear in places like the customer email footer.
+                  Leave a field empty if you don't use that platform.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-3 gap-y-3 mt-3">
+                {SOCIAL_FIELDS.map((field) => (
+                  <div key={field.key} className="space-y-1">
+                    <Label
+                      htmlFor={`social-${field.key}`}
+                      className="text-[11px] font-bold text-slate-600 dark:text-slate-300"
+                    >
+                      {field.label}
+                    </Label>
+                    <Input
+                      id={`social-${field.key}`}
+                      type="url"
+                      value={social[field.key] ?? ""}
+                      onChange={(e) =>
+                        setSocial((prev) => ({
+                          ...prev,
+                          [field.key]: e.target.value,
+                        }))
+                      }
+                      placeholder={field.placeholder}
+                      className="h-9 text-xs rounded-xl"
+                      autoComplete="off"
+                      name={`social-${field.key}`}
+                    />
+                    {socialErrors[field.key] && (
+                      <p className="text-[10px] text-red-500">
+                        {socialErrors[field.key]}
+                      </p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
         )}
 
@@ -210,7 +351,7 @@ export function WhatsAppSupportLinkDialog({
             ) : (
               <>
                 <WhatsAppIcon className="w-4 h-4 mr-2" />
-                Save Link
+                Save Links
               </>
             )}
           </Button>

@@ -26,6 +26,9 @@ import {
   ReferralRoleMatrix,
   WhatsappSupportSettingsResponseDto,
   UpdateWhatsappSupportSettingsBody,
+  SOCIAL_LINK_PLATFORMS,
+  SocialLinkPlatformKey,
+  SocialLinks,
   QuoteUsageLimitsResponseDto,
   UpdateQuoteUsageLimitsBody,
 } from "./dto/appSetting.dto";
@@ -47,7 +50,10 @@ import {
 const LANDING_PAGE_SETTINGS_KEY = "LANDING_PAGE_SETTINGS";
 const DELIVERY_SETTINGS_KEY = "DELIVERY_SETTINGS";
 const REFERRAL_PROGRAM_SETTINGS_KEY = "REFERRAL_PROGRAM_SETTINGS";
-const WHATSAPP_SUPPORT_SETTINGS_KEY = "WHATSAPP_SUPPORT_SETTINGS";
+// Exported: the notification engine reads this AppSetting row directly
+// (via prisma, to avoid a module-dependency cycle) to build the WhatsApp
+// deep link for customer delivery emails — it needs the same key string.
+export const WHATSAPP_SUPPORT_SETTINGS_KEY = "WHATSAPP_SUPPORT_SETTINGS";
 
 /**
  * Fallback WhatsApp click-to-chat link — used when no admin has ever
@@ -56,6 +62,42 @@ const WHATSAPP_SUPPORT_SETTINGS_KEY = "WHATSAPP_SUPPORT_SETTINGS";
  * (both originate from the originally hardcoded wa.me link).
  */
 export const DEFAULT_WHATSAPP_SUPPORT_URL = "https://wa.me/message/YQXTDFV6STKUP1";
+
+/**
+ * Append a pre-filled "text" message to the admin-configured WhatsApp
+ * click-to-chat link, producing a ready-to-open deep link:
+ *   https://wa.me/14243132168?text=Hi%2C%20I%20have%20a%20question...
+ *
+ * The BASE link always comes from the DB (WHATSAPP_SUPPORT_SETTINGS.
+ * supportUrl) — never hardcoded — so ops can rotate the number at any
+ * time from the admin Config Hub and every email picks it up.
+ *
+ * Any pre-existing "text" param on the stored link is replaced (our
+ * delivery-specific message must win). Uses encodeURIComponent (spaces
+ * → %20) — the format WhatsApp's own docs use for wa.me links.
+ */
+export function buildWhatsappDeepLink(
+  supportUrl: string,
+  message: string,
+): string {
+  const base = (supportUrl ?? "").trim();
+  if (!base) return base;
+
+  let cleanBase = base;
+  try {
+    const parsed = new URL(base);
+    if (parsed.searchParams.has("text")) {
+      parsed.searchParams.delete("text");
+      cleanBase = parsed.toString();
+    }
+  } catch {
+    // Not parseable — append to the raw string below rather than
+    // throwing: a slightly ugly link beats a missing support link.
+  }
+
+  const joiner = cleanBase.includes("?") ? "&" : "?";
+  return `${cleanBase}${joiner}text=${encodeURIComponent(message)}`;
+}
 
 /** Hosts the support link is allowed to point at. wa.me short links
  * (number or /message/ code), the api.whatsapp.com send flow, and
@@ -827,6 +869,7 @@ export class AppSettingService extends AppSettingServiceBase {
 
     return {
       supportUrl: stored || DEFAULT_WHATSAPP_SUPPORT_URL,
+      social: this.readStoredSocialLinks(row?.value),
     };
   }
 
@@ -835,18 +878,79 @@ export class AppSettingService extends AppSettingServiceBase {
   ): Promise<WhatsappSupportSettingsResponseDto> {
     const supportUrl = this.normalizeWhatsappSupportUrl(input.supportUrl);
 
+    // Merge social links: keys absent from the body keep their stored
+    // values, explicit "" / null clears the platform. The dialog always
+    // sends the full object, but partial payloads stay safe for scripts.
+    const existingRow = await this.prisma.appSetting.findUnique({
+      where: { key: WHATSAPP_SUPPORT_SETTINGS_KEY },
+      select: { value: true },
+    });
+    const existingSocial = this.readStoredSocialLinks(existingRow?.value);
+
+    const social: SocialLinks = {};
+    for (const platform of SOCIAL_LINK_PLATFORMS) {
+      const incoming =
+        input.social && platform in input.social
+          ? input.social[platform as SocialLinkPlatformKey]
+          : undefined;
+      social[platform] =
+        incoming === undefined
+          ? existingSocial[platform] ?? null
+          : this.normalizeSocialLinkUrl(platform, incoming);
+    }
+
     await this.prisma.appSetting.upsert({
       where: { key: WHATSAPP_SUPPORT_SETTINGS_KEY },
       create: {
         key: WHATSAPP_SUPPORT_SETTINGS_KEY,
-        value: { supportUrl } as any,
+        value: { supportUrl, social } as any,
       },
       update: {
-        value: { supportUrl } as any,
+        value: { supportUrl, social } as any,
       },
     });
 
-    return { supportUrl };
+    return { supportUrl, social };
+  }
+
+  /** Normalized social map from the stored JSON value — unset → null. */
+  private readStoredSocialLinks(value: Prisma.JsonValue | null | undefined): SocialLinks {
+    const social: SocialLinks = {};
+    const storedSocial =
+      value && typeof value === "object" && !Array.isArray(value)
+        ? ((value as Record<string, unknown>).social ?? {})
+        : {};
+
+    for (const platform of SOCIAL_LINK_PLATFORMS) {
+      const raw = (storedSocial as Record<string, unknown>)[platform];
+      social[platform] = typeof raw === "string" && raw.trim() ? raw.trim() : null;
+    }
+    return social;
+  }
+
+  /** Social links are optional — but when present they must be https:// URLs. */
+  private normalizeSocialLinkUrl(
+    platform: SocialLinkPlatformKey,
+    raw: string | null | undefined,
+  ): string | null {
+    if (raw == null) return null;
+    const trimmed = `${raw}`.trim();
+    if (!trimmed) return null;
+
+    let parsed: URL;
+    try {
+      parsed = new URL(trimmed);
+    } catch {
+      throw new BadRequestException(
+        `${platform} must be a valid absolute URL (e.g. https://instagram.com/101drivers), or leave it empty`,
+      );
+    }
+
+    if (parsed.protocol !== "https:") {
+      throw new BadRequestException(`${platform} must start with https://`);
+    }
+
+    return parsed.toString();
   }
 
   // ============================================================

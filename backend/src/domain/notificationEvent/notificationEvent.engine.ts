@@ -11,6 +11,16 @@ import {
 import { PrismaService } from "../../prisma/prisma.service";
 import { MailService } from "../../common/mail/mail.service";
 import { TrackingGateway } from "../../gateways/tracking.gateway";
+// Task 139: the WhatsApp deep link in customer delivery emails is built
+// from the admin-editable link stored in AppSetting (WHATSAPP_SUPPORT_
+// SETTINGS.supportUrl) — read directly via prisma (importing the service
+// would create a module cycle). Constants + builder come from appSetting.
+import {
+  DEFAULT_WHATSAPP_SUPPORT_URL,
+  WHATSAPP_SUPPORT_SETTINGS_KEY,
+  buildWhatsappDeepLink,
+} from "../../appSetting/appSetting.service";
+import { SOCIAL_LINK_PLATFORMS } from "../../appSetting/dto/appSetting.dto";
 
 type Tx = Prisma.TransactionClient;
 
@@ -542,6 +552,41 @@ export class NotificationEventEngine {
         ? "Listed — waiting for a driver"
         : String(delivery.status);
 
+    // Task 139: ready-to-open WhatsApp deep link — the BASE link comes
+    // from the admin-editable AppSetting (never hardcoded), and the
+    // pre-filled message carries the pickup address so support instantly
+    // knows which delivery the question is about. A settings-read failure
+    // falls back to the default link instead of breaking the email.
+    // Same read also yields the optional "Follow us" footer lines.
+    const { waLink, socialLines } = await this.buildDeliveryContact(
+      delivery.pickupAddress
+    );
+
+    const bodyLines = [
+      `Hi ${firstName},`,
+      "",
+      "We received your delivery request. It's now open for drivers.",
+      "",
+      `Pickup: ${delivery.pickupAddress}`,
+      "",
+      `Drop-off: ${delivery.dropoffAddress}`,
+      "",
+      `Status: ${statusLine}`,
+      "",
+      "You'll get another text and email with the driver's name and phone number as soon as one accepts.",
+      "",
+      "Questions? Chat with us on WhatsApp — the link opens a chat with your pickup address already typed in:",
+      waLink,
+      "",
+      "Or email info@101drivers.com",
+    ];
+
+    if (socialLines.length > 0) {
+      bodyLines.push("", "Follow us:", ...socialLines);
+    }
+
+    bodyLines.push("", "— 101 Drivers Inc");
+
     return this.queueAndSend({
       actorUserId: input.actorUserId ?? null,
       customerId: delivery.customerId,
@@ -551,28 +596,101 @@ export class NotificationEventEngine {
       templateCode: "delivery-listed",
       toEmail,
       subject: "Your delivery request is in",
-      body: [
-        `Hi ${firstName},`,
-        "",
-        "We received your delivery request. It's now open for drivers.",
-        "",
-        `Pickup: ${delivery.pickupAddress}`,
-        "",
-        `Drop-off: ${delivery.dropoffAddress}`,
-        "",
-        `Status: ${statusLine}`,
-        "",
-        "You'll get another text and email with the driver's name and phone number as soon as one accepts.",
-        "",
-        "Questions? WhatsApp (424) 313-2168 or email info@101drivers.com",
-        "",
-        "— 101 Drivers Inc",
-      ].join("\n"),
+      body: bodyLines.join("\n"),
       payload: {
         deliveryId: delivery.id,
         status: delivery.status,
       },
     });
+  }
+
+  /**
+   * Task 139: contact block for customer delivery emails.
+   *
+   * waLink — the ready-to-open WhatsApp deep link. The base link is the
+   * admin-editable AppSetting value (WHATSAPP_SUPPORT_SETTINGS.supportUrl,
+   * falling back to the shared default when no admin has saved one yet);
+   * the pre-filled message carries the delivery's pickup address, e.g.
+   *   https://wa.me/14243132168?text=Hi%2C%20I%20have%20a%20question%20
+   *   about%20my%20delivery%20request%20%28pickup%3A%20...%29
+   * wrapSimpleHtml() turns the URL into a clickable <a> in the HTML part.
+   *
+   * socialLines — one "Label: url" line per social platform the admin
+   * saved in the Config Hub (all optional; unset platforms are omitted,
+   * so the footer never shows a dead link).
+   *
+   * A settings-read failure downgrades to the default WhatsApp link and
+   * an empty footer — it must never break sending the delivery email.
+   */
+  private async buildDeliveryContact(
+    pickupAddress: string | null
+  ): Promise<{ waLink: string; socialLines: string[] }> {
+    let supportUrl = DEFAULT_WHATSAPP_SUPPORT_URL;
+    let socialLines: string[] = [];
+
+    try {
+      const row = await this.prisma.appSetting.findUnique({
+        where: { key: WHATSAPP_SUPPORT_SETTINGS_KEY },
+        select: { value: true },
+      });
+
+      const storedSupportUrl =
+        row?.value &&
+        typeof row.value === "object" &&
+        typeof (row.value as { supportUrl?: unknown }).supportUrl === "string"
+          ? ((row.value as { supportUrl: string }).supportUrl || "").trim()
+          : "";
+
+      if (storedSupportUrl) supportUrl = storedSupportUrl;
+      socialLines = this.socialFooterLinesFrom(row?.value);
+    } catch (error) {
+      this.logger.warn(
+        `Failed to read WHATSAPP_SUPPORT_SETTINGS for the delivery email; using defaults: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
+    }
+
+    const pickupPart = pickupAddress?.trim()
+      ? ` (pickup: ${pickupAddress.trim()})`
+      : "";
+    const message = `Hi, I have a question about my delivery request${pickupPart}`;
+
+    return {
+      waLink: buildWhatsappDeepLink(supportUrl, message),
+      socialLines,
+    };
+  }
+
+  /** "Label: url" lines per configured platform — email footer helper. */
+  private socialFooterLinesFrom(value: Prisma.JsonValue | null | undefined): string[] {
+    const storedSocial =
+      value && typeof value === "object" && !Array.isArray(value)
+        ? ((value as Record<string, unknown>).social ?? {})
+        : {};
+
+    const labels: Record<string, string> = {
+      instagram: "Instagram",
+      facebook: "Facebook",
+      x: "X (Twitter)",
+      youtube: "YouTube",
+      linkedin: "LinkedIn",
+      tiktok: "TikTok",
+      threads: "Threads",
+      pinterest: "Pinterest",
+      medium: "Medium",
+      substack: "Substack",
+      yelp: "Yelp",
+    };
+
+    const lines: string[] = [];
+    for (const platform of SOCIAL_LINK_PLATFORMS) {
+      const raw = (storedSocial as Record<string, unknown>)[platform];
+      if (typeof raw === "string" && raw.trim()) {
+        lines.push(`${labels[platform] ?? platform}: ${raw.trim()}`);
+      }
+    }
+    return lines;
   }
 
   async notifyDriverBooked(input: {

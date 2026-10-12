@@ -173,12 +173,12 @@ const configCards = [
     href: null,
     onClick: "openWhatsAppDialog",
     icon: WhatsAppIcon,
-    title: "WhatsApp Support Link",
-    description: "Set the WhatsApp click-to-chat link used by every \"Message us on WhatsApp\" button across the app (help center, support flows, urgent callouts). Rotate it here — no code changes or redeploy needed.",
+    title: "WhatsApp & Social Links",
+    description: "Set the WhatsApp click-to-chat link used by every \"Message us on WhatsApp\" button and the customer delivery emails, plus your optional social media profile links (Instagram, Facebook, X, YouTube and more). Rotate any of them here — no code changes or redeploy needed.",
     chips: [
       { icon: WhatsAppIcon, label: "Chat link" },
+      { icon: Users, label: "Social profiles" },
       { icon: Edit3, label: "Editable" },
-      { icon: Power, label: "Instant" },
     ]
   }
 ]
