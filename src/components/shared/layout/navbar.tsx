@@ -3,7 +3,11 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState, type MouseEvent } from "react";
 import { ArrowRight as ArrowForward, Menu } from "lucide-react";
 import { RightHemisphereNav } from "./rightHemisphereNav";
-import { useRequestDelivery } from "@/hooks/useRequestDelivery";
+import {
+  useRequestDelivery,
+  selectSignupCardOnLanding,
+  type SignupCard,
+} from "@/hooks/useRequestDelivery";
 
 /**
  * Smooth-scroll to a landing-page section when we're ALREADY on it.
@@ -16,23 +20,30 @@ import { useRequestDelivery } from "@/hooks/useRequestDelivery";
  * any other page we do nothing here and let the <Link> navigate
  * normally — the landing page handles the section on arrival.
  *
- * Each tab has its own DISTINCT section (the old markup pointed Business
- * and Personal at the same #dealers anchor and Drivers at #drivers,
- * which exists nowhere):
- *   How it works → #how              (step-by-step cards)
- *   Business     → #dealers          ("Choose your delivery type" signup)
- *   Personal     → #quote            (instant quote form)
- *   Drivers      → #jointhewaitlist  ("Be Your Own Boss" recruitment)
+ * Business and Personal BOTH land on the #dealers signup section — the
+ * user asked for Personal to move there from #quote. Since two tabs now
+ * share one section, the clicked tab is expressed by the matching signup
+ * card switching to its selected color (dark + lime ring + check); the
+ * handler dispatches "101drivers:select-signup-card" on the landing page.
+ * The hash carries the card (e.g. #dealers-personal) so cross-page
+ * navigation and refresh re-select the same card — homePage parses it.
+ *   How it works → #how                  (step-by-step cards)
+ *   Business     → #dealers-business     (signup cards, Business colored)
+ *   Personal     → #dealers-personal     (signup cards, Personal colored)
+ *   Drivers      → #jointhewaitlist      ("Be Your Own Boss" recruitment)
  */
-const makeSectionNavHandler = (sectionId: string) => (e: MouseEvent<HTMLAnchorElement>) => {
+const makeSectionNavHandler = (sectionId: string, card?: SignupCard) =>
+  (e: MouseEvent<HTMLAnchorElement>) => {
   const { pathname } = window.location;
   if (pathname !== "/" && pathname !== "/home") return;
   e.preventDefault();
   document
     .getElementById(sectionId)
     ?.scrollIntoView({ behavior: "smooth", block: "start" });
+  if (card) selectSignupCardOnLanding(card);
   try {
-    history.replaceState(null, "", `${pathname}#${sectionId}`);
+    const hash = card ? `${sectionId}-${card.toLowerCase()}` : sectionId;
+    history.replaceState(null, "", `${pathname}#${hash}`);
   } catch { /* ignore */ }
 };
 
@@ -71,15 +82,15 @@ export const NavBar = () => {
               How it works
             </Link>
             <Link
-              to="/home#dealers"
-              onClick={makeSectionNavHandler("dealers")}
+              to="/home#dealers-business"
+              onClick={makeSectionNavHandler("dealers", "BUSINESS")}
               className="text-sm font-semibold text-slate-600 dark:text-slate-400 hover:text-primary transition-colors"
             >
               Business
             </Link>
             <Link
-              to="/home#quote"
-              onClick={makeSectionNavHandler("quote")}
+              to="/home#dealers-personal"
+              onClick={makeSectionNavHandler("dealers", "PERSONAL")}
               className="text-sm font-semibold text-slate-600 dark:text-slate-400 hover:text-primary transition-colors"
             >
               Personal
@@ -116,15 +127,15 @@ export const NavBar = () => {
               How it works
             </Link>
             <Link
-              to="/home#dealers"
-              onClick={(e) => { setMobileMenuOpen(false); makeSectionNavHandler("dealers")(e); }}
+              to="/home#dealers-business"
+              onClick={(e) => { setMobileMenuOpen(false); makeSectionNavHandler("dealers", "BUSINESS")(e); }}
               className="text-sm font-semibold text-slate-700 dark:text-slate-300 hover:text-primary transition-colors"
             >
               Business
             </Link>
             <Link
-              to="/home#quote"
-              onClick={(e) => { setMobileMenuOpen(false); makeSectionNavHandler("quote")(e); }}
+              to="/home#dealers-personal"
+              onClick={(e) => { setMobileMenuOpen(false); makeSectionNavHandler("dealers", "PERSONAL")(e); }}
               className="text-sm font-semibold text-slate-700 dark:text-slate-300 hover:text-primary transition-colors"
             >
               Personal

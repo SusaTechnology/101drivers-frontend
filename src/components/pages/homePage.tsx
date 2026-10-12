@@ -56,7 +56,11 @@ import {
   ClipboardCheck,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { ACTIVATE_QUOTE_EVENT } from "@/hooks/useRequestDelivery";
+import {
+  ACTIVATE_QUOTE_EVENT,
+  SELECT_SIGNUP_CARD_EVENT,
+  type SignupCard,
+} from "@/hooks/useRequestDelivery";
 import { NavBar } from "../shared/layout/navbar";
 import { DealerSignupForm } from "../auth/DealerSignupForm";
 import RouteMap from '@/components/map/RouteMap';
@@ -138,6 +142,15 @@ export default function LandingPage() {
   const [distance, setDistance] = useState<number | null>(null);
   const [quoteResult, setQuoteResult] = useState<any>(null);
   const [isLoadingQuote, setIsLoadingQuote] = useState(false);
+
+  // ─── Selected signup card in the #dealers section ────────────────
+  // The navbar's Business and Personal tabs BOTH land on #dealers now —
+  // the clicked tab is expressed by coloring the matching card (dark bg +
+  // lime ring + check). Defaults to BUSINESS, which was the hardcoded
+  // "recommended" look before the cards became switchable. Clicking a
+  // card, the navbar tabs (event), or arriving via #dealers-business /
+  // #dealers-personal all set it.
+  const [signupCard, setSignupCard] = useState<SignupCard>("BUSINESS");
 
   // ─── Guest daily quote budget (client mirror) ────────────────────
   // The SERVER owns the budget (per-IP daily counter, 429 once over);
@@ -684,6 +697,39 @@ export default function LandingPage() {
     window.addEventListener(ACTIVATE_QUOTE_EVENT, onActivateQuote);
     return () => window.removeEventListener(ACTIVATE_QUOTE_EVENT, onActivateQuote);
   }, [activateQuoteForm]);
+
+  // ─── Signup-card selection (Business/Personal tabs → #dealers) ────
+  // Same-page: the navbar tab scrolls to #dealers and dispatches
+  // "101drivers:select-signup-card"; this listener colors the matching
+  // card. (The navbar already did the scrolling — this only swaps color.)
+  useEffect(() => {
+    const onSelectSignupCard = (e: Event) => {
+      const card = (e as CustomEvent<{ card?: SignupCard }>).detail?.card;
+      if (card === "BUSINESS" || card === "PERSONAL") setSignupCard(card);
+    };
+    window.addEventListener(SELECT_SIGNUP_CARD_EVENT, onSelectSignupCard);
+    return () => window.removeEventListener(SELECT_SIGNUP_CARD_EVENT, onSelectSignupCard);
+  }, []);
+
+  // Cross-page arrival / refresh with the card in the URL
+  // (#dealers-business | #dealers-personal): no element carries that id,
+  // so TanStack can't auto-scroll — glide to the #dealers section and
+  // apply the card color here. Plain #dealers keeps native behavior and
+  // the default (Business) selection.
+  useEffect(() => {
+    try {
+      const hash = window.location.hash;
+      const match = hash.match(/^#dealers-(business|personal)$/i);
+      if (!match) return;
+      setSignupCard(match[1].toUpperCase() as SignupCard);
+      const t = setTimeout(() => {
+        document
+          .getElementById("dealers")
+          ?.scrollIntoView({ behavior: "smooth", block: "start" });
+      }, 150);
+      return () => clearTimeout(t);
+    } catch { /* ignore */ }
+  }, []);
 
   // Cross-page arrival (privacy/terms CTA → /home#quote) and the
   // same-hash re-run when the visitor answers the chooser: deps follow
@@ -1567,50 +1613,85 @@ export default function LandingPage() {
               Sign up or log in to get started — pick the option that fits you.
             </p>
             <div className="flex flex-col sm:flex-row gap-4 max-w-lg mx-auto">
-              {/* ── Business delivery — default selected (dark bg + checkmark) ──
-                  Both buttons use the same card-like styling so users instantly
-                  see they're tappable. The entire box is clickable via the
-                  <Link> inside. */}
+              {/* ── Business / Personal signup cards — the SELECTED one is
+                  dark with a lime ring + check, the other stays light.
+                  Selection follows the navbar tab that landed here
+                  (Business tab → Business card, Personal tab → Personal
+                  card), direct clicks, and the #dealers-* hash on
+                  arrival; default is Business (the old hardcoded look).
+                  Both cards stay <Link>s to their signup flows. */}
               <Link
                 to="/auth/dealer-signup"
-                className="flex-1 group relative cursor-pointer rounded-2xl bg-slate-900 dark:bg-slate-800 border-2 border-slate-900 dark:border-slate-700 shadow-lg shadow-slate-900/20 hover:shadow-xl hover:shadow-slate-900/25 hover:-translate-y-0.5 transition-all duration-200 overflow-hidden"
+                aria-pressed={signupCard === "BUSINESS"}
+                onClick={() => setSignupCard("BUSINESS")}
+                className={`flex-1 group relative cursor-pointer rounded-2xl border-2 transition-all duration-200 overflow-hidden ${
+                  signupCard === "BUSINESS"
+                    ? "bg-slate-900 dark:bg-slate-800 border-slate-900 dark:border-slate-700 ring-2 ring-lime-500 ring-offset-2 ring-offset-white dark:ring-offset-slate-950 shadow-lg shadow-slate-900/20 dark:shadow-none"
+                    : "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 shadow-lg shadow-slate-200/50 dark:shadow-none hover:shadow-xl hover:border-lime-400 dark:hover:border-lime-500 hover:-translate-y-0.5"
+                }`}
               >
-                {/* Checkmark badge — shows this is the recommended/default option */}
-                {/* <div className="absolute top-3 right-3 w-6 h-6 rounded-full bg-lime-400 flex items-center justify-center shadow-md">
-                  <CheckCircle className="w-4 h-4 text-slate-900" strokeWidth={3} />
-                </div> */}
+                {/* Check badge — marks the card the visitor picked */}
+                {signupCard === "BUSINESS" && (
+                  <div className="absolute top-3 right-3 w-6 h-6 rounded-full bg-lime-500 flex items-center justify-center shadow-md">
+                    <Check className="w-4 h-4 text-slate-950" strokeWidth={3} />
+                  </div>
+                )}
                 <div className="p-5 sm:p-6 text-left">
                   <div className="flex items-center gap-3 mb-2">
-                    <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center shrink-0">
-                      <Building className="w-5 h-5 text-lime-400" />
+                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
+                      signupCard === "BUSINESS" ? "bg-white/10" : "bg-slate-100 dark:bg-slate-800"
+                    }`}>
+                      <Building className={`w-5 h-5 ${
+                        signupCard === "BUSINESS" ? "text-lime-400" : "text-slate-600 dark:text-slate-400 group-hover:text-lime-500"
+                      } transition-colors`} />
                     </div>
-                    <span className="text-lg font-extrabold text-white">
+                    <span className={`text-lg font-extrabold ${
+                      signupCard === "BUSINESS" ? "text-white" : "text-slate-900 dark:text-white"
+                    }`}>
                       Business Delivery
                     </span>
                   </div>
-                  <p className="text-sm text-slate-300 dark:text-slate-400 leading-relaxed">
-                    For dealerships, rental companies, and other business needing vehicle delivery services.    
+                  <p className={`text-sm leading-relaxed ${
+                    signupCard === "BUSINESS" ? "text-slate-300 dark:text-slate-400" : "text-slate-600 dark:text-slate-400"
+                  }`}>
+                    For dealerships, rental companies, and other business needing vehicle delivery services.
                   </p>
                 </div>
               </Link>
 
-              {/* ── Personal delivery — same card styling, light variant ──
-                  Matches the Business button's shape, border, shadow, and
-                  cursor. Users see two clear, tappable cards side by side. */}
               <Link
                 to="/auth/individual-signup"
-                className="flex-1 group relative cursor-pointer rounded-2xl bg-white dark:bg-slate-900 border-2 border-slate-200 dark:border-slate-700 shadow-lg shadow-slate-200/50 dark:shadow-none hover:shadow-xl hover:border-lime-400 dark:hover:border-lime-500 hover:-translate-y-0.5 transition-all duration-200 overflow-hidden"
+                aria-pressed={signupCard === "PERSONAL"}
+                onClick={() => setSignupCard("PERSONAL")}
+                className={`flex-1 group relative cursor-pointer rounded-2xl border-2 transition-all duration-200 overflow-hidden ${
+                  signupCard === "PERSONAL"
+                    ? "bg-slate-900 dark:bg-slate-800 border-slate-900 dark:border-slate-700 ring-2 ring-lime-500 ring-offset-2 ring-offset-white dark:ring-offset-slate-950 shadow-lg shadow-slate-900/20 dark:shadow-none"
+                    : "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 shadow-lg shadow-slate-200/50 dark:shadow-none hover:shadow-xl hover:border-lime-400 dark:hover:border-lime-500 hover:-translate-y-0.5"
+                }`}
               >
+                {signupCard === "PERSONAL" && (
+                  <div className="absolute top-3 right-3 w-6 h-6 rounded-full bg-lime-500 flex items-center justify-center shadow-md">
+                    <Check className="w-4 h-4 text-slate-950" strokeWidth={3} />
+                  </div>
+                )}
                 <div className="p-5 sm:p-6 text-left">
                   <div className="flex items-center gap-3 mb-2">
-                    <div className="w-10 h-10 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center shrink-0">
-                      <UserCircle className="w-5 h-5 text-slate-600 dark:text-slate-400 group-hover:text-lime-500 transition-colors" />
+                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
+                      signupCard === "PERSONAL" ? "bg-white/10" : "bg-slate-100 dark:bg-slate-800"
+                    }`}>
+                      <UserCircle className={`w-5 h-5 ${
+                        signupCard === "PERSONAL" ? "text-lime-400" : "text-slate-600 dark:text-slate-400 group-hover:text-lime-500"
+                      } transition-colors`} />
                     </div>
-                    <span className="text-lg font-extrabold text-slate-900 dark:text-white">
+                    <span className={`text-lg font-extrabold ${
+                      signupCard === "PERSONAL" ? "text-white" : "text-slate-900 dark:text-white"
+                    }`}>
                       Personal Delivery
                     </span>
                   </div>
-                  <p className="text-sm text-slate-600 dark:text-slate-400 leading-relaxed">
+                  <p className={`text-sm leading-relaxed ${
+                    signupCard === "PERSONAL" ? "text-slate-300 dark:text-slate-400" : "text-slate-600 dark:text-slate-400"
+                  }`}>
                     For individuals who need their own car moved from point A to point B
                   </p>
                 </div>

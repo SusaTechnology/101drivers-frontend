@@ -33,6 +33,24 @@ export const CUSTOMER_ROLES = ["BUSINESS_CUSTOMER", "PRIVATE_CUSTOMER"];
 export const ACTIVATE_QUOTE_EVENT = "101drivers:activate-quote";
 
 /**
+ * Which signup card in the #dealers section ("Choose your delivery type")
+ * should show as selected. Dispatched by the navbar's Business/Personal
+ * tabs — both land on the SAME section now, so the clicked tab is
+ * expressed by coloring the matching card (dark + lime ring + check).
+ */
+export const SELECT_SIGNUP_CARD_EVENT = "101drivers:select-signup-card";
+
+export type SignupCard = "BUSINESS" | "PERSONAL";
+
+/**
+ * The landing page is mounted (its #dealers section exists) and therefore
+ * listens for this event — highlight the matching signup card.
+ */
+export function selectSignupCardOnLanding(card: SignupCard) {
+  window.dispatchEvent(new CustomEvent(SELECT_SIGNUP_CARD_EVENT, { detail: { card } }));
+}
+
+/**
  * The landing page is mounted (its #quote section exists) and therefore
  * listens for the activation event — let IT decide what the visitor sees,
  * based on whether a delivery type is already on file.

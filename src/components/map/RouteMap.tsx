@@ -172,6 +172,14 @@ export default function RouteMap({
   const [map, setMap] = useState<google.maps.Map | null>(null);
   const [internalDirections, setInternalDirections] = useState<google.maps.DirectionsResult | null>(null);
   const [trackPolyline, setTrackPolyline] = useState<google.maps.Polyline | null>(null);
+  // True when the driving route can't be shown (Directions API denied /
+  // disabled on the browser key, network hang) — a dashed straight A→B
+  // line is drawn instead so the path is NEVER silently missing. The A/B
+  // markers come from Maps JS + Places which are usually enabled even when
+  // Directions isn't, which is exactly how "markers but no line" happened.
+  const [showFallbackLine, setShowFallbackLine] = useState(false);
+  // Increments per directions attempt so stale callbacks/timers are ignored.
+  const routeAttemptRef = useRef(0);
   const initialDriverFocusDone = useRef(false);
 
   // ── Follow-driver state (refs, not state — avoids re-renders on every GPS tick) ──
@@ -202,38 +210,98 @@ export default function RouteMap({
     setMap(null);
   };
 
-  // Internal directions fetching (fallback when no external directions)
+  // Internal directions fetching (fallback when no external directions).
+  // If the request fails (REQUEST_DENIED when the browser key lacks the
+  // Directions API is the classic case) or hangs, showFallbackLine turns
+  // on so a dashed straight A→B line renders instead — the visitor always
+  // sees SOME path between the two markers.
   useEffect(() => {
     // If external directions are provided, skip internal fetching
     if (externalDirections) {
       setInternalDirections(null);
+      setShowFallbackLine(false);
       return;
     }
 
     if (!isLoaded || !pickup || !dropoff) {
       setInternalDirections(null);
+      setShowFallbackLine(false);
       return;
     }
 
-    const directionsService = new google.maps.DirectionsService();
+    const attempt = ++routeAttemptRef.current;
+    let settled = false;
 
-    directionsService.route(
-      {
-        origin: pickup,
-        destination: dropoff,
-        travelMode: google.maps.TravelMode.DRIVING,
-        provideRouteAlternatives: showAlternatives,
-      },
-      (result, status) => {
-        if (status === google.maps.DirectionsStatus.OK) {
-          setInternalDirections(result);
-        } else {
-          console.error('Directions request failed:', status);
-          setInternalDirections(null);
+    // If no answer within 4s, assume the request is dead (hung network,
+    // throttled key) and show the dashed line — the real route still
+    // replaces it if the answer eventually lands.
+    const timeoutId = window.setTimeout(() => {
+      if (!settled && attempt === routeAttemptRef.current) setShowFallbackLine(true);
+    }, 4000);
+
+    try {
+      const directionsService = new google.maps.DirectionsService();
+
+      directionsService.route(
+        {
+          origin: pickup,
+          destination: dropoff,
+          travelMode: google.maps.TravelMode.DRIVING,
+          provideRouteAlternatives: showAlternatives,
+        },
+        (result, status) => {
+          if (attempt !== routeAttemptRef.current) return; // stale attempt
+          settled = true;
+          window.clearTimeout(timeoutId);
+          if (status === google.maps.DirectionsStatus.OK) {
+            setInternalDirections(result);
+            setShowFallbackLine(false);
+          } else {
+            console.error('Directions request failed:', status);
+            setInternalDirections(null);
+            setShowFallbackLine(true);
+          }
         }
-      }
-    );
+      );
+    } catch (err) {
+      // Service constructor/route can throw when the Maps namespace is
+      // partially available (degraded key, version drift).
+      console.error('Directions request failed:', err);
+      settled = true;
+      window.clearTimeout(timeoutId);
+      setInternalDirections(null);
+      setShowFallbackLine(true);
+    }
+
+    return () => window.clearTimeout(timeoutId);
   }, [isLoaded, pickup, dropoff, showAlternatives, externalDirections]);
+
+  // ── Fallback path: dashed straight line between A and B ──
+  // Rendered only when the real driving route is unavailable, so the
+  // "path between A and B" is always visible on the map.
+  useEffect(() => {
+    if (!map || !showFallbackLine || !pickup || !dropoff) return;
+
+    const dashSymbol = {
+      path: 'M 0,-1.2 0,1.2',
+      strokeOpacity: 1,
+      strokeWeight: 3,
+      scale: 2.4,
+    };
+
+    const line = new google.maps.Polyline({
+      path: [pickup, dropoff],
+      geodesic: true,
+      strokeColor: '#84cc16', // lime-500 — brand accent, visible on light & dark tiles
+      strokeOpacity: 0, // hidden solid stroke — the dash icons carry the line
+      strokeWeight: 4,
+      zIndex: 50, // float above the pickup-zone polygons
+      icons: [{ icon: dashSymbol, offset: '0', repeat: '18px' }],
+      map,
+    });
+
+    return () => { line.setMap(null); };
+  }, [map, showFallbackLine, pickup, dropoff]);
 
   // ── Imperative driver marker: create, remove, and animate ──
   useEffect(() => {
