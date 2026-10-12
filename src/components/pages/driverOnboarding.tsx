@@ -539,6 +539,25 @@ export default function DriverOnboardingPage() {
   const [homeAreaFocused, setHomeAreaFocused] = useState(false);
   const [homeAreaBlurred, setHomeAreaBlurred] = useState(false);
 
+  // ── Full legal name — Stripe exact-match guidance ─────────────────
+  // Stripe verifies payouts against the name exactly as printed on the
+  // driver's license, so a missing middle name fails identity matching.
+  // This is a SOFT warning: a two-word name is submittable (plenty of
+  // people legally have no middle name) — the driver just has to tell us
+  // so by dismissing the warning. Checkmark policy:
+  //   - 3+ words  → passed (green checkmark, no warning)
+  //   - 2 words   → red warning; checkmark only after the driver
+  //                 dismisses it ("I don't have a middle name")
+  //   - 0–1 words → neither checkmark nor warning (empty/invalid)
+  // The name is stored backend-side as a single verbatim string — no
+  // normalization — so casing/spacing here is what Stripe will see.
+  const [nameWarningDismissed, setNameWarningDismissed] = useState(false);
+  const fullNameWordCount = (watchFullName ?? "").trim().split(/\s+/).filter(Boolean).length;
+  const showFullNameWarning = fullNameWordCount === 2 && !nameWarningDismissed;
+  const fullNamePasses =
+    (fullNameWordCount >= 3 || (fullNameWordCount === 2 && nameWarningDismissed)) &&
+    !errors.fullName;
+
   // Age gate: compute actual age from DOB
   const computedAge = useMemo(() => {
     const dobStr = watchDateOfBirth;
@@ -1044,10 +1063,10 @@ export default function DriverOnboardingPage() {
                         : "border-transparent"
                     )}>
                       <Label htmlFor="fullName" className="text-xs font-bold">
-                        Full legal name (exactly as it appears on your driver's license){!watchFullName?.trim() && <span className="text-red-500">*</span>}
+                        Full legal name, including middle name, exactly as it appears on your driver's license.{!watchFullName?.trim() && <span className="text-red-500">*</span>}
                       </Label>
                       <p className="text-[10px] text-slate-500 dark:text-slate-400 mb-1">
-                        This must match your driver's license exactly.
+                        Include your middle name if it's on your license — even if you don't usually use it. Stripe requires an exact match for payouts.
                       </p>
                       <div className="relative">
                         <Input
@@ -1057,7 +1076,7 @@ export default function DriverOnboardingPage() {
                             "h-14 rounded-2xl pr-10 transition-colors",
                             errors.fullName
                               ? "border-red-400 dark:border-red-500"
-                              : watchFullName?.trim()
+                              : fullNamePasses
                                 ? "border-green-300 dark:border-green-700"
                                 : ""
                           )}
@@ -1065,7 +1084,7 @@ export default function DriverOnboardingPage() {
                           autoComplete="name"
                           disabled={isPending || !isAgeVerified}
                         />
-                        {watchFullName?.trim() && !errors.fullName && (
+                        {fullNamePasses && (
                           <div className="absolute right-3 top-1/2 -translate-y-1/2">
                             <CheckCircle className="w-5 h-5 text-green-500" />
                           </div>
@@ -1075,6 +1094,21 @@ export default function DriverOnboardingPage() {
                         <p className="text-xs text-red-500 font-medium">
                           {errors.fullName.message}
                         </p>
+                      )}
+                      {showFullNameWarning && !errors.fullName && (
+                        <div className="flex items-start justify-between gap-3 mt-1">
+                          <p className="text-xs text-red-600 dark:text-red-400 font-medium flex items-start gap-1.5">
+                            <AlertCircle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
+                            If your license shows a middle name, include it here.
+                          </p>
+                          <button
+                            type="button"
+                            onClick={() => setNameWarningDismissed(true)}
+                            className="text-[11px] font-bold text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 underline underline-offset-2 whitespace-nowrap flex-shrink-0 transition-colors"
+                          >
+                            I don't have a middle name
+                          </button>
+                        </div>
                       )}
                     </div>
 
