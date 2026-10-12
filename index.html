@@ -105,6 +105,45 @@
       }
     </style>
 
+    <!-- ── Boot-shell styles (used until React mounts) ──
+         The boot shell gives every launch a branded first paint and — when
+         the JS bundle never boots (stale service-worker chunks, failed
+         module script, module-level crash) — turns the old BLANK WHITE
+         PWA screen into a recoverable loading screen with escalation:
+         8s → manual Reload button; 20s → "Clear app data & reload", which
+         unregisters the service worker and deletes every cache bucket
+         (the only fix for a poisoned installed PWA) while KEEPING
+         localStorage, so users stay signed in. -->
+    <style>
+      @keyframes boot-spin { to { transform: rotate(360deg); } }
+      #boot-shell {
+        position: fixed; inset: 0; z-index: 9999;
+        display: flex; flex-direction: column; align-items: center; justify-content: center;
+        gap: 16px; padding: 24px; text-align: center;
+        background: #ffffff; color: #0f172a;
+        font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+      }
+      .dark #boot-shell { background: #0f172a; color: #f8fafc; }
+      #boot-shell .boot-ring {
+        width: 36px; height: 36px; border-radius: 50%;
+        border: 4px solid #d9f99d; border-top-color: #65a30d;
+        animation: boot-spin 0.9s linear infinite;
+      }
+      .dark #boot-shell .boot-ring { border-color: #365314; border-top-color: #a3e635; }
+      #boot-shell .boot-msg { font-size: 14px; font-weight: 600; }
+      #boot-shell .boot-hint { font-size: 12px; color: #64748b; margin: 0 0 10px; }
+      .dark #boot-shell .boot-hint { color: #94a3b8; }
+      #boot-shell button {
+        font: inherit; font-size: 13px; font-weight: 600; cursor: pointer;
+        border-radius: 12px; padding: 10px 18px; border: none;
+        background: #0f172a; color: #ffffff;
+      }
+      .dark #boot-shell button { background: #f8fafc; color: #0f172a; }
+      #boot-shell button.boot-nuclear-btn {
+        background: #b91c1c; color: #ffffff;
+      }
+    </style>
+
     <!-- Inline script: reads localStorage and sets the 'dark' class
          on <html> before React loads. The <style> above handles the rest. -->
     <script>
@@ -139,9 +178,103 @@
         </ul>
       </div>
     </noscript>
-    <div id="app"></div>
+    <div id="app">
+      <!-- Boot shell: replaced by React on mount (createRoot().render()
+           takes over the container). Visible only during boot, or
+           permanently if the bundle fails — with recovery buttons. -->
+      <div id="boot-shell">
+        <div class="boot-ring" aria-hidden="true"></div>
+        <div class="boot-msg">Loading 101 Drivers&hellip;</div>
+        <div id="boot-slow" style="display:none">
+          <p class="boot-hint">This is taking longer than usual.</p>
+          <button type="button" onclick="location.reload()">Reload</button>
+        </div>
+        <div id="boot-stuck" style="display:none">
+          <p class="boot-hint">Still stuck? The saved app data may be outdated.</p>
+          <button type="button" class="boot-nuclear-btn" id="boot-clear-btn">Clear app data &amp; reload</button>
+        </div>
+      </div>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
-    
+
+    <!-- ── Pre-React recovery listeners ──
+         These run BEFORE the bundle so they work even when the entry
+         module itself fails to load (the vite:preloadError handler inside
+         main.tsx only exists once the bundle has booted). Both share the
+         same 30s reload guard key as RouteErrorScreen so no code path can
+         loop reloads. -->
+    <script>
+      (function () {
+        var RELOAD_KEY = 'route-error:auto-reload-at';
+        function reloadOnce() {
+          try {
+            var last = Number(sessionStorage.getItem(RELOAD_KEY) || 0);
+            if (Date.now() - last < 30000) return false;
+            sessionStorage.setItem(RELOAD_KEY, String(Date.now()));
+          } catch (e) { /* private mode — still reload */ }
+          location.reload();
+          return true;
+        }
+
+        // A lazy chunk / preload failed before React could listen.
+        window.addEventListener('vite:preloadError', function (e) {
+          e.preventDefault();
+          reloadOnce();
+        });
+
+        // Entry/asset script element failed to LOAD (404 after a deploy
+        // swapped hashed files, SPA-fallback HTML served as JS, ...).
+        // Capture phase catches script errors that happen before any
+        // window.onerror inside the bundle is registered. Only app
+        // assets trigger recovery — a random broken <img> must not.
+        window.addEventListener('error', function (ev) {
+          var t = ev.target;
+          if (!t || (t.tagName !== 'SCRIPT' && t.tagName !== 'LINK')) return;
+          var url = String(t.src || t.href || '');
+          if (url.indexOf('/assets/') !== -1 || url.indexOf('/src/') !== -1) {
+            reloadOnce();
+          }
+        }, true);
+
+        // Watchdogs: if React never takes over, escalate recovery.
+        setTimeout(function () {
+          if (window.__APP_BOOTED__) return;
+          var el = document.getElementById('boot-slow');
+          if (el) el.style.display = 'block';
+        }, 8000);
+        setTimeout(function () {
+          if (window.__APP_BOOTED__) return;
+          var el = document.getElementById('boot-stuck');
+          if (el) el.style.display = 'block';
+          var btn = document.getElementById('boot-clear-btn');
+          if (btn && !btn.dataset.wired) {
+            btn.dataset.wired = '1';
+            btn.addEventListener('click', function () {
+              // The nuclear option for a poisoned installed PWA: drop the
+              // service worker and EVERY cache bucket (stale chunks live
+              // there) but keep localStorage — sign-in state survives.
+              var done = function () { location.reload(); };
+              try {
+                var regs = navigator.serviceWorker
+                  ? navigator.serviceWorker.getRegistrations()
+                  : Promise.resolve([]);
+                regs
+                  .then(function (rs) {
+                    return Promise.all(rs.map(function (r) { return r.unregister(); }));
+                  })
+                  .then(function () { return caches.keys(); })
+                  .then(function (keys) {
+                    return Promise.all((keys || []).map(function (k) { return caches.delete(k); }));
+                  })
+                  .catch(function () {})
+                  .then(done, done);
+              } catch (e) { done(); }
+            });
+          }
+        }, 20000);
+      })();
+    </script>
+
     <!-- Register Service Worker (production only) -->
     <script>
       if ('serviceWorker' in navigator && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {

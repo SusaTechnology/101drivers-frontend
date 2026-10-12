@@ -414,10 +414,22 @@ export function WhatsAppSupportLinkDialog({
                             name={`social-${field.key}`}
                           />
                         </div>
-                        {socialErrors[field.key] && (
+                        {socialErrors[field.key] ? (
                           <p className="text-[10px] text-red-500">
                             {socialErrors[field.key]}
                           </p>
+                        ) : (
+                          (social[field.key] ?? "").trim() && (
+                            <a
+                              href={social[field.key]!.trim()}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="flex items-center gap-1.5 text-[10px] font-bold text-primary hover:underline"
+                            >
+                              <ExternalLink className="w-3 h-3" />
+                              Test this link before saving
+                            </a>
+                          )
                         )}
                       </div>
                     );

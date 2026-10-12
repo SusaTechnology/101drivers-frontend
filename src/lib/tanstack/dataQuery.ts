@@ -1,13 +1,15 @@
 "use client";
+import { useRef } from "react";
 import {
   keepPreviousData,
   useQuery,
   useMutation,
   useQueryClient,
 } from "@tanstack/react-query";
-import type { QueryKey } from "@tanstack/react-query";
+import type { QueryKey, UseMutationResult } from "@tanstack/react-query";
 import { socketConnect, socketDisconnect } from "@/lib/socket";
 import { safeLocalStorage } from "@/lib/safeStorage";
+import { uploadTracker } from "@/lib/uploadFeedback";
 
 // ==================== TOKEN & USER MANAGEMENT ====================
 const ACCESS_TOKEN_KEY = "accessToken";
@@ -767,46 +769,64 @@ export function useFileUpload<TData = any>(
 ) {
   const queryClient = useQueryClient();
 
-  return useMutation<TData, Error, FormData>({
+  // Task: no silent uploads. Every upload surfaces in the global overlay
+  // (spinner the instant the tap lands, error card with Retry on failure,
+  // system notification when the app is backgrounded at completion).
+  // The overlay lives in uploadFeedback.tsx and is mounted once at the
+  // app root — individual pages keep their own richer error handling.
+  const mutationRef = useRef<
+    UseMutationResult<TData, Error, FormData> | null
+  >(null);
+
+  const mutation = useMutation<TData, Error, FormData>({
     mutationFn: async (formData) => {
-      // Get valid token (handles refresh when token/user is missing)
-      const token = await ensureAuth();
-      if (!token) {
-        throw new Error('Not authenticated');
-      }
+      const trackId = uploadTracker.begin("Uploading");
+      try {
+        // Get valid token (handles refresh when token/user is missing)
+        const token = await ensureAuth();
+        if (!token) {
+          throw new Error('Not authenticated');
+        }
 
-      const doUpload = (authToken: string) =>
-        fetch(apiEndPoint, {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${authToken}`,
-            // Do NOT set Content-Type – browser will set with boundary
-          },
-          body: formData,
-          credentials: 'include',
+        const doUpload = (authToken: string) =>
+          fetch(apiEndPoint, {
+            method: 'POST',
+            headers: {
+              Authorization: `Bearer ${authToken}`,
+              // Do NOT set Content-Type – browser will set with boundary
+            },
+            body: formData,
+            credentials: 'include',
+          });
+
+        let response = await doUpload(token);
+
+        // Access token may have expired since it was issued (15 min TTL).
+        // ensureAuth cannot detect that client-side, so handle the 401 here:
+        // refresh once and retry, exactly like baseFetch does for JSON calls.
+        if (response.status === 401) {
+          const newToken = await refreshShared();
+          response = await doUpload(newToken);
+        }
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(errorData.message || `Upload failed with status ${response.status}`);
+        }
+
+        // Handle 204 No Content
+        const data = response.status === 204 ? (null as TData) : ((await response.json()) as TData);
+
+        uploadTracker.succeed(trackId);
+        return data;
+      } catch (error) {
+        // The Retry closure re-sends the EXACT same FormData through this
+        // same mutation — no re-picking files, no re-entering data.
+        uploadTracker.fail(trackId, error, () => {
+          mutationRef.current?.mutate(formData);
         });
-
-      let response = await doUpload(token);
-
-      // Access token may have expired since it was issued (15 min TTL).
-      // ensureAuth cannot detect that client-side, so handle the 401 here:
-      // refresh once and retry, exactly like baseFetch does for JSON calls.
-      if (response.status === 401) {
-        const newToken = await refreshShared();
-        response = await doUpload(newToken);
+        throw error;
       }
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.message || `Upload failed with status ${response.status}`);
-      }
-
-      // Handle 204 No Content
-      if (response.status === 204) {
-        return null as TData;
-      }
-
-      return response.json();
     },
     onSuccess: (data) => {
       if (options?.successMessage) {
@@ -829,6 +849,9 @@ export function useFileUpload<TData = any>(
     },
     onSettled: options?.onSettled,
   });
+
+  mutationRef.current = mutation;
+  return mutation;
 }
 
 // ==================== AUTHENTICATED FETCH HELPERS ====================

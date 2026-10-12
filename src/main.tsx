@@ -60,8 +60,13 @@ declare module "@tanstack/react-router" {
 }
 
 // Render the app
+// NOTE: the container holds a static boot shell (spinner + recovery
+// buttons) so a failed bundle shows a branded screen instead of white.
+// createRoot().render() replaces that content when React mounts — the
+// old `!rootElement.innerHTML` guard here would have PERMANENTLY kept
+// the shell on screen and never booted the app at all.
 const rootElement = document.getElementById("app");
-if (rootElement && !rootElement.innerHTML) {
+if (rootElement) {
   const root = ReactDOM.createRoot(rootElement);
   root.render(
     <>
@@ -77,6 +82,10 @@ if (rootElement && !rootElement.innerHTML) {
     </>
   );
 }
+
+// Tell the index.html boot watchdogs that React took over — the shell
+// (and its recovery buttons) can no longer appear on this page load.
+(window as unknown as { __APP_BOOTED__?: boolean }).__APP_BOOTED__ = true;
 
 // If you want to start measuring performance in your app, pass a function
 // to log results (for example: reportWebVitals(console.log))

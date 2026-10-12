@@ -3,6 +3,7 @@ import { ThemeProvider } from '@/lib/theme'
 import { Toaster } from 'sonner'
 import type { ReactNode } from 'react'
 import { getLastKnownRoles } from './dataQuery'
+import { UploadFeedbackOverlay } from '@/lib/uploadFeedback'
 
 const SESSION_EXPIRED_MSG = 'Session expired'
 
@@ -91,6 +92,10 @@ export function Providers({ children }: AppProvidersProps) {
     >
       <QueryClientProvider client={queryClient}>
         {children}
+        {/* Global upload feedback: instant "Uploading…" pill, error card
+            with Retry, backgrounded completion notification. Driven by
+            useFileUpload — see uploadFeedback.tsx. */}
+        <UploadFeedbackOverlay />
         <Toaster
           richColors
           position="top-center"

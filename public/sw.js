@@ -291,9 +291,22 @@ self.addEventListener('fetch', (event) => {
           return response;
         })
         .catch(() => {
-          // Return cached response or offline page
+          // Network failed (offline / wake-from-idle radio race): serve the
+          // cached page if we have one, and ALSO refresh it in the
+          // background — otherwise an installed PWA that launched offline
+          // would keep booting from an index.html of a previous deploy
+          // whose hashed chunks no longer exist anywhere (its cache bucket
+          // was wiped by the current build's activate handler), which is
+          // exactly the "PWA icon opens a blank screen" failure mode.
+          // Background refresh here means the NEXT launch is current.
           return caches.match(request)
-            .then((response) => response || caches.match('/'));
+            .then((response) => {
+              if (response) {
+                event.waitUntil(fetchAndCache(request));
+                return response;
+              }
+              return caches.match('/');
+            });
         })
     );
     return;
