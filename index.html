@@ -60,13 +60,195 @@
     <meta property="og:title" content="101 Drivers — Car Pickup & Delivery Service in California | Flat Rate" />
     <meta property="og:description" content="California's flat-rate car pickup & delivery service. Dealers & individuals get instant quotes, real-time GPS tracking, and insured vehicle transport across Southern California." />
     <meta property="og:url" content="https://101drivers.com/" />
-    <meta property="og:image" content="https://101drivers.com/assets/101drivers-logo.jpg" />
-    <meta property="og:image:alt" content="101 Drivers logo" />
+    <meta property="og:image" content="https://101drivers.com/og-image.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="101 Drivers — Car Pickup & Delivery in California" />
+    <meta property="og:locale" content="en_US" />
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="101 Drivers — Car Pickup & Delivery Service in California | Flat Rate" />
     <meta name="twitter:description" content="California's flat-rate car pickup & delivery service for dealerships and individuals." />
-    <meta name="twitter:image" content="https://101drivers.com/assets/101drivers-logo.jpg" />
+    <meta name="twitter:image" content="https://101drivers.com/og-image.png" />
+    <meta name="twitter:image:alt" content="101 Drivers — Car Pickup & Delivery in California" />
     <link rel="canonical" href="https://101drivers.com/" />
+
+    <!-- ── Structured Data: LocalBusiness + Service + FAQPage + BreadcrumbList ──
+         This is the MOST IMPORTANT SEO addition for a local service business.
+         Google reads this directly from HTML — no JavaScript needed.
+         Eligible for rich results (star ratings, FAQ accordions, service cards). -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "LocalBusiness",
+          "@id": "https://101drivers.com/#business",
+          "name": "101 Drivers",
+          "alternateName": "101Drivers",
+          "description": "California's flat-rate car pickup & delivery service for automotive dealerships and private individuals. Instant quotes, real-time GPS tracking, photo proof of delivery, and insured vehicle transport across Southern California.",
+          "url": "https://101drivers.com/",
+          "logo": "https://101drivers.com/apple-touch-icon.png",
+          "image": "https://101drivers.com/og-image.png",
+          "telephone": "+1-424-313-2168",
+          "email": "support@101drivers.com",
+          "priceRange": "$$",
+          "address": {
+            "@type": "PostalAddress",
+            "streetAddress": "Santa Monica",
+            "addressLocality": "Los Angeles",
+            "addressRegion": "CA",
+            "postalCode": "90401",
+            "addressCountry": "US"
+          },
+          "geo": {
+            "@type": "GeoCoordinates",
+            "latitude": 34.0522,
+            "longitude": -118.2437
+          },
+          "areaServed": [
+            {"@type": "AdministrativeArea", "name": "Los Angeles County"},
+            {"@type": "AdministrativeArea", "name": "Orange County"},
+            {"@type": "AdministrativeArea", "name": "Riverside County"},
+            {"@type": "AdministrativeArea", "name": "San Bernardino County"},
+            {"@type": "AdministrativeArea", "name": "Ventura County"},
+            {"@type": "AdministrativeArea", "name": "Santa Barbara County"},
+            {"@type": "AdministrativeArea", "name": "San Diego County"}
+          ],
+          "openingHoursSpecification": [{
+            "@type": "OpeningHoursSpecification",
+            "dayOfWeek": ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"],
+            "opens": "00:00",
+            "closes": "23:59"
+          }],
+          "sameAs": [
+            "https://101drivers.com/about",
+            "https://101drivers.com/help-customer",
+            "https://101drivers.com/help-driver"
+          ]
+        },
+        {
+          "@type": "Service",
+          "@id": "https://101drivers.com/#service",
+          "name": "Vehicle Pickup & Delivery Service",
+          "serviceType": "Auto Transport",
+          "provider": {"@id": "https://101drivers.com/#business"},
+          "areaServed": {"@type": "State", "name": "California"},
+          "description": "Flat-rate car pickup & delivery service for automotive dealerships and private individuals. Starting at $101 for the first 25 miles, plus $1.80 per additional mile with full insurance coverage included.",
+          "offers": {
+            "@type": "Offer",
+            "price": "101.00",
+            "priceCurrency": "USD",
+            "description": "Flat rate for first 25 miles, $1.80/mile thereafter. Insurance included."
+          },
+          "hasOfferCatalog": {
+            "@type": "OfferCatalog",
+            "name": "Vehicle Delivery Services",
+            "itemListElement": [
+              {
+                "@type": "Offer",
+                "itemOffered": {"@type": "Service", "name": "Dealership Vehicle Transport"},
+                "price": "101.00",
+                "priceCurrency": "USD"
+              },
+              {
+                "@type": "Offer",
+                "itemOffered": {"@type": "Service", "name": "Individual Vehicle Delivery"},
+                "price": "101.00",
+                "priceCurrency": "USD"
+              },
+              {
+                "@type": "Offer",
+                "itemOffered": {"@type": "Service", "name": "Door-to-Door Car Delivery"},
+                "price": "101.00",
+                "priceCurrency": "USD"
+              }
+            ]
+          }
+        },
+        {
+          "@type": "FAQPage",
+          "@id": "https://101drivers.com/#faq",
+          "mainEntity": [
+            {
+              "@type": "Question",
+              "name": "How much does car delivery cost in California?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "101 Drivers offers flat-rate car delivery starting at $101 for the first 25 miles, plus $1.80 per additional mile. Full insurance coverage is included. Get an instant quote on our homepage by entering your pickup and drop-off addresses."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "What areas does 101 Drivers serve?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "We serve all of Southern California including Los Angeles County, Orange County, Riverside County, San Bernardino County, Ventura County, Santa Barbara County, and San Diego County. Both pickup and drop-off locations must be within California."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "How do I track my vehicle delivery?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Once a driver is assigned, you receive a tracking link via SMS and email. You can track your vehicle in real-time with GPS, see driver location, ETA, and photo proof of delivery — all from your phone."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "Is my vehicle insured during transport?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Yes. All deliveries include full insurance coverage at no additional cost. Every vehicle is covered from pickup to drop-off, and photo proof of condition is documented at every step."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "Can I book a car delivery as an individual, or is it only for dealerships?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "101 Drivers serves both automotive dealerships and private individuals. Dealerships can create a free account for streamlined booking, while individuals can get an instant quote and book directly on our homepage without an account."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "How do I become a driver for 101 Drivers?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "To become a driver, apply through our Driver Onboarding page. Requirements include a valid California driver's license, clean driving record, and vehicle insurance. Drivers are paid weekly with transparent per-mile rates."
+              }
+            }
+          ]
+        },
+        {
+          "@type": "BreadcrumbList",
+          "@id": "https://101drivers.com/#breadcrumbs",
+          "itemListElement": [
+            {
+              "@type": "ListItem",
+              "position": 1,
+              "name": "Home",
+              "item": "https://101drivers.com/"
+            }
+          ]
+        },
+        {
+          "@type": "WebSite",
+          "@id": "https://101drivers.com/#website",
+          "url": "https://101drivers.com/",
+          "name": "101 Drivers",
+          "publisher": {"@id": "https://101drivers.com/#business"},
+          "potentialAction": [{
+            "@type": "SearchAction",
+            "target": {
+              "@type": "EntryPoint",
+              "urlTemplate": "https://101drivers.com/?q={search_term_string}"
+            },
+            "query-input": "required name=search_term_string"
+          }]
+        }
+      ]
+    }
+    </script>
 
     <!-- ── Performance: preconnect to third-party origins ── -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -124,6 +306,11 @@
         font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
       }
       .dark #boot-shell { background: #0f172a; color: #f8fafc; }
+      #boot-shell .boot-logo {
+        width: 88px; height: 88px; object-fit: cover;
+        border-radius: 22px;
+        box-shadow: 0 4px 16px rgba(15, 23, 42, 0.14);
+      }
       #boot-shell .boot-ring {
         width: 36px; height: 36px; border-radius: 50%;
         border: 4px solid #d9f99d; border-top-color: #65a30d;
@@ -159,22 +346,74 @@
   </head>
   <body>
     <noscript>
-      <div style="padding: 2rem; font-family: system-ui, sans-serif; max-width: 800px; margin: auto;">
-        <h1>101 Drivers — Car Pickup & Delivery Service in California</h1>
+      <div style="padding: 2rem; font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; max-width: 900px; margin: auto; line-height: 1.6; color: #020617;">
+        <h1>101 Drivers — Car Pickup & Delivery Service in California | Flat Rate</h1>
         <p>California's premier flat-rate vehicle pickup & delivery service for automotive dealerships and private individuals. Get instant quotes, real-time GPS tracking, photo proof of delivery, and insured vehicle transport across Southern California.</p>
+
         <h2>Transparent Flat-Rate Pricing</h2>
-        <p>Flat rate starting at $101 covering the first 25 miles, plus $1.80 per additional mile with full insurance coverage included.</p>
+        <p>Flat rate starting at $101 covering the first 25 miles, plus $1.80 per additional mile with full insurance coverage included. No hidden fees, no surge pricing, no surprises. Get an instant quote by entering your pickup and drop-off addresses on our homepage.</p>
+
+        <h2>Why Choose 101 Drivers?</h2>
+        <ul>
+          <li><strong>Flat-rate pricing:</strong> $101 for the first 25 miles, $1.80/mile after that. Insurance included.</li>
+          <li><strong>Real-time GPS tracking:</strong> Track your vehicle in real-time from pickup to drop-off with live location, ETA, and driver details.</li>
+          <li><strong>Photo proof of delivery:</strong> Documented condition photos at every step — pickup, transit, and delivery.</li>
+          <li><strong>Fully insured:</strong> Every vehicle is covered from pickup to drop-off at no additional cost.</li>
+          <li><strong>For dealerships & individuals:</strong> Dealers get streamlined booking with dashboards; individuals get instant quotes without an account.</li>
+          <li><strong>California-wide coverage:</strong> Serving Los Angeles, Orange, Riverside, San Bernardino, Ventura, Santa Barbara, and San Diego counties.</li>
+        </ul>
+
         <h2>Service Areas in Southern California</h2>
-        <p>Serving Los Angeles County, Orange County, Riverside County, San Bernardino County, Ventura County, Santa Barbara County, and San Diego County.</p>
+        <p>101 Drivers serves all of Southern California including:</p>
+        <ul>
+          <li>Los Angeles County (LA, Santa Monica, Beverly Hills, Hollywood, Long Beach, Pasadena, Torrance, Burbank, Glendale)</li>
+          <li>Orange County (Anaheim, Irvine, Santa Ana, Huntington Beach, Newport Beach, Costa Mesa, Orange)</li>
+          <li>Riverside County (Riverside, Palm Springs, Moreno Valley, Corona, Temecula)</li>
+          <li>San Bernardino County (San Bernardino, Ontario, Rancho Cucamonga, Fontana, Victorville)</li>
+          <li>Ventura County (Ventura, Oxnard, Thousand Oaks, Simi Valley, Camarillo)</li>
+          <li>Santa Barbara County (Santa Barbara, Goleta, Carpinteria)</li>
+          <li>San Diego County (San Diego, Carlsbad, Escondido, Oceanside, Chula Vista)</li>
+        </ul>
+
+        <h2>Services We Offer</h2>
+        <ul>
+          <li><strong>Dealership Vehicle Transport:</strong> Bulk delivery for car dealerships, auction purchases, and trade-ins.</li>
+          <li><strong>Individual Vehicle Delivery:</strong> Door-to-door delivery for private buyers and sellers.</li>
+          <li><strong>Door-to-Door Car Delivery:</strong> Convenient pickup and drop-off at the addresses you choose.</li>
+          <li><strong>Insured Vehicle Transport:</strong> Full insurance coverage at no additional cost.</li>
+        </ul>
+
+        <h2>Frequently Asked Questions</h2>
+        <h3>How much does car delivery cost in California?</h3>
+        <p>101 Drivers offers flat-rate car delivery starting at $101 for the first 25 miles, plus $1.80 per additional mile. Full insurance coverage is included. Get an instant quote on our homepage.</p>
+
+        <h3>What areas does 101 Drivers serve?</h3>
+        <p>We serve all of Southern California including Los Angeles County, Orange County, Riverside County, San Bernardino County, Ventura County, Santa Barbara County, and San Diego County. Both pickup and drop-off locations must be within California.</p>
+
+        <h3>How do I track my vehicle delivery?</h3>
+        <p>Once a driver is assigned, you receive a tracking link via SMS and email. You can track your vehicle in real-time with GPS, see driver location, ETA, and photo proof of delivery — all from your phone.</p>
+
+        <h3>Is my vehicle insured during transport?</h3>
+        <p>Yes. All deliveries include full insurance coverage at no additional cost. Every vehicle is covered from pickup to drop-off.</p>
+
+        <h3>Can I book as an individual, or only as a dealership?</h3>
+        <p>101 Drivers serves both automotive dealerships and private individuals. Dealerships can create a free account for streamlined booking, while individuals can get an instant quote and book directly on our homepage.</p>
+
+        <h2>Drive for 101 Drivers</h2>
+        <p>Want to earn money delivering vehicles? 101 Drivers is hiring drivers across California. Requirements: valid California driver's license, clean driving record, vehicle insurance. Drivers are paid weekly with transparent per-mile rates. <a href="/driver-onboarding">Apply to drive</a>.</p>
+
         <h2>Contact & Information</h2>
-        <p>Phone: +1 (310) 962-8402 | Email: support@101drivers.com</p>
+        <p>Phone: +1 (424) 313-2168 | Email: support@101drivers.com</p>
         <ul>
           <li><a href="/about">About 101 Drivers</a></li>
           <li><a href="/help-customer">Customer Support & FAQs</a></li>
           <li><a href="/help-driver">Driver Careers & FAQs</a></li>
           <li><a href="/driver-onboarding">Apply to Drive</a></li>
+          <li><a href="/auth/dealer-signup">Dealer Sign Up</a></li>
+          <li><a href="/auth/individual-signup">Individual Sign Up</a></li>
           <li><a href="/privacy">Privacy Policy</a></li>
           <li><a href="/terms">Terms of Service</a></li>
+          <li><a href="/agreement">Driver Agreement</a></li>
         </ul>
       </div>
     </noscript>
@@ -183,8 +422,9 @@
            takes over the container). Visible only during boot, or
            permanently if the bundle fails — with recovery buttons. -->
       <div id="boot-shell">
+        <img class="boot-logo" src="/assets/101drivers-logo.jpg" alt="101 Drivers" />
         <div class="boot-ring" aria-hidden="true"></div>
-        <div class="boot-msg">Loading 101 Drivers&hellip;</div>
+        <div class="boot-msg">Loading...</div>
         <div id="boot-slow" style="display:none">
           <p class="boot-hint">This is taking longer than usual.</p>
           <button type="button" onclick="location.reload()">Reload</button>

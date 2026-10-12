@@ -170,6 +170,62 @@ function validateOptionalUrl(raw: string): string | null {
   return null;
 }
 
+/**
+ * Returns an href usable by the "Test this link before saving" anchor:
+ * only absolute http(s) URLs are safe to open in a new tab. Anything else
+ * (a paste missing "https://", a typo) returns null so the link renders
+ * DISABLED instead of navigating the SPA to a garbage relative path.
+ */
+function toTestHref(raw: string): string | null {
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+  try {
+    const parsed = new URL(trimmed);
+    if (parsed.protocol === "http:" || parsed.protocol === "https:") {
+      return parsed.href;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The per-field test affordance. Shown under EVERY input (WhatsApp + all
+ * social platforms) whenever the field has content — exactly per ops'
+ * request: empty field → nothing; non-empty → the link is there. When the
+ * pasted text isn't an openable absolute URL the link renders disabled
+ * (muted, not clickable) while the red validation message below explains
+ * what to fix — so a real pasted link ALWAYS gets its test link.
+ */
+function TestLink({ raw }: { raw: string }) {
+  if (!raw.trim()) return null;
+  const href = toTestHref(raw);
+  if (href) {
+    return (
+      <a
+        href={href}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="inline-flex items-center gap-1.5 text-[11px] font-bold text-primary hover:underline"
+      >
+        <ExternalLink className="w-3 h-3" />
+        Test this link before saving
+      </a>
+    );
+  }
+  return (
+    <span
+      aria-disabled="true"
+      title="Fix the link first — it must start with https://"
+      className="inline-flex items-center gap-1.5 text-[11px] font-bold text-slate-300 dark:text-slate-600 cursor-not-allowed select-none"
+    >
+      <ExternalLink className="w-3 h-3" />
+      Test this link before saving
+    </span>
+  );
+}
+
 interface WhatsAppSupportLinkDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -345,19 +401,11 @@ export function WhatsAppSupportLinkDialog({
                   https://wa.me/14243132168) so the pre-filled question message
                   opens with your pickup address.
                 </p>
+                <TestLink raw={supportUrl} />
+                {supportUrlError && (
+                  <p className="text-[10px] text-red-500">{supportUrlError}</p>
+                )}
               </div>
-
-              {supportUrl.trim() && !supportUrlError && (
-                <a
-                  href={supportUrl.trim()}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-1.5 text-xs font-bold text-primary hover:underline"
-                >
-                  <ExternalLink className="w-3.5 h-3.5" />
-                  Test this link before saving
-                </a>
-              )}
 
               {supportUrl.trim() === WHATSAPP_SUPPORT_URL && (
                 <p className="flex items-center gap-1.5 text-[11px] text-slate-500 dark:text-slate-400">
@@ -414,22 +462,13 @@ export function WhatsAppSupportLinkDialog({
                             name={`social-${field.key}`}
                           />
                         </div>
-                        {socialErrors[field.key] ? (
+                        {(social[field.key] ?? "").trim() && (
+                          <TestLink raw={social[field.key] ?? ""} />
+                        )}
+                        {socialErrors[field.key] && (
                           <p className="text-[10px] text-red-500">
                             {socialErrors[field.key]}
                           </p>
-                        ) : (
-                          (social[field.key] ?? "").trim() && (
-                            <a
-                              href={social[field.key]!.trim()}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="flex items-center gap-1.5 text-[10px] font-bold text-primary hover:underline"
-                            >
-                              <ExternalLink className="w-3 h-3" />
-                              Test this link before saving
-                            </a>
-                          )
                         )}
                       </div>
                     );
