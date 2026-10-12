@@ -1,6 +1,8 @@
 // 101 Drivers Service Worker for PWA
 //
-// v5 — per-deploy cache versioning + content-type guard.
+// v5.2 — per-deploy cache versioning + content-type guard + CACHE-FIRST
+// navigations (stale-while-revalidate; see the v5.2 block at the fetch
+// handler for why — PWA cold start must not wait on the network).
 //
 // WHY (history of incidents this file caused before):
 //   v3-and-earlier cached ANY response, including 404/500 error pages
@@ -57,6 +59,19 @@ const STATIC_ASSETS = [
   '/icons/icon-512x512.png',
   '/apple-touch-icon.png'
 ];
+
+// iOS launch screens (apple-touch-startup-image) — one per device/orientation.
+// Precached so a standalone PWA's launch screen is available even on the very
+// first offline launch after install. Names must stay in sync with
+// scripts/gen_splash.py, which generates public/splash/*.
+[
+  'iphone5-se1', 'iphone678-se23', 'iphone-plus', 'iphone-xs-11pro-12mini-13mini',
+  'iphone-xr-11', 'iphone-xsmax-11promax', 'iphone-12-13-14', 'iphone-121314promax',
+  'iphone-14pro', 'iphone-14promax-15', 'iphone-16pro', 'iphone-16promax',
+  'iphone-air', 'ipad-mini', 'ipad-102', 'ipad-air', 'ipad-pro-11', 'ipad-pro-129',
+].forEach((stem) => {
+  STATIC_ASSETS.push(`/splash/${stem}-portrait.png`, `/splash/${stem}-landscape.png`);
+});
 
 // ── Content-type guard ────────────────────────────────────────────────
 // Returns true when a response's content-type matches what the request
@@ -274,40 +289,84 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // For navigation requests, try network first, then cache
+// Navigation fetch + cache. Navigations are ALWAYS documents — an HTML
+// content-type under any path is the CORRECT answer here (nginx's SPA
+// fallback serves index.html for /driver/123 etc.). The generic
+// contentTypeMatchesRequest guard is for SUBRESOURCES and would wrongly
+// treat every deep-link page as poison; its navigation equivalent is
+// simply "ok + text/html", which already excludes 404/502/503 error
+// bodies via response.ok.
+// Both puts are CHAINED (not fire-and-forget) so the service worker stays
+// alive until the cache is primed for the next launch.
+async function fetchNavigationAndCache(request) {
+  const response = await fetchWithRetry(request);
+  if (response && response.ok) {
+    const type = (response.headers.get('content-type') || '').toLowerCase();
+    if (type.includes('html')) {
+      const cache = await caches.open(DYNAMIC_CACHE_NAME);
+      await Promise.all([
+        cache.put(request, response.clone()),
+        cache.put('/index.html', response.clone()),
+      ]);
+    }
+  }
+  return response;
+}
+
+// v5.2 — cache-first (stale-while-revalidate) NAVIGATIONS.
+//
+// WHY: v5.1 served navigations NETWORK-FIRST (cache only when the network
+// outright failed). Every PWA cold launch therefore waited a full network
+// round-trip — DNS + TLS + server render + the phone's radio reconnecting
+// after idle — before a single pixel painted. On iPhone standalone (which
+// has NO launch/splash UI at all) that wait is a plain WHITE screen for
+// seconds: exactly the "white screen before the loading comes" report.
+// The boot shell could only paint AFTER the navigation response arrived.
+//
+// WHAT v5.2 CHANGES: navigations are now served from THIS deploy's cached
+// index.html instantly (the same stale-while-revalidate every other asset
+// already used), and the fresh copy is fetched in the background so the
+// NEXT launch is current. Staleness is contained by the existing defense
+// stack, which was built for exactly this:
+//   - cache buckets embed the per-deploy BUILD_ID and activate wipes every
+//     older bucket, so a cached index.html can only be from the CURRENT
+//     deploy's service worker;
+//   - the inline boot shell + 8s/20s watchdogs recover a stale/mismatched
+//     boot; the vite:preloadError reload-once recovers a chunk 404 after a
+//     mid-deploy refresh.
+// First-ever visit and the first launch right after a deploy (empty
+// navigation cache) still go to the network — identical to v5.1 there.
+
+  // For navigation requests, serve the cached shell INSTANTLY, refresh in
+  // the background, and fall back to network only when nothing is cached.
   if (request.mode === 'navigate') {
     event.respondWith(
-      fetch(request)
-        .then((response) => {
-          // Cache the new response — but ONLY if it is a real page with
-          // the content-type it promises. Caching 404/502/503 error pages
-          // here is what used to keep the app broken after a failed deploy
-          // until site data was cleared.
-          if (response && response.ok && contentTypeMatchesRequest(request, response)) {
-            const responseClone = response.clone();
-            caches.open(DYNAMIC_CACHE_NAME)
-              .then((cache) => cache.put(request, responseClone));
-          }
-          return response;
-        })
-        .catch(() => {
-          // Network failed (offline / wake-from-idle radio race): serve the
-          // cached page if we have one, and ALSO refresh it in the
-          // background — otherwise an installed PWA that launched offline
-          // would keep booting from an index.html of a previous deploy
-          // whose hashed chunks no longer exist anywhere (its cache bucket
-          // was wiped by the current build's activate handler), which is
-          // exactly the "PWA icon opens a blank screen" failure mode.
-          // Background refresh here means the NEXT launch is current.
-          return caches.match(request)
-            .then((response) => {
-              if (response) {
-                event.waitUntil(fetchAndCache(request));
-                return response;
-              }
-              return caches.match('/');
-            });
-        })
+      (async () => {
+        // 1. Instant paint. ignoreSearch so /?source=pwa, /?utm_…, and
+        //    deep links (/driver/123) all hit the cached SPA shell — every
+        //    navigation on this origin is the same client-rendered index.html.
+        const cached =
+          (await caches.match(request, { ignoreSearch: true })) ||
+          (await caches.match('/index.html'));
+
+        // 2. Background refresh — primes the request's own key AND the
+        //    canonical '/index.html' key so the shell fallback above can
+        //    never go stale-empty (see fetchNavigationAndCache).
+        const networkPromise = fetchNavigationAndCache(request).catch(() => null);
+
+        if (cached) {
+          event.waitUntil(networkPromise);
+          return cached;
+        }
+
+        // 3. Nothing cached yet (first visit / first launch after a deploy):
+        //    wait for the network exactly like v5.1 did.
+        const response = await networkPromise;
+        if (response) return response;
+
+        // 4. Offline AND nothing cached — last resort: any cached page.
+        return (await caches.match('/')) || Response.error();
+      })()
     );
     return;
   }
