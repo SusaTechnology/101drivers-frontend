@@ -254,30 +254,24 @@ export default function DriverProofCamPage() {
 
           {/* --- Beautiful, safe content --- */}
 <div className="space-y-6 text-left text-slate-700 dark:text-slate-200 leading-relaxed">
-  {/* Why it matters */}
+  {/* Why it matters — tightened copy per owner (six + six, instant upload,
+      location only during an active route) */}
   <div className="bg-blue-50/50 dark:bg-blue-900/10 border border-blue-200 dark:border-blue-800 rounded-2xl p-5">
     <h2 className="text-lg font-bold text-slate-900 dark:text-white mb-2">
       📸 How Proof Camera works
     </h2>
     <p className="text-base">
-
-      Your phone <strong>is</strong> your proof camera. You’ll take six photos 
-      at the pickup location and six photos at the drop-off location. 
-      These 12 photos prove the vehicle was left in the same condition
-       as when you picked it up. The pictures upload instantly to the app, 
-       so they don’t get saved on your phone.Location only turns on when you hit Start on a route, 
-       and turns off when you hit End.This app requires a smartphone with a camera and GPS — works 
-       on any iPhone or Android
-    </p>
-    <p className="text-sm mt-2 text-slate-500 dark:text-slate-400">
-      Requires a smartphone with camera & GPS — works on any iPhone or Android.
+      Your phone <strong>is</strong> your proof camera. Take six photos at
+      pickup and six at drop-off — twelve total. They upload instantly, so
+      nothing stays on your phone. Location turns on when you hit Start and
+      off when you hit End.
     </p>
   </div>
 
   {/* Permission steps */}
   <div>
     <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-3">
-      How to enable camera & location permissions
+      Enable camera &amp; location
     </h3>
 
     {/* iPhone steps */}
@@ -328,10 +322,11 @@ export default function DriverProofCamPage() {
     </p>
   </div>
 
-  {/* Call to action */}
+  {/* Call to action — ties the flow to the button below */}
   <p className="text-sm text-slate-600 dark:text-slate-300 italic">
-    When you tap the button below, we’ll ask you to allow camera and location. 
-    Just tap Allow — it’s only used while you’re on an active route.
+    Then tap <strong>Cool, let’s go!</strong> below — we’ll ask you to allow
+    camera and location. Just tap Allow — they’re only used while you’re on
+    an active route.
   </p>
 </div>
 

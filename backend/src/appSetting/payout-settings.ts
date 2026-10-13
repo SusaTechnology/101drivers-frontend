@@ -136,31 +136,27 @@ const CRON_DAY_NAMES = [
 ];
 
 /**
- * Human-readable cadence for the driver wallet, e.g.
- * "Mondays at 6:00 AM (America/Los_Angeles)". Falls back to the raw cron
- * expression for non-standard shapes — the wallet renders whatever this
- * returns.
+ * Human-readable cadence for the driver wallet.
+ *
+ * Owner decision (payouts copy pass): drivers only need the DAY — the
+ * hour and timezone are operational detail that reads like noise in the
+ * wallet, so they are no longer shown. Standard crons render as
+ * "Weekly on Mondays"; anything non-standard degrades to a neutral
+ * "Weekly (custom schedule)" without leaking raw cron/timezone strings
+ * into the driver UI.
  */
 export function describeWeeklyCron(settings: PayoutSettings): string {
   const fields = settings.weeklyCron.trim().split(/\s+/);
   if (fields.length !== 5) {
-    return `Weekly (${settings.weeklyCron}, ${settings.weeklyTimezone})`;
+    return "Weekly (custom schedule)";
   }
-  const [, hourStr, , dowStr] = fields;
-  const hour = Number(hourStr);
+  const [, , , dowStr] = fields;
   const dow = Number(dowStr);
   const dayName =
     Number.isInteger(dow) && dow >= 0 && dow <= 6
       ? CRON_DAY_NAMES[dow]
-      : "Weekly";
-  if (!Number.isInteger(hour) || hour < 0 || hour > 23) {
-    return `${dayName} (${settings.weeklyTimezone})`;
-  }
-  const hour12 = hour % 12 === 0 ? 12 : hour % 12;
-  const ampm = hour < 12 ? "AM" : "PM";
-  return `${dayName} at ${hour12}:${String(
-    Number(fields[0]) || 0,
-  ).padStart(2, "0")} ${ampm} (${settings.weeklyTimezone})`;
+      : null;
+  return dayName ? `Weekly on ${dayName}` : "Weekly (custom schedule)";
 }
 
 // ============================================================

@@ -2628,7 +2628,7 @@ export default function DealerDeliveryDetails({ deliveryId }: DealerDeliveryDeta
             </AlertDialogTitle>
             <AlertDialogDescription>
               {deliveryData?.status === 'BOOKED'
-                ? 'This delivery is booked but not yet started. You can complete it now or revert it to Listed so another driver can pick it up.'
+                ? "This delivery is booked but not yet started. The driver will complete the delivery. If there's an issue, you can release the delivery back to the list or close it."
                 : 'Are you sure you want to close this delivery? This will move it to Closed and cannot be undone.'}
             </AlertDialogDescription>
           </AlertDialogHeader>
@@ -2642,7 +2642,7 @@ export default function DealerDeliveryDetails({ deliveryId }: DealerDeliveryDeta
                 className="inline-flex items-center gap-2 px-5 py-3 rounded-full font-extrabold"
               >
                 <RefreshCw className="h-4 w-4" />
-                {transitionDeliveryMutation.isPending ? 'Reverting...' : 'Revert to Listed'}
+                {transitionDeliveryMutation.isPending ? 'Re-listing...' : 'Re-list Delivery'}
               </Button>
             )}
             <Button

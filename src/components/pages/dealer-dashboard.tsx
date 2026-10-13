@@ -1015,7 +1015,7 @@ export default function DealerDashboard() {
             </AlertDialogTitle>
             <AlertDialogDescription>
               {actionDialogStatus === 'BOOKED'
-                ? 'This delivery is booked but not yet started. You can complete it now or revert it to Listed so another driver can pick it up.'
+                ? "This delivery is booked but not yet started. The driver will complete the delivery. If there's an issue, you can release the delivery back to the list or close it."
                 : 'Are you sure you want to close this delivery? This will move it to Closed and cannot be undone.'}
             </AlertDialogDescription>
           </AlertDialogHeader>
@@ -1028,7 +1028,7 @@ export default function DealerDashboard() {
                 className="inline-flex items-center gap-2 px-5 py-3 rounded-full font-extrabold border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50 transition"
               >
                 <RefreshCw className="h-4 w-4" />
-                {transitionMutation.isPending ? 'Reverting...' : 'Revert to Listed'}
+                {transitionMutation.isPending ? 'Re-listing...' : 'Re-list Delivery'}
               </button>
             )}
             <button

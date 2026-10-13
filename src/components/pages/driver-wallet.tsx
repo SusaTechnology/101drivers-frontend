@@ -1176,7 +1176,7 @@ export default function DriverWalletPage() {
               <div className="relative z-10 mt-6 flex items-start gap-2 px-4 py-3 rounded-xl bg-emerald-50 dark:bg-emerald-900/10 border border-emerald-200 dark:border-emerald-800/40">
                 <Schedule className="w-4 h-4 text-emerald-600 dark:text-emerald-400 flex-shrink-0 mt-0.5" />
                 <p className="text-xs text-emerald-700 dark:text-emerald-300">
-                  <span className="font-bold">Automatic payouts.</span> Your full balance is transferred to your connected account on the configured schedule{cadenceClause}. No action needed.
+                  <span className="font-bold">Automatic payouts.</span> Your full balance is transferred to your connected account weekly on Mondays. No action needed.
                 </p>
               </div>
             )}
@@ -1310,7 +1310,9 @@ export default function DriverWalletPage() {
               <div>
                 <CardTitle className="text-lg font-black">Weekly payouts</CardTitle>
                 <CardDescription className="text-sm mt-1">
-                  Connect your Stripe account to receive your automatic weekly payouts.
+                  {connectStatus?.setupComplete
+                    ? 'Your Stripe account is connected. Weekly payouts are active.'
+                    : 'Connect your Stripe account to receive your automatic weekly payouts.'}
                 </CardDescription>
               </div>
               {connectStatus?.setupComplete ? (
@@ -1454,7 +1456,7 @@ export default function DriverWalletPage() {
                   {wallet.payouts.length === 0 ? (
                     <TableRow>
                       <TableCell colSpan={4} className="py-8 text-center text-sm text-slate-500 dark:text-slate-400">
-                        No payouts yet. Complete deliveries to start earning.
+                        No payouts yet. Your first one lands Monday morning.
                       </TableCell>
                     </TableRow>
                   ) : (
