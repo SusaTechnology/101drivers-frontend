@@ -44,6 +44,10 @@ export enum EnumNotificationEventType {
   SupportRequestReplied = "SUPPORT_REQUEST_REPLIED",
   SupportRequestResolved = "SUPPORT_REQUEST_RESOLVED",
   SupportRequestClosed = "SUPPORT_REQUEST_CLOSED",
+  // ── Money-visibility alerts (Task 19) — mirrors prisma/schema.prisma ──
+  PaymentRefunded = "PAYMENT_REFUNDED",
+  AdminPayoutRunFailed = "ADMIN_PAYOUT_RUN_FAILED",
+  AdminPlatformPayout = "ADMIN_PLATFORM_PAYOUT",
 }
 
 registerEnumType(EnumNotificationEventType, {

@@ -19,6 +19,10 @@ export enum EnumPaymentEventStatus {
   Paid = "PAID",
   Voided = "VOIDED",
   Refunded = "REFUNDED",
+  // Written by the admin refund endpoint the moment Stripe accepts the
+  // refund request; upgraded to REFUNDED by the charge.refunded webhook
+  // or the reconciliation sweep (Task 19 — mirrors prisma/schema.prisma).
+  Processing = "PROCESSING",
 }
 
 registerEnumType(EnumPaymentEventStatus, {

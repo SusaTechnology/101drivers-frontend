@@ -325,7 +325,11 @@ class NotificationEventCreateInput {
     | "SUPPORT_REQUEST_ASSIGNED"
     | "SUPPORT_REQUEST_REPLIED"
     | "SUPPORT_REQUEST_RESOLVED"
-    | "SUPPORT_REQUEST_CLOSED";
+    | "SUPPORT_REQUEST_CLOSED"
+    // Money-visibility alerts (Task 19)
+    | "PAYMENT_REFUNDED"
+    | "ADMIN_PAYOUT_RUN_FAILED"
+    | "ADMIN_PLATFORM_PAYOUT";
 }
 
 export { NotificationEventCreateInput as NotificationEventCreateInput };

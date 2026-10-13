@@ -120,6 +120,7 @@ class PaymentEvent {
     | "PAID"
     | "VOIDED"
     | "REFUNDED"
+    | "PROCESSING"
     | null;
 
   @ApiProperty({

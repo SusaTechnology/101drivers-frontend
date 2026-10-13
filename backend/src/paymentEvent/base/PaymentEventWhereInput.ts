@@ -118,7 +118,8 @@ class PaymentEventWhereInput {
     | "INVOICED"
     | "PAID"
     | "VOIDED"
-    | "REFUNDED";
+    | "REFUNDED"
+    | "PROCESSING";
 
   @ApiProperty({
     required: false,

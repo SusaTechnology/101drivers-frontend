@@ -105,6 +105,7 @@ class PaymentEventUpdateInput {
     | "PAID"
     | "VOIDED"
     | "REFUNDED"
+    | "PROCESSING"
     | null;
 
   @ApiProperty({
