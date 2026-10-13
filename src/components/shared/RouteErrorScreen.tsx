@@ -8,25 +8,41 @@ import { AlertTriangle, RefreshCw, RotateCcw, WifiOff } from 'lucide-react'
  * Every page is rendered inside TanStack Router's CatchBoundary. When a
  * component throws (or a lazy route chunk fails to import — the classic
  * "missing file after deploy" case), the router swaps the ENTIRE page for
- * its built-in default screen: a nearly empty white page with a tiny icon
- * and a "Show Error" button (details hidden in production). To users that
- * looks like "the page turned clean white and says something" with no way
- * to recover except a blind refresh.
+ * its built-in default screen. This component replaces that default with
+ * a branded, actionable screen.
  *
- * This component replaces that default with a branded, actionable screen:
- *   - Plain-language explanation of what happened.
- *   - "Try again" re-renders the route; "Reload page" hard-refreshes.
- *   - Stale-chunk errors (deploy replaced hashed files while a tab was
- *     open, or the first chunk fetch after waking from idle lost the race
- *     against the reconnecting network) NEVER paint this card — they get
- *     a quiet "Updating the app…" shell while the automatic one-shot
- *     reload runs, so the user never sees a scary error screen for a
- *     failure that fixes itself. If the reload is guard-blocked (a
- *     reload already happened within the last 30s — possible sign of a
- *     genuinely broken deploy), the full card below still appears so
- *     the user can act manually.
- *   - The underlying error message is kept in a collapsible block so
- *     support can still see the real cause.
+ * WHAT USERS ACTUALLY SEE (the important part — owner requirement: users
+ * must NEVER catch a flashing "Something went wrong" during login or page
+ * changes, and must never see the app "freak them out"):
+ *
+ *   1. QUIET FIRST, ALWAYS. For the first QUIET_MS the crash renders the
+ *      exact RoutePending spinner — the same ring the app shows on every
+ *      normal page load. Transient errors (a route loader that lost the
+ *      network race, a query retried by React Query, a chunk that lands a
+ *      beat late) recover and unmount INSIDE this window, so the user
+ *      never sees any error at all — this is what killed the reported
+ *      "it flashes and goes away too fast" dialogs.
+ *
+ *   2. ONE SILENT AUTO-RETRY. Non-stale errors get a single reset() after
+ *      AUTO_RESET_MS (guarded by a module-level 30s spacing so a truly
+ *      broken page cannot loop). If the retry succeeds, the user saw only
+ *      a normal-looking spinner. Most login/page-change failures are
+ *      exactly this class.
+ *
+ *   3. ONLY a failure that survived the silent retry paints the full card
+ *      — after QUIET_MS, so it can never flash.
+ *
+ *   4. Stale-chunk errors (deploy replaced hashed files under an open
+ *      tab, or the first chunk fetch after waking from idle lost the race
+ *      against the reconnecting network) NEVER paint the card at all —
+ *      they show a quiet "Updating the app…" shell while the automatic
+ *      one-shot reload runs. If the reload is guard-blocked (a reload
+ *      already happened within the last 30s — possible sign of a
+ *      genuinely broken deploy), the full card still appears so the user
+ *      can act manually.
+ *
+ *   The underlying error message is kept in a collapsible block so
+ *   support can still see the real cause.
  */
 
 /** Error signatures that mean "the JS bundle on the server changed under us". */
@@ -62,6 +78,40 @@ function isStaleChunkError(error: unknown): boolean {
 
 const RELOAD_GUARD_KEY = 'route-error:auto-reload-at'
 const RELOAD_GUARD_MS = 30_000
+
+/** How long a crash stays as the quiet RoutePending spinner before the
+ * card is allowed to paint. Transient errors unmount inside this window
+ * and are never seen. */
+const QUIET_MS = 1_400
+
+/** When the single silent auto-retry fires. */
+const AUTO_RESET_MS = 900
+
+/** Minimum spacing between silent auto-retries across remounts — prevents
+ * a persistently-throwing route from looping reset() forever. */
+const AUTO_RESET_SPACING_MS = 30_000
+
+/** Module-level memory of the last silent retry. Survives remounts of the
+ * error component (TanStack Router re-creates it on every re-catch). */
+let lastAutoResetAt = 0
+
+/**
+ * The quiet recovery shell — pixel-identical to RoutePending (and to the
+ * index.html boot shell): slate background, 40px lime ring, one small
+ * bold label. Every "the app hit a bump" state reads as ONE spinner.
+ */
+function QuietShell({ text = 'Loading…' }: { text?: string }) {
+  return (
+    <div
+      className="min-h-screen w-full flex flex-col items-center justify-center gap-4 bg-slate-50 text-slate-500 dark:bg-slate-950 dark:text-slate-400"
+      role="status"
+      aria-live="polite"
+    >
+      <div className="h-10 w-10 animate-spin rounded-full border-b-2 border-lime-500" />
+      <p className="text-sm font-bold">{text}</p>
+    </div>
+  )
+}
 
 /**
  * Hard-reload the tab at most once per RELOAD_GUARD_MS window.
@@ -99,6 +149,10 @@ export function RouteErrorScreen({
   // deploy. Fall back to the full actionable card in that case.
   const [reloadBlocked, setReloadBlocked] = useState(false)
 
+  // The crash stays a quiet spinner for QUIET_MS before the card may
+  // paint. Transient errors unmount inside the window and are never seen.
+  const [quietElapsed, setQuietElapsed] = useState(false)
+
   // Auto-recover from stale-chunk crashes (deploy happened mid-session,
   // or the first chunk fetch after waking from idle lost the network
   // race). The reload is the only reliable recovery — a failed module
@@ -108,24 +162,38 @@ export function RouteErrorScreen({
     if (staleChunk) {
       const reloaded = reloadOnceForStaleBuild()
       if (!reloaded) setReloadBlocked(true)
+      return
     }
-  }, [staleChunk])
 
-  // While the automatic reload is in flight, show a quiet update shell
-  // instead of the error card — a chunk failure recovers itself within
-  // seconds, and flashing "Something went wrong" for it is exactly what
-  // users reported as a recurring bug after leaving the app idle.
+    // One silent auto-retry for every other crash. Loader failures and
+    // render hiccups during login / page changes are overwhelmingly
+    // transient; retrying once inside the quiet window makes them
+    // invisible. The module-level timestamp guarantees a persistent
+    // error can never loop: on a re-catch the retry is skipped and the
+    // card paints after QUIET_MS.
+    const now = Date.now()
+    if (now - lastAutoResetAt >= AUTO_RESET_SPACING_MS) {
+      lastAutoResetAt = now
+      const timer = setTimeout(() => reset(), AUTO_RESET_MS)
+      return () => clearTimeout(timer)
+    }
+  }, [staleChunk, reset])
+
+  useEffect(() => {
+    const timer = setTimeout(() => setQuietElapsed(true), QUIET_MS)
+    return () => clearTimeout(timer)
+  }, [])
+
+  // Stale-chunk crash: quiet update shell while the auto-reload runs.
   if (staleChunk && !reloadBlocked) {
-    return (
-      <div className="flex min-h-[60vh] w-full items-center justify-center bg-white px-4 py-16 text-slate-900 dark:bg-slate-950 dark:text-slate-100">
-        <div className="flex flex-col items-center gap-3 text-center">
-          <RefreshCw className="h-8 w-8 animate-spin text-lime-600 dark:text-lime-400" />
-          <p className="text-sm font-medium text-slate-600 dark:text-slate-400">
-            Updating the app…
-          </p>
-        </div>
-      </div>
-    )
+    return <QuietShell text="Updating the app…" />
+  }
+
+  // Any other crash during its quiet grace window: the exact RoutePending
+  // spinner. The silent auto-retry usually resolves the crash inside this
+  // window and the page resumes — the user never learns an error happened.
+  if (!quietElapsed) {
+    return <QuietShell text="Loading…" />
   }
 
   const message =

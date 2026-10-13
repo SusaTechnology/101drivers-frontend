@@ -1,8 +1,10 @@
 // 101 Drivers Service Worker for PWA
 //
-// v5.2 — per-deploy cache versioning + content-type guard + CACHE-FIRST
-// navigations (stale-while-revalidate; see the v5.2 block at the fetch
-// handler for why — PWA cold start must not wait on the network).
+// v5.3 — per-deploy cache versioning + content-type guard + NETWORK-FIRST
+// navigations with a short timeout and a cached-shell fallback (the same
+// "NetworkFirst" document recipe Workbox ships for SPAs). See the v5.3
+// block at the fetch handler for why v5.2's cache-first navigations had
+// to go.
 //
 // WHY (history of incidents this file caused before):
 //   v3-and-earlier cached ANY response, including 404/500 error pages
@@ -169,6 +171,11 @@ function fetchAndCache(request) {
   });
 }
 
+// How long an online navigation waits for the fresh document before the
+// cached shell is served instead. Short enough that a reconnecting phone
+// radio does not turn into a hang, long enough to cover a normal RTT.
+const NAV_TIMEOUT_MS = 1500;
+
 // Check if a URL is a Vite dev server asset that must NEVER be cached.
 // Vite 7 serves pre-bundled deps, HMR chunks, and virtual modules at
 // various paths that change on every restart or cache clear.
@@ -313,59 +320,88 @@ async function fetchNavigationAndCache(request) {
   return response;
 }
 
-// v5.2 — cache-first (stale-while-revalidate) NAVIGATIONS.
+// v5.3 — NETWORK-FIRST navigations (short timeout, cached-shell fallback).
 //
-// WHY: v5.1 served navigations NETWORK-FIRST (cache only when the network
-// outright failed). Every PWA cold launch therefore waited a full network
-// round-trip — DNS + TLS + server render + the phone's radio reconnecting
-// after idle — before a single pixel painted. On iPhone standalone (which
-// has NO launch/splash UI at all) that wait is a plain WHITE screen for
-// seconds: exactly the "white screen before the loading comes" report.
-// The boot shell could only paint AFTER the navigation response arrived.
+// WHY v5.2 (cache-first navigations) was reverted: cache-first hands the
+// device the LAST DEPLOY'S index.html even while the network is healthy.
+// That shell references hashed /assets chunks from that build — and our
+// deploys replace the web root, so after the next deploy (or a server-side
+// outage like the Oct-12 nginx redirect incident) those chunks are GONE.
+// Every recovery path then reloads into THE SAME stale shell (cache-first
+// serves it again), the 30s reload guard stops the loop, and users end on
+// the boot escalation screen with nothing left to tap. The BUILD_ID bucket
+// versioning cannot help here — the OLD service worker happily serves its
+// OWN old bucket until the new one activates, and a broken server never
+// delivers a new one at all. Cache-first HTML is only safe when the server
+// keeps every historical asset forever; ours does not.
 //
-// WHAT v5.2 CHANGES: navigations are now served from THIS deploy's cached
-// index.html instantly (the same stale-while-revalidate every other asset
-// already used), and the fresh copy is fetched in the background so the
-// NEXT launch is current. Staleness is contained by the existing defense
-// stack, which was built for exactly this:
-//   - cache buckets embed the per-deploy BUILD_ID and activate wipes every
-//     older bucket, so a cached index.html can only be from the CURRENT
-//     deploy's service worker;
-//   - the inline boot shell + 8s/20s watchdogs recover a stale/mismatched
-//     boot; the vite:preloadError reload-once recovers a chunk 404 after a
-//     mid-deploy refresh.
-// First-ever visit and the first launch right after a deploy (empty
-// navigation cache) still go to the network — identical to v5.1 there.
+// WHAT v5.3 DOES (the standard SPA pattern):
+//   - Online: every navigation waits up to NAV_TIMEOUT_MS for the FRESH
+//     document. A deploy or a server fix reaches every device on its very
+//     next launch — a stale shell becomes structurally impossible while
+//     the device is online.
+//   - Offline / radio still reconnecting / server unreachable: the cached
+//     shell is served after the short timeout (offline support preserved;
+//     fetchWithRetry bridges the wake-from-idle reconnect first).
+//   - First-ever visit (nothing cached): the network is waited on without
+//     the timeout, exactly like v5.1.
+//   - The fresh response is still dual-put (request key + /index.html) so
+//     offline launches keep working.
+// Cold-start paint cost when healthy: one small HTML round-trip, covered
+// by the iOS launch screens / Android splash that the OS shows before the
+// first pixel — a fair trade for never shipping a broken shell.
 
-  // For navigation requests, serve the cached shell INSTANTLY, refresh in
-  // the background, and fall back to network only when nothing is cached.
+  // Network-first with timeout for navigation requests.
   if (request.mode === 'navigate') {
     event.respondWith(
       (async () => {
-        // 1. Instant paint. ignoreSearch so /?source=pwa, /?utm_…, and
-        //    deep links (/driver/123) all hit the cached SPA shell — every
-        //    navigation on this origin is the same client-rendered index.html.
-        const cached =
+        // Cached-shell fallback. ignoreSearch so /?source=pwa, /?utm_…,
+        // and deep links (/driver/123) all hit the cached SPA shell —
+        // every navigation on this origin is the same index.html.
+        const cachedPromise = (async () =>
           (await caches.match(request, { ignoreSearch: true })) ||
-          (await caches.match('/index.html'));
+          (await caches.match('/index.html'))
+        )();
 
-        // 2. Background refresh — primes the request's own key AND the
-        //    canonical '/index.html' key so the shell fallback above can
-        //    never go stale-empty (see fetchNavigationAndCache).
-        const networkPromise = fetchNavigationAndCache(request).catch(() => null);
+        // Fresh document + cache priming for the NEXT offline launch.
+        const networkPromise = fetchNavigationAndCache(request);
 
-        if (cached) {
-          event.waitUntil(networkPromise);
-          return cached;
+        // Prefer the network, but never hang on it: after NAV_TIMEOUT_MS
+        // hand back the cached shell while the fetch keeps running in the
+        // background (waitUntil keeps this SW alive until it lands).
+        const timeoutPromise = new Promise((resolve) =>
+          setTimeout(() => resolve(null), NAV_TIMEOUT_MS)
+        );
+
+        let response = await Promise.race([
+          networkPromise
+            .then((r) => (r && r.ok ? r : null))
+            .catch(() => null),
+          timeoutPromise,
+        ]);
+
+        if (!response) {
+          // Network timed out (or answered with an error status) — serve
+          // the cached shell, offline-style, and let the fetch finish.
+          event.waitUntil(networkPromise.catch(() => null));
+          response = await cachedPromise;
+          if (response) return response;
+
+          // Nothing cached (first visit) and the network is merely slow:
+          // wait it out without the timeout rather than showing a blank
+          // error for a connection that will land in a few seconds.
+          try {
+            const late = await networkPromise;
+            if (late) return late;
+          } catch (_) {
+            /* offline with no cache — last resort below */
+          }
+          return (await caches.match('/')) || Response.error();
         }
 
-        // 3. Nothing cached yet (first visit / first launch after a deploy):
-        //    wait for the network exactly like v5.1 did.
-        const response = await networkPromise;
-        if (response) return response;
-
-        // 4. Offline AND nothing cached — last resort: any cached page.
-        return (await caches.match('/')) || Response.error();
+        // Network won the race with a clean response.
+        event.waitUntil(networkPromise.catch(() => null));
+        return response;
       })()
     );
     return;
