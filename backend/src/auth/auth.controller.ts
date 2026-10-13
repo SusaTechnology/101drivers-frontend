@@ -76,15 +76,17 @@ export class AuthController {
    * GET /api/auth/public/validate-zip/90012 (no auth — mirrors the
    * referral public resolve endpoint pattern).
    *
-   * POLYGON-BASED (service-area pass): the zip is geocoded (cached) and
-   * tested against the ONE LA-metro polygon in ServiceAreaPolygon.
    * Returns 200 always with a structured verdict the form renders live:
-   *   { valid: true,  zip, reason: "IN_AREA",
-   *     message: "In our service area — you're eligible for review." }
-   *   { valid: false, zip, reason: "OUT_OF_AREA" | "UNRESOLVED_ZIP" | "NO_ZIP",
-   *     message: ... }
-   * Signup is format-guarded only — an out-of-area zip can still register
-   * and lands WAITLISTED with a gray badge for manual review.
+   *   { valid: true,  zip, state: "CA", reason: null,
+   *     message: "In California — we serve this area." }
+   *   { valid: false, zip, state: null, reason: "OUT_OF_STATE"|"INVALID_FORMAT",
+   *     message: "Not in California — ..." }
+   *
+   * Same rule as the signupDriver hard guard (single source of truth in
+   * AuthService.evaluateCaliforniaHomeArea) — the form can never show
+   * green for a ZIP the backend would reject. The California gate is NOT
+   * changed by the service-area feature: the LA-metro polygon only
+   * derives the admin badge AFTER a California account exists.
    */
   @Get("public/validate-zip/:zip")
   @HttpCode(HttpStatus.OK)
