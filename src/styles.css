@@ -221,6 +221,33 @@ a, button, [role="button"], input, select, textarea, label, summary {
 html {
   overflow-x: hidden;
   overflow-x: clip;
+  /* iOS text-inflation guard: Safari sometimes renders text slightly larger
+     than the CSS asks for (its old "-webkit-text-size-adjust" auto-inflation,
+     most visible in landscape). Pinning it to 100% makes iPhone render text
+     at the exact size the design specifies — one of the causes of the
+     "app looks a little zoomed" report on iPhones (PWA and browser). */
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+/* iOS focus auto-zoom guard ("the app comes a little zoomed" — iPhone).
+   Mobile Safari auto-zooms the whole page whenever a form control with a
+   computed font-size BELOW 16px receives focus, and it stays zoomed after
+   the field loses focus — the page then feels permanently zoomed-in until
+   the user manually pinch-zooms back. The standard Input/Textarea ship
+   text-base (16px) on mobile already, but any custom control styled
+   text-sm (14px) or smaller would silently trigger this on every focus.
+   The floor below makes it structurally impossible on touch devices,
+   regardless of what any component passes in its className (element
+   selector loses to Tailwind utilities, hence !important). Desktop is
+   unaffected (pointer: fine), and pinch-zoom accessibility is untouched —
+   only the AUTOMATIC zoom-on-focus is suppressed. */
+@media (pointer: coarse) {
+  input,
+  textarea,
+  select {
+    font-size: 16px !important;
+  }
 }
 
 /* iPhone toast position — CSS enforcement of the offset set via the sonner

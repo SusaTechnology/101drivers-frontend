@@ -151,6 +151,32 @@ export function isSocketConnected(): boolean {
 }
 
 /**
+ * Post-idle revival nudge (called from resume-sync when the app becomes
+ * visible again after a long suspension, e.g. a driver phone left on the
+ * dash for 3 hours).
+ *
+ * Why it exists: while iOS suspends a page its timers stop, so the socket's
+ * heartbeat can't detect the dead TCP connection until the page resumes —
+ * the engine then needs up to a full ping/pong cycle before it notices and
+ * starts its own reconnect. The nudge skips that wait: if a socket instance
+ * exists but isn't connected, connect() is called immediately (it also
+ * resets the reconnection backoff counter, so the first attempt is instant
+ * instead of waiting up to the 60s max backoff).
+ *
+ * Deliberately a NO-OP when no socket was ever created — pages that never
+ * joined a tracking room must not start connecting just because they were
+ * hidden and shown again. Auto-reconnect (reconnection: true, no cap)
+ * remains the owner of all other cases; this only accelerates the
+ * post-suspension first attempt.
+ */
+export function nudgeSocketReconnect(): void {
+  if (socket && !socket.connected) {
+    console.log('[Socket] Resume nudge — reconnecting after suspension');
+    socket.connect();
+  }
+}
+
+/**
  * Join a delivery room (authenticated).
  * If socket is still connecting, queues the join for when it connects.
  */

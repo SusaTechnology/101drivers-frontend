@@ -4,6 +4,7 @@ import { Toaster } from 'sonner'
 import type { ReactNode } from 'react'
 import { getLastKnownRoles } from './dataQuery'
 import { UploadFeedbackOverlay } from '@/lib/uploadFeedback'
+import { installResumeSync } from './resume-sync'
 
 const SESSION_EXPIRED_MSG = 'Session expired'
 
@@ -48,6 +49,13 @@ export const queryClient = new QueryClient({
     },
   },
 })
+
+// Long-idle resilience: after hours hidden/offline/suspended, ONE silent
+// burst revalidates active queries, flushes offline-paused mutations and
+// revives the tracking socket (see resume-sync.ts for the full design).
+// refetchOnWindowFocus stays false on purpose — quick tab switches must
+// stay free of refetch storms; only real "came back later" events fire.
+installResumeSync(queryClient)
 
 // Global handler: when any query/mutation fails with "Session expired",
 // redirect to the correct role-specific login instead of showing a broken retry UI.
