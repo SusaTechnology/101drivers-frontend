@@ -16,6 +16,14 @@ import {
 } from "./components/shared/RouteErrorScreen.tsx";
 import { NotFoundScreen } from "./components/shared/NotFoundScreen.tsx";
 import RoutePending from "./components/shared/RoutePending.tsx";
+import { installErrorCapture } from "./lib/errorCapture.ts";
+
+// Last-resort capture for errors that escape every layer above (event
+// handlers, un-awaited promises, non-React code). Persists the last 20 to
+// storage via safeStorage and — when VITE_CLIENT_LOG_URL is configured at
+// build time — beacons them on tab hide/pagehide. Runs before the router
+// mounts so even a crash during the first route import gets recorded.
+installErrorCapture();
 // import { GoogleMapsProvider } from "./lib/map/GoogleMapsProvider.tsx";
 // Create a new router instance
 const router = createRouter({

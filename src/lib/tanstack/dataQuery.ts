@@ -8,6 +8,7 @@ import {
 } from "@tanstack/react-query";
 import type { QueryKey, UseMutationResult } from "@tanstack/react-query";
 import { socketConnect, socketDisconnect } from "@/lib/socket";
+import { fetchWithTimeout } from "@/lib/fetchWithTimeout";
 import { safeLocalStorage } from "@/lib/safeStorage";
 import { uploadTracker } from "@/lib/uploadFeedback";
 
@@ -303,7 +304,14 @@ async function baseFetch<T>(
   };
 
   try {
-    const response = await fetch(url, finalOptions);
+    // JSON calls get a hard 30s deadline (fetchWithTimeout) so a half-open
+    // connection — iOS suspension, Wi-Fi↔cellular flap — can never wedge a
+    // query until the OS TCP stack gives up minutes later. Multipart uploads
+    // stay deadline-free: slow mobile uplinks are normal and the upload
+    // overlay owns their failure UX.
+    const response = isFormData
+      ? await fetch(url, finalOptions)
+      : await fetchWithTimeout(url, finalOptions);
 
     // Handle 401 with token refresh ONLY if not a public endpoint.
     // 401 = token expired/invalid → a fresh token can fix it.
@@ -318,10 +326,9 @@ async function baseFetch<T>(
       // Retry with new token
       //@ts-ignore
       headers.Authorization = `Bearer ${newToken}`;
-      const retryResponse = await fetch(url, {
-        ...finalOptions,
-        headers,
-      });
+      const retryResponse = isFormData
+        ? await fetch(url, { ...finalOptions, headers })
+        : await fetchWithTimeout(url, { ...finalOptions, headers });
 
       if (!retryResponse.ok) {
         throw await parseError(retryResponse);
@@ -394,7 +401,10 @@ async function refreshAccessToken(): Promise<string> {
   
   try {
     const storedRefreshToken = getRefreshToken();
-    const response = await fetch(
+    // Deadline applies here too: a hung refresh wedges ensureAuth(), and
+    // every query behind it, forever. A timeout rejects like any refresh
+    // failure — auth is NOT cleared (network errors never log users out).
+    const response = await fetchWithTimeout(
       `${import.meta.env.VITE_API_URL}/api/auth/refresh-token`,
       {
         method: "GET", // adjust to POST if needed
