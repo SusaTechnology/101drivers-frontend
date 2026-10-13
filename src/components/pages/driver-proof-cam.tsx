@@ -5,8 +5,17 @@ import { Button } from "@/components/ui/button";
 
 const PROOF_CAM_FLAG = "hasSeenProofCam";
 
+type PermissionCheck = { granted: boolean; detail: string };
+
+const CAMERA_BLOCKED_DETAIL =
+  "Camera access is blocked. Allow camera for this site in your browser (or phone) settings, then tap Retry.";
+const LOCATION_BLOCKED_DETAIL =
+  "Location access is blocked. Allow location for this site in your browser (or phone) settings, then tap Retry.";
+
 export default function DriverProofCamPage() {
   const [permissionError, setPermissionError] = useState<string | null>(null);
+  const [camCheck, setCamCheck] = useState<PermissionCheck | null>(null);
+  const [locCheck, setLocCheck] = useState<PermissionCheck | null>(null);
   const [isRequesting, setIsRequesting] = useState(false);
   const navigate = useNavigate();
 
@@ -22,38 +31,98 @@ export default function DriverProofCamPage() {
     }
   }, [navigate]);
 
-  const requestPermissions = async (): Promise<boolean> => {
-    try {
-      // Request camera permission
-      const cameraStream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: "environment" },
-      });
+  // ── CAMERA ────────────────────────────────────────────────────────────────
+  // Only NotAllowedError / SecurityError mean the driver said "no". Device-level
+  // failures (no camera, camera busy, missing back camera) are NOT permission
+  // denials — trapping the driver on this screen for those is wrong; the proof
+  // photo flow itself will surface a real error if the camera is unusable.
+  const checkCameraPermission = async (): Promise<PermissionCheck> => {
+    if (!navigator.mediaDevices?.getUserMedia) {
+      // Insecure context (http) or a webview without camera support.
+      return {
+        granted: false,
+        detail:
+          "This browser can't open the camera. Please open the app in Safari (iPhone) or Chrome (Android).",
+      };
+    }
+    const openCamera = async (video: MediaTrackConstraints | boolean) => {
+      const stream = await navigator.mediaDevices.getUserMedia({ video });
       // Stop the stream immediately — we just needed permission
-      cameraStream.getTracks().forEach((track) => track.stop());
+      stream.getTracks().forEach((track) => track.stop());
+    };
+    try {
+      await openCamera({ facingMode: "environment" });
+      return { granted: true, detail: "" };
+    } catch (err: any) {
+      const name = err?.name ?? "";
+      // No back-facing camera (e.g. desktops) — any camera proves the permission.
+      if (name === "OverconstrainedError") {
+        try {
+          await openCamera(true);
+          return { granted: true, detail: "" };
+        } catch (retryErr: any) {
+          const retryName = retryErr?.name ?? "";
+          if (retryName === "NotAllowedError" || retryName === "SecurityError") {
+            return { granted: false, detail: CAMERA_BLOCKED_DETAIL };
+          }
+          return { granted: true, detail: "" };
+        }
+      }
+      if (name === "NotAllowedError" || name === "SecurityError") {
+        return { granted: false, detail: CAMERA_BLOCKED_DETAIL };
+      }
+      // NotFoundError (no camera), NotReadableError (camera busy) etc.:
+      // permission itself is fine — let the driver in.
+      return { granted: true, detail: "" };
+    }
+  };
 
-      // Request geolocation permission
+  // ── LOCATION ──────────────────────────────────────────────────────────────
+  // GeolocationPositionError code 1 (PERMISSION_DENIED) is the ONLY signal that
+  // the driver said "no". Codes 2/3 (POSITION_UNAVAILABLE / TIMEOUT) mean the
+  // permission IS granted but the device couldn't produce a fix right now —
+  // indoors, weak GPS, desktop without a location source. Route tracking
+  // retries continuously on the job screens, so this gate must not trap
+  // drivers whose permission was allowed but whose fix is slow/unavailable.
+  const checkLocationPermission = async (): Promise<PermissionCheck> => {
+    if (!("geolocation" in navigator)) {
+      return {
+        granted: false,
+        detail:
+          "This browser has no location support. Please open the app in Safari or Chrome.",
+      };
+    }
+    try {
       await new Promise<GeolocationPosition>((resolve, reject) => {
         navigator.geolocation.getCurrentPosition(resolve, reject, {
           enableHighAccuracy: false,
-          timeout: 30000,
-          maximumAge: 60000,
+          timeout: 15000,
+          maximumAge: 300000, // accept a fix up to 5 min old → fast resolve
         });
       });
-
-      return true;
+      return { granted: true, detail: "" };
     } catch (err: any) {
-      console.warn("Permission request failed:", err);
-      return false;
+      if (err?.code === 1) {
+        return { granted: false, detail: LOCATION_BLOCKED_DETAIL };
+      }
+      // Granted but no fix available — pass the gate.
+      return { granted: true, detail: "" };
     }
   };
 
   const handleContinue = async () => {
     setPermissionError(null);
+    setCamCheck(null);
+    setLocCheck(null);
     setIsRequesting(true);
 
-    const granted = await requestPermissions();
-    console.log(granted)
-    if (granted) {
+    // Sequential so the two native prompts never collide on iOS Safari.
+    const cam = await checkCameraPermission();
+    setCamCheck(cam);
+    const loc = await checkLocationPermission();
+    setLocCheck(loc);
+
+    if (cam.granted && loc.granted) {
       try {
         localStorage.setItem(PROOF_CAM_FLAG, "true");
       } catch {
@@ -62,7 +131,7 @@ export default function DriverProofCamPage() {
       navigate({ to: "/driver/dashboard" });
     } else {
       setPermissionError(
-        "Camera and location access are required for deliveries. Please tap Allow on both prompts to continue."
+        "Camera and location access are required for deliveries. Please fix the item marked ✗ above and tap Retry."
       );
     }
 
@@ -70,7 +139,7 @@ export default function DriverProofCamPage() {
   };
 
   return (
-    <div className="min-h-screen bg-background-light dark:bg-background-dark font-sans antialiased text-slate-900 dark:text-white flex flex-col overflow-hidden">
+    <div className="min-h-screen bg-background-light dark:bg-background-dark font-sans antialiased text-slate-900 dark:text-white flex flex-col">
       {/* Back link top-left */}
       <div className="sticky top-0 p-6">
         <Link
@@ -172,12 +241,36 @@ export default function DriverProofCamPage() {
   </p>
 </div>
 
-          {/* Permission error / retry message */}
-          {permissionError && (
-            <div className="p-4 rounded-2xl bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-900/30">
-              <p className="text-sm text-amber-800 dark:text-amber-200 font-semibold">
-                {permissionError}
-              </p>
+          {/* Permission status / retry message */}
+          {(camCheck || locCheck) && (
+            <div className="p-4 rounded-2xl bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-900/30 space-y-2 text-left">
+              {camCheck && (
+                <div className="flex items-start gap-2">
+                  <span className="text-sm font-black text-amber-800 dark:text-amber-200">
+                    {camCheck.granted ? "✓" : "✗"}
+                  </span>
+                  <p className="text-sm text-amber-800 dark:text-amber-200 font-semibold">
+                    Camera {camCheck.granted ? "allowed" : "blocked"}
+                    {!camCheck.granted && camCheck.detail ? ` — ${camCheck.detail}` : ""}
+                  </p>
+                </div>
+              )}
+              {locCheck && (
+                <div className="flex items-start gap-2">
+                  <span className="text-sm font-black text-amber-800 dark:text-amber-200">
+                    {locCheck.granted ? "✓" : "✗"}
+                  </span>
+                  <p className="text-sm text-amber-800 dark:text-amber-200 font-semibold">
+                    Location {locCheck.granted ? "allowed" : "blocked"}
+                    {!locCheck.granted && locCheck.detail ? ` — ${locCheck.detail}` : ""}
+                  </p>
+                </div>
+              )}
+              {permissionError && (
+                <p className="text-sm text-amber-800 dark:text-amber-200">
+                  {permissionError}
+                </p>
+              )}
             </div>
           )}
         </div>
