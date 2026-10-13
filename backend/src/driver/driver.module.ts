@@ -12,6 +12,7 @@ import { DriverApprovalEngine } from "src/domain/driver/driverApproval.engine";
 import { NotificationEventEngine } from "src/domain/notificationEvent/notificationEvent.engine";
 import { MailService } from "src/common/mail/mail.service";
 import { ReferralModule } from "../referral/referral.module";
+import { GeoModule } from "../geo/geo.module";
 
 @Module({
   // ReferralModule provides ReferralTriggerService — needed by
@@ -19,6 +20,7 @@ import { ReferralModule } from "../referral/referral.module";
   // approves a referred driver. forwardRef to break the circular
   // dependency chain.
   imports: [
+    GeoModule,
     DriverModuleBase,
     forwardRef(() => AuthModule),
     forwardRef(() => ReferralModule),

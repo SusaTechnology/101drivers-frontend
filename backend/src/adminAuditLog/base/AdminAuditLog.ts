@@ -56,7 +56,7 @@ class AdminAuditLog {
     | "POLICY_UPDATE"
     | "DISPUTE_UPDATE"
     | "PAYMENT_OVERRIDE"
-    | "PAYOUT_OVERRIDE"
+    | "PAYOUT_OVERRIDE" | "SERVICE_AREA_UPDATE" | "DRIVER_SERVICE_AREA_CHANGE"
     | "OTHER";
 
   @ApiProperty({

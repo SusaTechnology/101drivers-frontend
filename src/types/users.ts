@@ -149,6 +149,11 @@ export interface AdminDriverEmbed {
   profilePhotoUrl: string | null;
   selfiePhotoUrl: string | null;
   residentialZip: string | null;
+  // Derived service-area badge (LA-metro polygon). inArea null = no zip /
+  // unresolvable; flagged = needs review. NEVER drives `status`.
+  serviceAreaInArea?: boolean | null;
+  serviceAreaZip?: string | null;
+  serviceAreaFlagged?: boolean;
   approvedAt: string | null;
   approvedByUserId: string | null;
   licenseNumber: string | null;

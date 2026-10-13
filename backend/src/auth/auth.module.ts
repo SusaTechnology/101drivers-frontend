@@ -21,8 +21,10 @@ import { EmailVerificationService } from "./email-verification/email-verificatio
 import { MailModule } from "src/common/mail/mail.module";
 import { NotificationEventEngine } from "src/domain/notificationEvent/notificationEvent.engine";
 import { PrismaService } from "../prisma/prisma.service";
+import { GeoModule } from "../geo/geo.module";
 @Module({
   imports: [
+    GeoModule,
     forwardRef(() => UserModule),
     forwardRef(() => CustomerModule),
     forwardRef(() => DriverModule),

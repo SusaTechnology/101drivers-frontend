@@ -26,6 +26,7 @@ import {
   MessageSquare as Sms,
   Flag,
   Edit3,
+  Save,
   Power,
   Lock,
   Gift,
@@ -99,6 +100,17 @@ const configCards = [
       { icon: MailCheck, label: "Email" },
       { icon: Sms, label: "SMS" },
       { icon: Route, label: "Routing" },
+    ]
+  },
+  {
+    href: "/admin-service-area",
+    icon: MapPin,
+    title: "Service Area",
+    description: "The ONE LA-metro driver zone. Drag vertices on the map, preview how many badges flip, then save — drivers re-check instantly.",
+    chips: [
+      { icon: MapPin, label: "Polygon" },
+      { icon: Edit3, label: "Drag" },
+      { icon: Save, label: "Re-check" },
     ]
   },
   {

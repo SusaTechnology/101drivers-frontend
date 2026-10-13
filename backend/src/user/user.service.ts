@@ -21,6 +21,7 @@ import {
 import * as bcrypt from "bcrypt";
 import { randomBytes } from "crypto";
 import { PrismaService } from "../prisma/prisma.service";
+import { ServiceAreaService } from "../geo/service-area.service";
 import { UserServiceBase } from "./base/user.service.base";
 import { UserDomain } from "../domain/user/user.domain";
 import { UserPolicyService } from "../domain/user/userPolicy.service";
@@ -45,7 +46,8 @@ constructor(
   private readonly policy: UserPolicyService,
   private readonly customerService: CustomerService,
   private readonly driverService: DriverService,
-  private readonly passwordService: PasswordService
+  private readonly passwordService: PasswordService,
+  private readonly serviceArea: ServiceAreaService
 ) {
   super(prisma);
 }
@@ -1060,6 +1062,9 @@ async getAdminUsersV2(query: {
             phone: true,
             profilePhotoUrl: true,
             residentialZip: true,
+            serviceAreaInArea: true,
+            serviceAreaZip: true,
+            serviceAreaFlagged: true,
             approvedAt: true,
             approvedByUserId: true,
             createdAt: true,
@@ -1702,6 +1707,19 @@ async adminUpdateUser(input: {
       }
     }
   });
+
+  // Admin changed the driver's zip → re-derive the service-area badge.
+  // Best-effort + non-blocking: the detail response below must never fail
+  // because of a geocode outage.
+  if (input.driver?.residentialZip !== undefined && existing.driver?.id) {
+    void this.serviceArea
+      .evaluateDriverByZip({
+        driverId: existing.driver.id,
+        zipRaw: input.driver.residentialZip,
+        source: "admin zip update",
+      })
+      .catch(() => {});
+  }
 
   return this.getAdminUserDetail(input.userId);
 }

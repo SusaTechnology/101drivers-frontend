@@ -70,10 +70,12 @@ import { CmsService } from "./cms/cms.service";
 import { NotificationEventEngine } from "./domain/notificationEvent/notificationEvent.engine";
 import { MailService } from "./common/mail/mail.service";
 import { PostpaidBillingModule } from "./postpaidBilling/postpaidBilling.module";
+import { GeoModule } from "./geo/geo.module";
 @Module({
   controllers: [StripeWebhookController, InsurancePortalController, ContentController, CmsController],
   imports: [
     ACLModule,
+    GeoModule,
     AuthModule,
     UserModule,
     CustomerModule,

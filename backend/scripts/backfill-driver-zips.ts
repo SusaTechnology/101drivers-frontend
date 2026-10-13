@@ -54,7 +54,8 @@ const DEFAULT_SEED = 101;
 // ---------------------------------------------------------------------------
 // Curated pool of REAL California ZIPs, spread across the same region bands
 // as the admin Region picker, so a random fill still lands somewhere
-// meaningful on the map (LA, Bay Area, Sacramento, ...).
+// meaningful on the map (LA, Sacramento, ... — the standalone Bay Area
+// region was removed in the service-area pass).
 // ---------------------------------------------------------------------------
 const CA_ZIP_POOL: string[] = [
   // Los Angeles metro
@@ -85,7 +86,7 @@ const CA_ZIP_POOL: string[] = [
   "93602", "93611", "93612", "93618", "93619", "93630", "93634", "93637",
   "93638", "93644", "93650", "93662", "93667", "93701", "93704", "93706",
   "93710", "93711", "93720", "93727",
-  // Bay Area
+  // Bay Area (now filtered under Northern California — standalone region removed)
   "94014", "94016", "94024", "94025", "94040", "94043", "94061", "94063",
   "94080", "94086", "94087", "94103", "94110", "94112", "94122", "94301",
   "94303", "94401", "94501", "94509", "94520", "94526", "94533", "94538",

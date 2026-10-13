@@ -168,6 +168,16 @@ model Driver {
   // them to the same funnel stage; full history lives in AdminAuditLog.
   heldFromStatus   EnumDriverStatus?
   heldAt           DateTime?
+  // ── Service-area eligibility (LA-metro polygon, see geo/service-area.*) ──
+  // DERIVED, never manual: recomputed from residentialZip against the
+  // ServiceAreaPolygon row on signup, zip change, and polygon save.
+  // GREEN admin badge = inArea true. inArea null = no zip / unresolvable.
+  // NEVER writes `status` — the manual funnel (WAITLISTED → APPROVED etc.)
+  // always wins; a manually-deactivated driver is never re-activated here.
+  serviceAreaInArea     Boolean?
+  serviceAreaZip        String?
+  serviceAreaCheckedAt  DateTime?
+  serviceAreaFlagged    Boolean  @default(false)
   // Tracks the highest tier the referrer has been paid out for.
   // Incremented each time the referrer crosses a multiple of
   // `referralThreshold` (read live from REFERRAL_PROGRAM_SETTINGS).
@@ -1800,6 +1810,8 @@ enum EnumAdminAuditLogAction {
   DISPUTE_UPDATE
   PAYMENT_OVERRIDE
   PAYOUT_OVERRIDE
+  SERVICE_AREA_UPDATE
+  DRIVER_SERVICE_AREA_CHANGE
   OTHER
 }
 
@@ -2089,4 +2101,26 @@ model BillingAuditFinding {
   @@index([customerId])
   @@index([check])
   @@index([createdAt])
+}
+
+/// The ONE driver service-area polygon (LA metro). Ordered [lat, lng]
+/// outer ring, editable by ops WITHOUT a deploy (admin map editor).
+/// Single-row by convention — the editor updates the active row.
+model ServiceAreaPolygon {
+  id         String   @id @default(cuid())
+  name       String
+  // Ordered [[lat, lng], ...] — the closed ring is implied (last → first).
+  coordsJson Json
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+/// Cache of ZIP → centroid geocodes so point-in-polygon evaluation costs
+/// one Google Geocoding call per distinct ZIP, ever (ops edits re-run the
+/// check against every driver without re-billing the API).
+model ServiceAreaZipCache {
+  zip       String   @id
+  lat       Float
+  lng       Float
+  fetchedAt DateTime @default(now())
 }

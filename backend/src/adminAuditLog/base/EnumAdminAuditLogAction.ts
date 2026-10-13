@@ -28,6 +28,8 @@ export enum EnumAdminAuditLogAction {
   DisputeUpdate = "DISPUTE_UPDATE",
   PaymentOverride = "PAYMENT_OVERRIDE",
   PayoutOverride = "PAYOUT_OVERRIDE",
+  ServiceAreaUpdate = "SERVICE_AREA_UPDATE",
+  DriverServiceAreaChange = "DRIVER_SERVICE_AREA_CHANGE",
   Other = "OTHER",
 }
 

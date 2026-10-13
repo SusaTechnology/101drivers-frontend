@@ -15,6 +15,11 @@ import { UserService } from "../user/user.service";
 import { CustomerService } from "../customer/customer.service";
 import { DriverService } from "../driver/driver.service";
 import { PrismaService } from "../prisma/prisma.service";
+import { ServiceAreaService } from "../geo/service-area.service";
+import {
+  normalizeServiceAreaZip,
+  pointInPolygon,
+} from "../geo/service-area.geometry";
 import { SignupDriverDto } from "./dto/SignupDriver.dto";
 import { SignupCustomerDto } from "./dto/SignupCustomer.dto";
 import { getCookieOptionsFromRequest } from "../common/cors-cookie.util";
@@ -95,6 +100,7 @@ export class AuthService {
     // at runtime.
     @Inject(forwardRef(() => ReferralService))
     private readonly referralService: ReferralService,
+    private readonly serviceArea: ServiceAreaService,
   ) {}
 
   private normalizeIdentifier(identifier: string): string {
@@ -470,15 +476,13 @@ export class AuthService {
   ): Promise<UserInfo | VerificationRequiredResult> {
     const normalizedEmail = dto.email.trim().toLowerCase();
 
-    // ─── California-only driver onboarding ───────────────────────────
-    // 101 Drivers operates exclusively in California. Reject out-of-state
-    // ZIPs FIRST — before the OTP request (call 1) and before any User/
-    // Driver row can be created (call 2) — so an out-of-state applicant
-    // never leaves a record behind. Mirrors the frontend check in
-    // driverOnboarding.tsx. Every California ZIP falls in the contiguous
-    // range 90001–96199 (the 9xx block below 97000; Oregon starts at
-    // 97000), so a range check needs no ZIP database.
-    this.assertCaliforniaHomeArea(dto.homeArea);
+    // ─── Driver signup ZIP guard (format only) ───────────────────────
+    // Owner decision (service-area pass): the OLD hard California-range
+    // reject is gone. Any valid 5-digit ZIP can register — the LA-metro
+    // polygon (ServiceAreaPolygon, editable by ops) decides the DERIVED
+    // green/gray badge after the account exists, and status stays manual.
+    // The verdict is stored right after account creation (see below).
+    this.assertValidHomeAreaFormat(dto.homeArea);
 
     // Validate driver age (must be 25+) before anything else
     this.validateDriverAge(dto.dateOfBirth);
@@ -603,6 +607,29 @@ export class AuthService {
         // Non-blocking: invalid/expired/self-referral/paused/out-of-window
         // just gets skipped. Driver account still created.
         this.logger.warn(`Referral application failed for driver ${driverId} (code: ${dto.referralCode}): ${refErr.message}`);
+      }
+    }
+
+    // ── Service-area evaluation (DERIVED badge — never blocks signup) ──
+    // The zip was format-checked above; the polygon now decides the
+    // admin badge: green = inside the LA-metro service area (eligible
+    // for review), gray = outside (stays WAITLISTED), gray+flagged =
+    // no/unresolvable zip. Best-effort: a geocode outage can never fail
+    // account creation — the next zip change or polygon save re-runs it.
+    if (driverId) {
+      try {
+        const verdict = await this.serviceArea.evaluateDriverByZip({
+          driverId,
+          zipRaw: dto.homeArea,
+          source: "driver signup",
+        });
+        this.logger.log(
+          `Service-area verdict for new driver ${driverId}: ${verdict.reason} (zip ${verdict.zip ?? "none"})`,
+        );
+      } catch (areaErr: any) {
+        this.logger.warn(
+          `Service-area evaluation failed for new driver ${driverId} (non-blocking): ${areaErr?.message}`,
+        );
       }
     }
 
@@ -1449,102 +1476,74 @@ export class AuthService {
   }
 
   /**
-   * California-only driver onboarding rule — SINGLE SOURCE OF TRUTH.
+   * Signup ZIP guard — FORMAT ONLY.
    *
-   * 101 Drivers operates exclusively in California. Every California ZIP
-   * code falls in the contiguous range 90001–96199 (the 9xx block below
-   * 97000 — Oregon starts at 97000, Washington at 98000, Alaska at 99500),
-   * and no OTHER state's ZIP falls inside that range, so a range check
-   * can never wrongly reject a Californian and needs no ZIP database.
-   * (Caveat, by design: a handful of UNASSIGNED numbers inside the range
-   * are accepted too — they belong to no state, so they can never let an
-   * out-of-state driver through.)
-   *
-   * Consumed by:
-   *   - assertCaliforniaHomeArea()  → signupDriver hard guard (throws)
-   *   - validateHomeAreaZip()       → public GET /auth/public/validate-zip/:zip
-   *     used by the signup form for the live green/red field verdict.
+   * Owner decision (service-area pass): the old hard California-range
+   * reject is REPLACED by the LA-metro service-area polygon. Any valid
+   * 5-digit zip may register; the polygon decides the badge (green = in
+   * service area → eligible for review, gray = out → waitlisted). The
+   * team reviews and flips status manually — signup never auto-approves.
+   * evaluateDriverByZip (below) stores the derived verdict + audit row.
    */
-  private evaluateCaliforniaHomeArea(homeArea?: string | null): {
-    valid: boolean;
-    zip: string;
-    reason: "INVALID_FORMAT" | "OUT_OF_STATE" | null;
-  } {
+  private assertValidHomeAreaFormat(homeArea?: string | null): void {
     const zip = (homeArea ?? "").trim();
     if (!/^\d{5}$/.test(zip)) {
-      return { valid: false, zip, reason: "INVALID_FORMAT" };
-    }
-    const numeric = parseInt(zip, 10);
-    if (numeric < 90001 || numeric > 96199) {
-      return { valid: false, zip, reason: "OUT_OF_STATE" };
-    }
-    return { valid: true, zip, reason: null };
-  }
-
-  /**
-   * Hard guard used by signupDriver. Called at the very top so BOTH the
-   * OTP request (call 1, no verificationToken) and the account creation
-   * (call 2, with token) reject out-of-state applicants — no OTP email is
-   * sent and no User or Driver row is ever created for a non-California
-   * ZIP. The frontend mirrors this rule for instant feedback and queries
-   * validateHomeAreaZip for the live field verdict; this remains the
-   * authoritative server-side backstop.
-   */
-  private assertCaliforniaHomeArea(homeArea?: string | null): void {
-    const verdict = this.evaluateCaliforniaHomeArea(homeArea);
-    if (verdict.reason === "INVALID_FORMAT") {
       throw new BadRequestException(
         "A valid 5-digit ZIP code is required to register as a driver."
-      );
-    }
-    if (!verdict.valid) {
-      throw new BadRequestException(
-        "We currently only operate in California. Your ZIP code is outside California, so we can't accept your driver registration."
       );
     }
   }
 
   /**
    * Public field-level ZIP check for the driver signup form
-   * (GET /auth/public/validate-zip/:zip). Same rule as the signup guard
-   * (evaluateCaliforniaHomeArea) but returns a structured verdict instead
-   * of throwing, so the form can show green "in California" / red "not in
-   * California" feedback while typing — mirroring the referral-code
-   * resolve endpoint pattern. Always 200, never auth-required.
+   * (GET /auth/public/validate-zip/:zip). POLYGON-BASED since the
+   * service-area pass: the zip is geocoded (cached forever in
+   * ServiceAreaZipCache) and tested against the ONE LA-metro polygon.
+   * Always 200, never auth-required; an unresolvable zip is a valid
+   * signup that lands gray + flagged — the message says so.
    */
-  validateHomeAreaZip(zip?: string): {
+  async validateHomeAreaZip(zip?: string): Promise<{
     valid: boolean;
     zip: string;
-    state: "CA" | null;
-    reason: "INVALID_FORMAT" | "OUT_OF_STATE" | null;
+    reason: "IN_AREA" | "OUT_OF_AREA" | "NO_ZIP" | "UNRESOLVED_ZIP" | null;
     message: string;
-  } {
-    const verdict = this.evaluateCaliforniaHomeArea(zip);
-    if (verdict.valid) {
-      return {
-        valid: true,
-        zip: verdict.zip,
-        state: "CA",
-        reason: null,
-        message: "In California — we serve this area.",
-      };
-    }
-    if (verdict.reason === "INVALID_FORMAT") {
+  }> {
+    const normalized = normalizeServiceAreaZip(zip);
+    if (!normalized) {
       return {
         valid: false,
-        zip: verdict.zip,
-        state: null,
-        reason: "INVALID_FORMAT",
+        zip: (zip ?? "").trim(),
+        reason: "NO_ZIP",
         message: "Enter a valid 5-digit ZIP code.",
+      };
+    }
+
+    const point = await this.serviceArea.geocodeZip(normalized);
+    if (!point) {
+      return {
+        valid: false,
+        zip: normalized,
+        reason: "UNRESOLVED_ZIP",
+        message:
+          "We couldn't place that ZIP on the map yet. You can still register — our team will review it.",
+      };
+    }
+
+    const polygon = await this.serviceArea.getPolygon();
+    if (pointInPolygon([point.lat, point.lng], polygon.coords)) {
+      return {
+        valid: true,
+        zip: normalized,
+        reason: "IN_AREA",
+        message: "In our service area — you're eligible for review.",
       };
     }
     return {
       valid: false,
-      zip: verdict.zip,
-      state: null,
-      reason: "OUT_OF_STATE",
+      zip: normalized,
+      reason: "OUT_OF_AREA",
       message:
-        "Not in California — we only accept drivers based in California (ZIP 90001–96199).",
+        "Outside our current service area (LA metro). You can still register — you'll be waitlisted for review.",
     };
   }
 

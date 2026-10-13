@@ -82,17 +82,6 @@ import { ReferralCodeInput } from "../shared/ReferralCodeInput";
 // 97000 — Oregon starts at 97000, Washington at 98000, Alaska at 99500),
 // so a simple range check is sufficient; no ZIP database is needed.
 // Mirrored on the backend (auth.service.ts assertCaliforniaHomeArea) so
-// the restriction holds even for direct API calls.
-export const CALIFORNIA_ZIP_ERROR_MESSAGE =
-  "This ZIP code is outside California. We currently only accept drivers based in California (ZIP codes 90001–96199).";
-
-export const isCaliforniaZip = (zip: string | null | undefined): boolean => {
-  const trimmed = (zip ?? "").trim();
-  if (!/^\d{5}$/.test(trimmed)) return false;
-  const n = parseInt(trimmed, 10);
-  return n >= 90001 && n <= 96199;
-};
-
 // Form validation schema
 const onboardingSchema = z
   .object({
@@ -117,12 +106,9 @@ const onboardingSchema = z
         "Password must contain at least one special character",
       ),
     confirmPassword: z.string().min(1, "Please confirm your password"),
-    homeArea: z
-      .string()
-      .regex(/^\d{5}$/, "Enter a valid 5-digit ZIP code")
-      .refine((zip) => isCaliforniaZip(zip), {
-        message: CALIFORNIA_ZIP_ERROR_MESSAGE,
-      }),
+    // Format only — the LA-metro polygon decides the service-area badge
+    // server-side. Out-of-area zips can still register (waitlisted).
+    homeArea: z.string().regex(/^\d{5}$/, "Enter a valid 5-digit ZIP code"),
     radius: z.string().optional(),
     districts: z.array(z.string()).optional(),
     alerts: z.boolean().optional(),
@@ -169,22 +155,31 @@ interface DriverSignupPayload {
   referralCode?: string;
 }
 
-/** Response of GET /api/auth/public/validate-zip/:zip (public, no auth). */
+/** Response of GET /api/auth/public/validate-zip/:zip (public, no auth).
+ *  POLYGON-BASED: reason says whether the zip's centroid falls inside the
+ *  LA-metro service area polygon (ServiceAreaPolygon, editable by ops). */
 interface ZipCheckResponse {
   valid: boolean;
   zip: string;
-  state: "CA" | null;
-  reason: "INVALID_FORMAT" | "OUT_OF_STATE" | null;
+  reason: "IN_AREA" | "OUT_OF_AREA" | "NO_ZIP" | "UNRESOLVED_ZIP" | null;
   message: string;
 }
 
-/** Verdict states rendered by the Home ZIP Code field. */
+/** Verdict states rendered by the Home ZIP Code field.
+ *  valid        → inside the service area (green, eligible for review)
+ *  out-of-area  → outside the polygon (amber; signup still allowed,
+ *                 driver lands waitlisted + gray badge for review)
+ *  unresolved   → zip couldn't be placed on the map (amber + flagged)
+ *  unknown      → verdict endpoint unreachable (neutral; the server
+ *                 decides the badge after signup — never blocks) */
 type ZipVerdict =
   | "empty"
   | "format-error"
   | "checking"
   | "valid"
-  | "not-california";
+  | "out-of-area"
+  | "unresolved"
+  | "unknown";
 
 // Format phone number to US format: (XXX) XXX-XXXX
 const formatPhoneNumber = (value: string): string => {
@@ -393,11 +388,6 @@ export default function DriverOnboardingPage() {
       id: "OC",
       label: "Orange County",
       description: "Irvine, Anaheim, Santa Ana",
-    },
-    {
-      id: "BayArea",
-      label: "Bay Area",
-      description: "San Francisco, Oakland, San Jose",
     },
   ];
 
@@ -649,7 +639,7 @@ export default function DriverOnboardingPage() {
     watchEmail && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(watchEmail) &&
     passwordChecks.allValid &&
     (watchPhone?.replace(/\D/g, '').length || 0) >= 10 &&
-    isCaliforniaZip(homeAreaValue)
+    /^\d{5}$/.test((homeAreaValue ?? "").trim())
   );
 
   // Form is ready to submit only when all fields are filled AND terms accepted
@@ -660,10 +650,10 @@ export default function DriverOnboardingPage() {
 
   // ── Live ZIP service-area check (mirrors ReferralCodeInput) ────────
   // The verdict comes from the backend's public validate-zip endpoint —
-  // the SAME rule (evaluateCaliforniaHomeArea) the signup guard enforces,
-  // so the field can never show green for a ZIP the backend would reject.
-  // Client-side isCaliforniaZip stays as the instant fallback + submit
-  // gating (identical rule, no network dependency).
+  // the SAME polygon rule (LA-metro ServiceAreaPolygon) the signup flow
+  // enforces server-side, so the field never shows green for a zip the
+  // backend would badge gray. The verdict NEVER blocks submit: out-of-area
+  // and unresolvable zips may still register (waitlisted + reviewed).
   const debouncedZip = useDebouncedValue((homeAreaValue ?? "").trim(), 500);
   const zipQueryReady =
     /^\d{5}$/.test(debouncedZip) && !isPending && isAgeVerified;
@@ -706,12 +696,16 @@ export default function DriverOnboardingPage() {
   } else if (zipChecking || debouncedZip !== zipValue) {
     zipVerdict = "checking";
   } else if (zipCheckError) {
-    zipVerdict = isCaliforniaZip(zipValue) ? "valid" : "not-california";
+    // Endpoint hiccup — neutral: the server derives the badge after
+    // signup, so the field must never block on a transient failure.
+    zipVerdict = "unknown";
   } else if (zipCheck) {
-    zipVerdict = zipCheck.valid ? "valid" : "not-california";
+    if (zipCheck.reason === "IN_AREA") zipVerdict = "valid";
+    else if (zipCheck.reason === "UNRESOLVED_ZIP") zipVerdict = "unresolved";
+    else zipVerdict = "out-of-area";
   } else {
-    // Query not enabled yet (age gate / submitting) — client fallback.
-    zipVerdict = isCaliforniaZip(zipValue) ? "valid" : "not-california";
+    // Query not enabled yet (age gate / submitting) — neutral fallback.
+    zipVerdict = "unknown";
   }
 
   // Header component — adapts to auth state. If the user is already
@@ -1493,11 +1487,13 @@ export default function DriverOnboardingPage() {
                       the signup guard; mirrors ReferralCodeInput UX) */}
                   <div className={cn(
                     "space-y-2 p-4 rounded-2xl border transition-all duration-300",
-                    (zipVerdict === "format-error" || zipVerdict === "not-california" || errors.homeArea)
+                    (zipVerdict === "format-error" || errors.homeArea)
                       ? "border-red-400 dark:border-red-600 bg-red-50 dark:bg-red-950/20"
                       : zipVerdict === "valid"
                         ? "border-emerald-300 dark:border-emerald-700 bg-emerald-50 dark:bg-emerald-900/10"
-                        : "border-transparent"
+                        : (zipVerdict === "out-of-area" || zipVerdict === "unresolved")
+                          ? "border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/10"
+                          : "border-transparent"
                   )}>
                     <Label htmlFor="homeArea" className="text-xs font-bold">
                       Home ZIP Code {zipVerdict !== "valid" && <span className="text-red-500"> *</span>}
@@ -1510,8 +1506,7 @@ export default function DriverOnboardingPage() {
                         {...register("homeArea", {
                           validate: (v) => {
                             if (!v?.trim()) return true;
-                            if (!/^\d{5}$/.test(v.trim())) return "Enter a valid 5-digit ZIP code";
-                            return isCaliforniaZip(v) || CALIFORNIA_ZIP_ERROR_MESSAGE;
+                            return /^\d{5}$/.test(v.trim()) || "Enter a valid 5-digit ZIP code";
                           },
                           // US ZIPs are exactly 5 digits: strip everything
                           // that is not a digit and hard-cap at 5 (typing
@@ -1540,11 +1535,13 @@ export default function DriverOnboardingPage() {
                         maxLength={5}
                         className={cn(
                           "h-14 pl-12 rounded-2xl transition-colors",
-                          (zipVerdict === "format-error" || zipVerdict === "not-california" || errors.homeArea)
+                          (zipVerdict === "format-error" || errors.homeArea)
                             ? "border-red-400 dark:border-red-500"
                             : zipVerdict === "valid"
                               ? "border-emerald-400 dark:border-emerald-700"
-                              : ""
+                              : (zipVerdict === "out-of-area" || zipVerdict === "unresolved")
+                                ? "border-amber-400 dark:border-amber-600"
+                                : ""
                         )}
                         placeholder="90012"
                         disabled={isPending || !isAgeVerified}
@@ -1557,9 +1554,9 @@ export default function DriverOnboardingPage() {
                           <CheckCircle className="w-5 h-5 text-emerald-500" />
                         </div>
                       )}
-                      {zipVerdict === "not-california" && (
+                      {(zipVerdict === "out-of-area" || zipVerdict === "unresolved") && (
                         <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                          <X className="w-5 h-5 text-red-500" />
+                          <AlertTriangle className="w-5 h-5 text-amber-500" />
                         </div>
                       )}
                     </div>
@@ -1569,10 +1566,21 @@ export default function DriverOnboardingPage() {
                         {zipCheck?.message || "In California — we serve this area."}
                       </p>
                     )}
-                    {zipVerdict === "not-california" && (
-                      <p className="text-xs text-red-500 dark:text-red-400 font-medium flex items-center gap-1.5">
-                        <X className="w-3.5 h-3.5" />
-                        {zipCheck?.message || CALIFORNIA_ZIP_ERROR_MESSAGE}
+                    {zipVerdict === "out-of-area" && (
+                      <p className="text-xs text-amber-700 dark:text-amber-400 font-medium flex items-center gap-1.5">
+                        <AlertTriangle className="w-3.5 h-3.5" />
+                        {zipCheck?.message || "Outside our current service area (LA metro). You can still register — you'll be waitlisted for review."}
+                      </p>
+                    )}
+                    {zipVerdict === "unresolved" && (
+                      <p className="text-xs text-amber-700 dark:text-amber-400 font-medium flex items-center gap-1.5">
+                        <AlertTriangle className="w-3.5 h-3.5" />
+                        {zipCheck?.message || "We couldn't place that ZIP on the map yet. You can still register — our team will review it."}
+                      </p>
+                    )}
+                    {zipVerdict === "unknown" && (
+                      <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">
+                        We'll confirm your service area right after you continue.
                       </p>
                     )}
                     {zipVerdict === "format-error" && (
@@ -1587,7 +1595,7 @@ export default function DriverOnboardingPage() {
                     )}
                     {zipVerdict === "empty" && (
                       <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                        Enter your 5-digit California ZIP code. We only operate in California — registrations with ZIP codes outside California (90001–96199) are rejected.
+                        Enter the 5-digit ZIP code of your home base. Our service area is the LA metro — inside it means a green badge and review priority; outside it you can still register and will be waitlisted for review.
                       </p>
                     )}
                   </div>

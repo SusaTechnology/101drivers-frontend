@@ -11,9 +11,11 @@ import { UserPolicyService } from "src/domain/user/userPolicy.service";
 import { UserDomain } from "src/domain/user/user.domain";
 import { CustomerModule } from "src/customer/customer.module";
 import { DriverModule } from "src/driver/driver.module";
+import { GeoModule } from "src/geo/geo.module";
 
 @Module({
   imports: [
+    GeoModule,
     UserModuleBase,
     forwardRef(() => AuthModule),
     MailModule,

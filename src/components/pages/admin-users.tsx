@@ -323,6 +323,34 @@ function RoleBadge({ role }: { role: UserRole }) {
   );
 }
 
+/**
+ * Service-area badge (derived, not manual): green = inside the LA-metro
+ * service-area polygon, gray = outside (waitlisted-for-review territory),
+ * amber = no zip / unresolvable zip — flagged for review. This badge never
+ * means "approved to drive" — the Status column keeps that truth manually.
+ */
+function ServiceAreaBadge({ inArea, flagged }: { inArea: boolean | null; flagged: boolean }) {
+  if (inArea === true) {
+    return (
+      <Badge className="w-fit text-[9px] font-bold border bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-900/20 dark:text-emerald-300 dark:border-emerald-800">
+        In service area
+      </Badge>
+    );
+  }
+  if (flagged || inArea === null) {
+    return (
+      <Badge className="w-fit text-[9px] font-bold border bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-900/20 dark:text-amber-300 dark:border-amber-800">
+        Review needed
+      </Badge>
+    );
+  }
+  return (
+    <Badge className="w-fit text-[9px] font-bold border bg-slate-50 text-slate-600 border-slate-200 dark:bg-slate-900 dark:text-slate-400 dark:border-slate-700">
+      Outside area
+    </Badge>
+  );
+}
+
 function StatusBadge({ isActive, disabledAt }: { isActive: boolean; disabledAt: string | null }) {
   if (disabledAt) {
     return (
@@ -1477,6 +1505,16 @@ export default function AdminUsersPage() {
                               {user.driver.residentialZip && (
                                 <div className="text-xs text-slate-500">ZIP {user.driver.residentialZip}</div>
                               )}
+                              {/* Service-area badge — DERIVED from the LA-metro
+                                  polygon (point-in-polygon on the driver's zip).
+                                  Green = in the service area (eligible for
+                                  review ONLY — not approved to drive; status
+                                  stays manual). Gray = outside. Amber = no zip
+                                  or unresolvable zip, flagged for review. */}
+                              <ServiceAreaBadge
+                                inArea={user.driver.serviceAreaInArea ?? null}
+                                flagged={user.driver.serviceAreaFlagged ?? false}
+                              />
                               {/* Schedule-change requests count hidden per ops
                                   decision (always 0 today — nothing in the app
                                   creates ScheduleChangeRequests). Restore if the

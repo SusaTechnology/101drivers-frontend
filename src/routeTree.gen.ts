@@ -66,6 +66,7 @@ import { Route as AdminSupportListIndexRouteImport } from './routes/admin-suppor
 import { Route as AdminSupportDetailIndexRouteImport } from './routes/admin-support-detail/index'
 import { Route as AdminSettingsIndexRouteImport } from './routes/admin-settings/index'
 import { Route as AdminServiceDistrictsIndexRouteImport } from './routes/admin-service-districts/index'
+import { Route as AdminServiceAreaIndexRouteImport } from './routes/admin-service-area/index'
 import { Route as AdminSchedulingPolicyIndexRouteImport } from './routes/admin-scheduling-policy/index'
 import { Route as AdminReportsIndexRouteImport } from './routes/admin-reports/index'
 import { Route as AdminReportPayoutsIndexRouteImport } from './routes/admin-report-payouts/index'
@@ -432,6 +433,11 @@ const AdminServiceDistrictsIndexRoute =
     path: '/admin-service-districts/',
     getParentRoute: () => rootRouteImport,
   } as any)
+const AdminServiceAreaIndexRoute = AdminServiceAreaIndexRouteImport.update({
+  id: '/admin-service-area/',
+  path: '/admin-service-area/',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AdminSchedulingPolicyIndexRoute =
   AdminSchedulingPolicyIndexRouteImport.update({
     id: '/admin-scheduling-policy/',
@@ -847,6 +853,7 @@ export interface FileRoutesByFullPath {
   '/admin-report-payouts/': typeof AdminReportPayoutsIndexRoute
   '/admin-reports/': typeof AdminReportsIndexRoute
   '/admin-scheduling-policy/': typeof AdminSchedulingPolicyIndexRoute
+  '/admin-service-area/': typeof AdminServiceAreaIndexRoute
   '/admin-service-districts/': typeof AdminServiceDistrictsIndexRoute
   '/admin-settings/': typeof AdminSettingsIndexRoute
   '/admin-support-detail/': typeof AdminSupportDetailIndexRoute
@@ -972,6 +979,7 @@ export interface FileRoutesByTo {
   '/admin-report-payouts': typeof AdminReportPayoutsIndexRoute
   '/admin-reports': typeof AdminReportsIndexRoute
   '/admin-scheduling-policy': typeof AdminSchedulingPolicyIndexRoute
+  '/admin-service-area': typeof AdminServiceAreaIndexRoute
   '/admin-service-districts': typeof AdminServiceDistrictsIndexRoute
   '/admin-settings': typeof AdminSettingsIndexRoute
   '/admin-support-detail': typeof AdminSupportDetailIndexRoute
@@ -1099,6 +1107,7 @@ export interface FileRoutesById {
   '/admin-report-payouts/': typeof AdminReportPayoutsIndexRoute
   '/admin-reports/': typeof AdminReportsIndexRoute
   '/admin-scheduling-policy/': typeof AdminSchedulingPolicyIndexRoute
+  '/admin-service-area/': typeof AdminServiceAreaIndexRoute
   '/admin-service-districts/': typeof AdminServiceDistrictsIndexRoute
   '/admin-settings/': typeof AdminSettingsIndexRoute
   '/admin-support-detail/': typeof AdminSupportDetailIndexRoute
@@ -1227,6 +1236,7 @@ export interface FileRouteTypes {
     | '/admin-report-payouts/'
     | '/admin-reports/'
     | '/admin-scheduling-policy/'
+    | '/admin-service-area/'
     | '/admin-service-districts/'
     | '/admin-settings/'
     | '/admin-support-detail/'
@@ -1352,6 +1362,7 @@ export interface FileRouteTypes {
     | '/admin-report-payouts'
     | '/admin-reports'
     | '/admin-scheduling-policy'
+    | '/admin-service-area'
     | '/admin-service-districts'
     | '/admin-settings'
     | '/admin-support-detail'
@@ -1478,6 +1489,7 @@ export interface FileRouteTypes {
     | '/admin-report-payouts/'
     | '/admin-reports/'
     | '/admin-scheduling-policy/'
+    | '/admin-service-area/'
     | '/admin-service-districts/'
     | '/admin-settings/'
     | '/admin-support-detail/'
@@ -1584,6 +1596,7 @@ export interface RootRouteChildren {
   AdminReportPayoutsIndexRoute: typeof AdminReportPayoutsIndexRoute
   AdminReportsIndexRoute: typeof AdminReportsIndexRoute
   AdminSchedulingPolicyIndexRoute: typeof AdminSchedulingPolicyIndexRoute
+  AdminServiceAreaIndexRoute: typeof AdminServiceAreaIndexRoute
   AdminServiceDistrictsIndexRoute: typeof AdminServiceDistrictsIndexRoute
   AdminSettingsIndexRoute: typeof AdminSettingsIndexRoute
   AdminSupportDetailIndexRoute: typeof AdminSupportDetailIndexRoute
@@ -2046,6 +2059,13 @@ declare module '@tanstack/react-router' {
       path: '/admin-service-districts'
       fullPath: '/admin-service-districts/'
       preLoaderRoute: typeof AdminServiceDistrictsIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin-service-area/': {
+      id: '/admin-service-area/'
+      path: '/admin-service-area'
+      fullPath: '/admin-service-area/'
+      preLoaderRoute: typeof AdminServiceAreaIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/admin-scheduling-policy/': {
@@ -2615,6 +2635,7 @@ const rootRouteChildren: RootRouteChildren = {
   AdminReportPayoutsIndexRoute: AdminReportPayoutsIndexRoute,
   AdminReportsIndexRoute: AdminReportsIndexRoute,
   AdminSchedulingPolicyIndexRoute: AdminSchedulingPolicyIndexRoute,
+  AdminServiceAreaIndexRoute: AdminServiceAreaIndexRoute,
   AdminServiceDistrictsIndexRoute: AdminServiceDistrictsIndexRoute,
   AdminSettingsIndexRoute: AdminSettingsIndexRoute,
   AdminSupportDetailIndexRoute: AdminSupportDetailIndexRoute,

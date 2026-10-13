@@ -23,6 +23,7 @@ import { UpdateDriverProfileBody } from "./dto/driverProfile.dto";
 import { EnumDriverStatus } from "@prisma/client";
 import { DriverApprovalEngine } from "../domain/driver/driverApproval.engine";
 import { CompleteDriverOnboardingDto } from "./dto/driverOnboardingComplete.dto";
+import { ServiceAreaService } from "../geo/service-area.service";
 
 @Injectable()
 export class DriverService extends DriverServiceBase {
@@ -30,7 +31,8 @@ export class DriverService extends DriverServiceBase {
     protected readonly prisma: PrismaService,
     private readonly domain: DriverDomain,
     private readonly policy: DriverPolicyService,
-    private readonly driverApprovalEngine: DriverApprovalEngine
+    private readonly driverApprovalEngine: DriverApprovalEngine,
+    private readonly serviceArea: ServiceAreaService
 
   ) {
     super(prisma);
@@ -588,6 +590,19 @@ async completeOnboarding(
     }),
   ]);
 
+  // Zip changed during onboarding → re-derive the service-area badge
+  // (green/gray). Best-effort and non-blocking: a geocode outage must
+  // never fail onboarding — the next zip change or polygon save re-runs.
+  if (dto.residentialZip) {
+    void this.serviceArea
+      .evaluateDriverByZip({
+        driverId: driverId,
+        zipRaw: dto.residentialZip,
+        source: "onboarding complete",
+      })
+      .catch(() => {});
+  }
+
   return this.domain.findUnique({ id: driverId });
 }
 
@@ -678,6 +693,17 @@ async completeOnboardingByToken(
       },
     }),
   ]);
+
+  // Same zip-change re-derivation as completeOnboarding above.
+  if (dto.residentialZip) {
+    void this.serviceArea
+      .evaluateDriverByZip({
+        driverId: driver.id,
+        zipRaw: dto.residentialZip,
+        source: "onboarding complete (token link)",
+      })
+      .catch(() => {});
+  }
 
   return this.domain.findUnique({ id: driver.id });
 }

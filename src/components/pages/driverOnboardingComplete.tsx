@@ -60,9 +60,11 @@ import {
   getUser,
   authFetchRaw,
 } from "@/lib/tanstack/dataQuery";
-// Shared California-ZIP rule — the exact helper the signup form
-// (driverOnboarding.tsx) uses, so both forms can never drift apart.
-import { isCaliforniaZip } from "./driverOnboarding";
+// Stored-ZIP sanity check — format only. The signup form no longer
+// hard-rejects out-of-area ZIPs (the LA-metro polygon decides the DERIVED
+// badge server-side), so any well-formed 5-digit ZIP is trusted here.
+const isValidZipFormat = (zip: string | null | undefined): boolean =>
+  /^\d{5}$/.test((zip ?? "").trim());
 
 // ==================== CONSTANTS ====================
 
@@ -256,13 +258,11 @@ export function DriverOnboardingComplete({ token }: DriverOnboardingCompleteProp
           setTokenValid(true);
           setAlreadyCompleted(data.onboardingCompleted === true);
           setDriverName(data.driverName || null);
-          // Only trust a stored ZIP that is a valid California ZIP — the
-          // same rule the signup form and its backend guard enforce. A
-          // null, malformed, or out-of-state value (API-created records)
-          // falls back to the visible input below so a correct ZIP is
-          // always what gets submitted.
+          // Only trust a stored ZIP that is well-formed — a null,
+          // malformed value (API-created records) falls back to the visible
+          // input below so a correct ZIP is always what gets submitted.
           const zip = typeof data?.residentialZip === "string" ? data.residentialZip : null;
-          setSavedZip(zip && isCaliforniaZip(zip) ? zip : null);
+          setSavedZip(isValidZipFormat(zip) ? zip : null);
         })
         .catch((err) => {
           setTokenValid(false);

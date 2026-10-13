@@ -47,7 +47,6 @@ const REGION_LABELS: { value: string; label: string }[] = [
   { value: "central-coast", label: "Central Coast & Bakersfield" },
   { value: "high-desert", label: "High Desert (Palmdale / Lancaster)" },
   { value: "central-valley", label: "Fresno & Central Valley" },
-  { value: "bay-area", label: "San Francisco Bay Area" },
   { value: "norcal", label: "Sacramento & Northern California" },
 ];
 
@@ -93,18 +92,21 @@ const COUNTY_TO_REGION: Record<string, string> = {
   Stanislaus: "central-valley",
   "San Joaquin": "central-valley",
 
-  // San Francisco Bay Area
-  "San Francisco": "bay-area",
-  "San Mateo": "bay-area",
-  "Santa Clara": "bay-area",
-  Alameda: "bay-area",
-  "Contra Costa": "bay-area",
-  Marin: "bay-area",
-  Sonoma: "bay-area",
-  Napa: "bay-area",
-  Solano: "bay-area",
-  "Santa Cruz": "bay-area",
-  "San Benito": "bay-area",
+  // San Francisco Bay Area → folded into Northern California. The
+  // standalone "Bay Area" polygon/region was deleted in the service-area
+  // pass (owner: one LA-metro service area only, Bay Area references
+  // removed); the zips remain filterable under norcal.
+  "San Francisco": "norcal",
+  "San Mateo": "norcal",
+  "Santa Clara": "norcal",
+  Alameda: "norcal",
+  "Contra Costa": "norcal",
+  Marin: "norcal",
+  Sonoma: "norcal",
+  Napa: "norcal",
+  Solano: "norcal",
+  "Santa Cruz": "norcal",
+  "San Benito": "norcal",
 
   // Sacramento & Northern California — everything north of the Tehachapi
   // plus the Sierra counties.
