@@ -18,6 +18,13 @@ const SESSION_EXPIRED_MSG = 'Session expired'
 // into a seamless recovery.
 function shouldRetryQuery(failureCount: number, error: unknown): boolean {
   if (failureCount >= 3) return false
+  // A dead session is PERMANENT until the user signs in again. Retrying it
+  // only multiplied identical "Session expired" errors (each one its own UI
+  // noise) and delayed the single redirect to login by the retry backoff.
+  // The canonical message now converges every racing query into exactly one
+  // cache onError → one redirect, immediately.
+  const msg = (error as Error | null)?.message
+  if (msg?.includes('Session expired')) return false
   const status = (error as { status?: number })?.status
   if (typeof status === 'number') {
     if (status === 408 || status === 429) return true

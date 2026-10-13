@@ -373,6 +373,18 @@ async function refreshAccessToken(): Promise<string> {
         return freshToken;
       }
     }
+    // DEAD-SESSION CONVERGENCE: when a refresh was rejected with 401,
+    // clearAuth() already tore the session down. Every OTHER query that
+    // raced the failure lands HERE, inside the cooldown window. Throwing
+    // the old cryptic "on cooldown" error made each of them retry 3× and
+    // paint redundant error toasts, while the one redirect that should
+    // have fired never did (its message didn't contain 'Session expired').
+    // Throwing the canonical session error makes every racing query
+    // converge on the same cache onError → exactly ONE redirect to the
+    // role's login page, immediately (provider skips retries for it).
+    if (!getAccessToken() && !getUser()) {
+      throw new Error("Session expired. Please login again.");
+    }
     console.log('⏳ Refresh on cooldown, waiting...');
     throw new Error('Token refresh on cooldown - please wait');
   }
