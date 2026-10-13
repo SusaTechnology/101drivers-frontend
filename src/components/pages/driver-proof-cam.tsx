@@ -35,10 +35,10 @@ export default function DriverProofCamPage() {
   const [camCheck, setCamCheck] = useState<PermissionCheck | null>(null);
   const [locCheck, setLocCheck] = useState<PermissionCheck | null>(null);
   const [isRequesting, setIsRequesting] = useState(false);
-  // True when the camera step is done and the location prompt needs its OWN
-  // tap (fresh user activation). Browsers silently DENY a geolocation call
-  // made right after the camera prompt in the same click — no popup, instant
-  // PERMISSION_DENIED — which drivers read as "it's not even asking me".
+  // Fallback ONLY: set when the browser silently refused to show the location
+  // popup in the same tap (the camera prompt consumed the tap's user
+  // activation — no popup, instant PERMISSION_DENIED, which drivers read as
+  // "it's not even asking me"). The next tap gives the prompt a fresh gesture.
   const [awaitingLocation, setAwaitingLocation] = useState(false);
   const navigate = useNavigate();
 
@@ -108,29 +108,32 @@ export default function DriverProofCamPage() {
   // retries continuously on the job screens, so this gate must not trap
   // drivers whose permission was allowed but whose fix is slow/unavailable.
   //
-  // The Permissions API is consulted FIRST when available:
-  //   state 'denied'  → the prompt can never appear; report that precisely
-  //                     (no popup until settings change) instead of calling
-  //                     getCurrentPosition and blaming the driver.
-  //   state 'granted' → no prompt will be shown, so the call is safe in the
-  //                     current gesture (no user-activation needed).
-  //   state 'prompt'  → a native prompt is coming — the caller MUST give it
-  //                     its own tap (see awaitingLocation), or browsers deny
-  //                     it silently after the camera prompt consumed the
-  //                     first tap's activation.
-  const checkLocationPermission = async (
-    stateHint?: GeoPermissionState,
-  ): Promise<PermissionCheck> => {
+  // The Permissions API is consulted when available, and code 1 is
+  // DISAGGREGATED so a missing popup is never reported as a refusal:
+  //   state 'denied' pre-check → the prompt can never appear; report that
+  //                     precisely (no popup until settings change).
+  //   code 1 + still
+  //   'prompt'/no API  → the popup was NEVER painted (silent auto-deny —
+  //                     the camera prompt consumed this tap's activation);
+  //                     retry from a fresh tap, never blame the driver.
+  //   code 1 + 'denied' → a real popup was refused → settings message.
+  //   code 1 on the fresh-activation tap (final) → genuine block.
+  type LocationAttempt =
+    | { outcome: "granted" }
+    | { outcome: "needs-tap" }
+    | { outcome: "blocked"; detail: string };
+
+  const attemptLocation = async (final: boolean): Promise<LocationAttempt> => {
     if (!("geolocation" in navigator)) {
       return {
-        granted: false,
+        outcome: "blocked",
         detail:
           "This browser has no location support. Please open the app in Safari or Chrome.",
       };
     }
-    const state = stateHint ?? (await geoPermissionState());
+    const state = await geoPermissionState();
     if (state === "denied") {
-      return { granted: false, detail: LOCATION_NO_POPUP_DETAIL };
+      return { outcome: "blocked", detail: LOCATION_NO_POPUP_DETAIL };
     }
     try {
       await new Promise<GeolocationPosition>((resolve, reject) => {
@@ -140,13 +143,24 @@ export default function DriverProofCamPage() {
           maximumAge: 300000, // accept a fix up to 5 min old → fast resolve
         });
       });
-      return { granted: true, detail: "" };
+      return { outcome: "granted" };
     } catch (err: any) {
       if (err?.code === 1) {
-        return { granted: false, detail: LOCATION_BLOCKED_DETAIL };
+        if (final) {
+          // Fresh gesture and still refused — a real denial.
+          return { outcome: "blocked", detail: LOCATION_BLOCKED_DETAIL };
+        }
+        const stateNow = await geoPermissionState();
+        if (stateNow === "prompt" || stateNow === null) {
+          // The site setting is still "ask" → no popup was ever painted.
+          // Hand the ask its own tap (fresh user activation), silently.
+          return { outcome: "needs-tap" };
+        }
+        // State flipped to 'denied' → the driver refused a real popup.
+        return { outcome: "blocked", detail: LOCATION_BLOCKED_DETAIL };
       }
-      // Granted but no fix available — pass the gate.
-      return { granted: true, detail: "" };
+      // Allowed but no fix available — pass the gate.
+      return { outcome: "granted" };
     }
   };
 
@@ -167,20 +181,25 @@ export default function DriverProofCamPage() {
     setIsRequesting(true);
 
     try {
-      // ── Second tap: the location prompt gets a FRESH user activation ──
+      // ── Fallback second tap: the location prompt gets a FRESH gesture ──
       if (awaitingLocation) {
         setAwaitingLocation(false);
-        const loc = await checkLocationPermission();
-        setLocCheck(loc);
-        if (loc.granted) {
+        const attempt = await attemptLocation(true);
+        if (attempt.outcome === "granted") {
+          setLocCheck({ granted: true, detail: "" });
           finishAndEnter();
-        } else {
+        } else if (attempt.outcome === "blocked") {
+          setLocCheck({ granted: false, detail: attempt.detail });
           setPermissionError(GENERIC_PERMISSION_ERROR);
+        } else {
+          // Unreachable with final=true (needs-tap only comes from the
+          // non-final attempt) — stay unstuck instead of blaming.
+          setAwaitingLocation(true);
         }
         return;
       }
 
-      // ── First tap: camera, then location only when no prompt is needed ──
+      // ── First tap: camera popup, then the location popup right after ──
       setCamCheck(null);
       setLocCheck(null);
 
@@ -192,29 +211,22 @@ export default function DriverProofCamPage() {
         return;
       }
 
-      const geoState = await geoPermissionState();
-      if (geoState === "denied") {
-        // Authoritative, instant, and the popup will never come — say so.
-        setLocCheck({ granted: false, detail: LOCATION_NO_POPUP_DETAIL });
-        setPermissionError(GENERIC_PERMISSION_ERROR);
+      // ONE tap, BOTH popups: the moment the camera prompt resolves, the
+      // location prompt fires in the same gesture. If the browser silently
+      // refused the second popup (activation spent on the camera prompt),
+      // the attempt reports needs-tap instead of blaming the driver.
+      const attempt = await attemptLocation(false);
+      if (attempt.outcome === "granted") {
+        setLocCheck({ granted: true, detail: "" });
+        finishAndEnter();
         return;
       }
-      if (geoState === "granted") {
-        // Already allowed → no native prompt → safe within this gesture.
-        const loc = await checkLocationPermission(geoState);
-        setLocCheck(loc);
-        if (loc.granted) {
-          finishAndEnter();
-        } else {
-          setPermissionError(GENERIC_PERMISSION_ERROR);
-        }
+      if (attempt.outcome === "needs-tap") {
+        setAwaitingLocation(true);
         return;
       }
-      // 'prompt' (or no Permissions API): the location popup needs its own
-      // tap. Asking in the same gesture gets silently denied on iOS Safari
-      // and Chrome after the camera prompt consumed the activation — the
-      // exact "it's not even asking me" report.
-      setAwaitingLocation(true);
+      setLocCheck({ granted: false, detail: attempt.detail });
+      setPermissionError(GENERIC_PERMISSION_ERROR);
     } finally {
       setIsRequesting(false);
     }
