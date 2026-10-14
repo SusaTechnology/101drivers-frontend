@@ -942,6 +942,25 @@ async getDriverJobDetail(
     });
   }
 
+  @common.Post(":id/tracking-link/resend")
+  @swagger.ApiOperation({
+    summary:
+      "Admin: regenerate the tracking share token and email the fresh link to customer + recipient",
+  })
+  @swagger.ApiOkResponse({ type: TrackingLinkResponseBody })
+  @nestAccessControl.UseRoles({
+    resource: "DeliveryRequest",
+    action: "read",
+    possession: "any",
+  })
+  async resendTrackingLink(
+    @common.Param() params: DeliveryRequestWhereUniqueInput
+  ): Promise<TrackingLinkResponseBody> {
+    return this.service.resendTrackingLink({
+      deliveryId: params.id,
+    });
+  }
+
   @common.Get(":id/tracking-link")
   @swagger.ApiOkResponse({ type: TrackingLinkResponseBody })
   @nestAccessControl.UseRoles({

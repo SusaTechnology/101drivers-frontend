@@ -1046,6 +1046,18 @@ async getTrackingLink(input: {
   });
 }
 
+/**
+ * Task 32: admin-triggered resend — regenerate the share token (old link
+ * dies) and email the fresh link to customer + recipient.
+ */
+async resendTrackingLink(input: {
+  deliveryId: string;
+}): Promise<any> {
+  return this.lifecycleService.resendTrackingLink({
+    deliveryId: input.deliveryId,
+  });
+}
+
 async getPublicTracking(input: {
   token: string;
 }): Promise<any> {

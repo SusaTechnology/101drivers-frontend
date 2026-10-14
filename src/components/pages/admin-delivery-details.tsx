@@ -142,6 +142,8 @@ export default function AdminDeliveryDetailsPage({ deliveryId }: { deliveryId: s
   const [approveComplianceOpen, setApproveComplianceOpen] = useState(false);
   const [forceCancelOpen, setForceCancelOpen] = useState(false);
   const [legalHoldOpen, setLegalHoldOpen] = useState(false);
+  // Task 32: admin "Send Tracking Link" confirm dialog.
+  const [sendTrackingLinkOpen, setSendTrackingLinkOpen] = useState(false);
   const [openDisputeOpen, setOpenDisputeOpen] = useState(false);
   const [evidencePreviewOpen, setEvidencePreviewOpen] = useState(false);
   const [selectedEvidence, setSelectedEvidence] = useState<Evidence | null>(null);
@@ -336,6 +338,26 @@ export default function AdminDeliveryDetailsPage({ deliveryId }: { deliveryId: s
       },
       onError: (err) => {
         toast.error('Failed to update legal hold', { description: err.message });
+      },
+    });
+  };
+
+  // Task 32: regenerate the tracking share token and email the fresh link
+  // to the customer + recipient on file. The previous link stops working
+  // immediately — hence the confirm dialog instead of a one-tap button.
+  const submitSendTrackingLink = () => {
+    deliveryActions.resendTrackingLink.mutate(undefined, {
+      onSuccess: (res) => {
+        setSendTrackingLinkOpen(false);
+        const recipients = res?.sentTo?.length
+          ? res.sentTo.join(', ')
+          : 'no email address on file';
+        toast.success('New tracking link sent', {
+          description: `Emailed to: ${recipients}. The previous tracking link no longer works.`,
+        });
+      },
+      onError: (err) => {
+        toast.error('Could not send tracking link', { description: err.message });
       },
     });
   };
@@ -652,6 +674,20 @@ export default function AdminDeliveryDetailsPage({ deliveryId }: { deliveryId: s
               <Download className="w-4 h-4 mr-1" />
               Export Evidence
             </Button>
+            {/* Task 32: send a fresh tracking link (only while a live trip
+                is possible — listed, booked, or in progress). Finished
+                deliveries have nothing left to track. */}
+            {(delivery.status === 'LISTED' || delivery.status === 'BOOKED' || delivery.status === 'ACTIVE') && (
+              <Button
+                variant="outline"
+                onClick={() => setSendTrackingLinkOpen(true)}
+                disabled={deliveryActions.isAnyPending}
+                className="rounded-xl"
+              >
+                <Mail className="w-4 h-4 mr-1" />
+                Send Tracking Link
+              </Button>
+            )}
             {delivery.dispute ? (
               <Link to="/admin-dispute-detail" search={{ disputeId: delivery.dispute.id }}>
                 <Button variant="outline" className="rounded-xl">
@@ -1761,6 +1797,42 @@ export default function AdminDeliveryDetailsPage({ deliveryId }: { deliveryId: s
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Task 32: Send Tracking Link confirm dialog */}
+      <Dialog open={sendTrackingLinkOpen} onOpenChange={setSendTrackingLinkOpen}>
+        <DialogContent className="max-w-md rounded-2xl">
+          <DialogHeader>
+            <DialogTitle>Send a fresh tracking link?</DialogTitle>
+            <DialogDescription asChild>
+              <div className="text-sm text-slate-600 dark:text-slate-400 space-y-2">
+                <p>
+                  A new tracking link will be generated and emailed to the customer and the recipient on
+                  file. The link works on any phone or computer and stays live while the delivery is on
+                  the road.
+                </p>
+                <p className="font-medium text-amber-600 dark:text-amber-400">
+                  The previous tracking link stops working immediately.
+                </p>
+              </div>
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setSendTrackingLinkOpen(false)} className="rounded-xl">
+              Close
+            </Button>
+            <Button
+              onClick={submitSendTrackingLink}
+              disabled={deliveryActions.resendTrackingLink.isPending}
+              className="rounded-xl bg-primary text-slate-950 hover:bg-primary/90"
+            >
+              {deliveryActions.resendTrackingLink.isPending && (
+                <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+              )}
+              {deliveryActions.resendTrackingLink.isPending ? 'Sending...' : 'Send Link'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Legal Hold Dialog */}
       <Dialog open={legalHoldOpen} onOpenChange={setLegalHoldOpen}>

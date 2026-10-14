@@ -508,6 +508,40 @@ export function useOpenDispute(deliveryId: string) {
 }
 
 /**
+ * Task 32: response for the admin "Send Tracking Link" action.
+ * sentTo lists the addresses the fresh link was actually emailed to
+ * (empty when the delivery has no email on file).
+ */
+export interface ResendTrackingLinkResponse {
+  token: string;
+  expiresAt: string;
+  trackingUrl: string;
+  sentTo: string[];
+}
+
+/**
+ * Hook for sending a FRESH tracking link (admin delivery details page).
+ *
+ * Calls POST /tracking-link/resend which:
+ *   1. Regenerates the share token — the previous link stops working
+ *      immediately.
+ *   2. Emails the new link to the customer and the recipient on file
+ *      (driver is not emailed).
+ *
+ * Only valid while the delivery is LISTED, BOOKED, or ACTIVE — the
+ * backend rejects it for finished deliveries.
+ */
+export function useResendTrackingLink(deliveryId: string) {
+  return useDataMutation<ResendTrackingLinkResponse, void>({
+    apiEndPoint: `${API_BASE_URL}/api/deliveryRequests/${deliveryId}/tracking-link/resend`,
+    method: 'POST',
+    invalidateQueryKey: [
+      ['admin-delivery-detail', deliveryId],
+    ],
+  });
+}
+
+/**
  * Combined hook that provides all delivery action mutations
  */
 export function useDeliveryActions(deliveryId: string, options?: {
@@ -520,6 +554,7 @@ export function useDeliveryActions(deliveryId: string, options?: {
   const forceCancel = useForceCancel(deliveryId);
   const legalHold = useLegalHold(deliveryId);
   const openDispute = useOpenDispute(deliveryId);
+  const resendTrackingLink = useResendTrackingLink(deliveryId);
 
   return {
     assignDriver: {
@@ -570,6 +605,14 @@ export function useDeliveryActions(deliveryId: string, options?: {
       error: openDispute.error,
       reset: openDispute.reset,
     },
+    resendTrackingLink: {
+      mutate: resendTrackingLink.mutate,
+      mutateAsync: resendTrackingLink.mutateAsync,
+      isPending: resendTrackingLink.isPending,
+      isError: resendTrackingLink.isError,
+      error: resendTrackingLink.error,
+      reset: resendTrackingLink.reset,
+    },
     // Track if any action is in progress
     isAnyPending: 
       assignDriver.isPending || 
@@ -577,6 +620,7 @@ export function useDeliveryActions(deliveryId: string, options?: {
       approveCompliance.isPending || 
       forceCancel.isPending || 
       legalHold.isPending ||
-      openDispute.isPending,
+      openDispute.isPending ||
+      resendTrackingLink.isPending,
   };
 }

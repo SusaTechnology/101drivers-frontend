@@ -1633,6 +1633,68 @@ async getTrackingLink(input: {
   };
 }
 
+/**
+ * Task 32: admin-triggered "send a fresh tracking link" (admin delivery
+ * details page). Regenerates the share token — the previous link stops
+ * working immediately — and emails the new link to the customer and the
+ * recipient with the same honest tracking-link copy as the trip-started
+ * email. The driver is NOT emailed (they already know the trip is theirs).
+ * Rejected for deliveries that are already over: there is no live trip to
+ * follow, so a "fresh link" email would only confuse the recipient.
+ */
+async resendTrackingLink(input: {
+  deliveryId: string;
+  actorUserId?: string | null;
+}) {
+  const delivery = await this.prisma.deliveryRequest.findUnique({
+    where: { id: input.deliveryId },
+    select: {
+      id: true,
+      status: true,
+    },
+  });
+
+  if (!delivery) {
+    throw new NotFoundException("Delivery request not found");
+  }
+
+  if (
+    delivery.status !== EnumDeliveryRequestStatus.LISTED &&
+    delivery.status !== EnumDeliveryRequestStatus.BOOKED &&
+    delivery.status !== EnumDeliveryRequestStatus.ACTIVE
+  ) {
+    throw new ConflictException(
+      "Tracking link can only be sent while the delivery is listed, booked, or in progress"
+    );
+  }
+
+  const token = this.generateTrackingToken();
+  const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+
+  await this.prisma.deliveryRequest.update({
+    where: { id: input.deliveryId },
+    data: {
+      trackingShareToken: token,
+      trackingShareExpiresAt: expiresAt,
+    },
+  });
+
+  const trackingUrl = this.buildPublicTrackingUrl(token);
+
+  const sentTo = await this.notificationEventEngine.notifyTrackingLinkResent({
+    deliveryId: input.deliveryId,
+    actorUserId: input.actorUserId ?? null,
+    trackingUrl,
+  });
+
+  return {
+    token,
+    expiresAt: expiresAt.toISOString(),
+    trackingUrl,
+    sentTo,
+  };
+}
+
   async getPublicTracking(input: {
     token: string;
   }) {
@@ -1680,7 +1742,9 @@ async getTrackingLink(input: {
     // ACTIVE: always allow — driver is moving, never expire mid-trip.
     // Everything else (COMPLETED, CANCELLED, DRAFT, etc.): no live driver to follow.
     if (delivery.status !== EnumDeliveryRequestStatus.ACTIVE) {
-      throw new ConflictException("Tracking is not available for this delivery status");
+      throw new ConflictException(
+        `Tracking is not available for this delivery (status: ${delivery.status})`
+      );
     }
 
     // Task 31: slide the housekeeping window forward on live-trip reads so

@@ -1298,6 +1298,10 @@ export class TrackingLinkResponseBody {
 
   @ApiProperty()
   trackingUrl!: string;
+
+  /** Task 32: only present on resend — addresses the email actually went to. */
+  @swagger.ApiPropertyOptional({ required: false, nullable: true, type: [String] })
+  sentTo?: string[];
 }
 export class AdminDeliveryListQueryDto {
   @swagger.ApiProperty({ required: false, nullable: true })

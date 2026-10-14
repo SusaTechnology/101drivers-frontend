@@ -32,6 +32,8 @@ import { BUSINESS_TZ } from '@/lib/timezone'
 import { toast } from 'sonner'
 import { useSocketEvent, useSocketConnected } from '@/hooks/useSocket'
 import { socketJoinPublic, socketLeavePublic, socketConnect, socketDisconnect } from '@/lib/socket'
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { WhatsAppSupportButton } from '@/components/shared/WhatsAppSupportButton'
 
 const formatTime = (dateString?: string) => {
   if (!dateString) return '—'
@@ -44,6 +46,9 @@ const StatusBadge = ({ status }: { status: string }) => {
     BOOKED: { label: 'Booked', className: 'bg-amber-50 text-amber-900 border-amber-200' },
     ACTIVE: { label: 'In Transit', className: 'bg-blue-50 text-blue-900 border-blue-200' },
     COMPLETED: { label: 'Completed', className: 'bg-emerald-50 text-emerald-900 border-emerald-200' },
+    CANCELLED: { label: 'Cancelled', className: 'bg-red-50 text-red-900 border-red-200' },
+    CLOSED: { label: 'Closed', className: 'bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-900 dark:text-slate-300 dark:border-slate-700' },
+    DISPUTED: { label: 'Under review', className: 'bg-purple-50 text-purple-900 border-purple-200' },
   }
   const c = cfg[status] ?? { label: status, className: '' }
   return (
@@ -52,6 +57,48 @@ const StatusBadge = ({ status }: { status: string }) => {
       {c.label}
     </Badge>
   )
+}
+
+// ── Task 32: trip-ended explanations ──
+// The public endpoint rejects non-ACTIVE deliveries with a 409 whose message
+// carries the status, e.g. "Tracking is not available for this delivery
+// (status: COMPLETED)". Map each possible ending to a human explanation
+// instead of showing a bare error. ACTIVE can leave to COMPLETED, CANCELLED,
+// CLOSED, or DISPUTED (see allowedTransitions); pre-trip statuses mean the
+// trip simply hasn't started yet.
+type TripEndedKind = 'completed' | 'cancelled' | 'closed' | 'disputed' | 'notstarted'
+
+const TRIP_ENDED_COPY: Record<TripEndedKind, { title: string; description: string }> = {
+  completed: {
+    title: 'Delivery completed',
+    description: 'This delivery has been completed successfully. Live tracking has closed — thanks for following along!',
+  },
+  cancelled: {
+    title: 'Delivery cancelled',
+    description: 'This delivery was cancelled, so live tracking has closed. If something looks wrong, chat with us on WhatsApp and our team will help.',
+  },
+  closed: {
+    title: 'Delivery closed',
+    description: 'This delivery was closed without completing the live trip, so tracking has closed. Chat with us on WhatsApp if you have questions.',
+  },
+  disputed: {
+    title: 'Delivery under review',
+    description: 'This delivery is being reviewed by our team, so live tracking is paused. Chat with us on WhatsApp for the latest updates.',
+  },
+  notstarted: {
+    title: 'Tracking not live yet',
+    description: 'This delivery is not on the road yet. Tracking goes live automatically the moment the driver starts the trip — keep this page open or come back later.',
+  },
+}
+
+const parseTripEnded = (message?: string | null): TripEndedKind | null => {
+  if (!message) return null
+  if (message.includes('COMPLETED')) return 'completed'
+  if (message.includes('CANCELLED')) return 'cancelled'
+  if (message.includes('CLOSED')) return 'closed'
+  if (message.includes('DISPUTED')) return 'disputed'
+  if (message.includes('not available')) return 'notstarted'
+  return null
 }
 
 interface PublicTrackPageProps {
@@ -153,6 +200,53 @@ export default function PublicTrackPage({ token }: PublicTrackPageProps) {
     }
   }, [errorObj])
 
+  // Task 32: trip-ended dialog. When the tracking poll is rejected because
+  // the delivery left ACTIVE (completed, cancelled, closed, disputed, or
+  // not started yet), explain it in a dialog instead of dumping the visitor
+  // on a bare error card. Closing the dialog keeps whatever the page had —
+  // the last known map (if the visitor was watching live) or the error
+  // card. The effect keys on the kind so a poll that keeps failing with the
+  // SAME status does not re-open the dialog after the visitor closes it.
+  const endedKind = parseTripEnded(errorObj?.message)
+  const [endedDialogOpen, setEndedDialogOpen] = useState(false)
+  useEffect(() => {
+    if (endedKind) setEndedDialogOpen(true)
+  }, [endedKind])
+
+  // The dialog is rendered in BOTH return paths — the fresh-visit error
+  // card AND the full page — so a recipient who opens an old link after the
+  // trip ended still gets the explanation dialog, not just a bare error.
+  const tripEndedDialog = (
+    <Dialog open={endedDialogOpen && !!endedKind} onOpenChange={setEndedDialogOpen}>
+      <DialogContent className="max-w-md rounded-2xl">
+        <DialogHeader>
+          <div className="mx-auto mb-1 flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-100 dark:bg-slate-800">
+            <AlertCircle className="h-6 w-6 text-slate-500" />
+          </div>
+          <DialogTitle className="text-center">
+            {endedKind ? TRIP_ENDED_COPY[endedKind].title : ''}
+          </DialogTitle>
+          <DialogDescription className="text-center">
+            {endedKind ? TRIP_ENDED_COPY[endedKind].description : ''}
+          </DialogDescription>
+        </DialogHeader>
+        <div className="mt-1 flex flex-col gap-2">
+          <WhatsAppSupportButton
+            label="Chat with us on WhatsApp"
+            className="w-full [&>button]:w-full"
+          />
+          <Button
+            variant="outline"
+            onClick={() => setEndedDialogOpen(false)}
+            className="w-full rounded-2xl font-bold"
+          >
+            Close
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  )
+
   // Check if tracking data is stale (no update for > 2 min)
   const isDataStale = (() => {
     if (!trackingData?.trackingSession?.latestPoint?.recordedAt) return false
@@ -214,8 +308,8 @@ export default function PublicTrackPage({ token }: PublicTrackPageProps) {
           <p className="mt-2 text-slate-600 dark:text-slate-400">
             {errorObj?.message?.includes('expired')
               ? 'This tracking link has expired. Please request a new one.'
-              : errorObj?.message?.includes('not available')
-                ? 'This delivery is no longer in progress, so live tracking has closed.'
+              : endedKind
+                ? TRIP_ENDED_COPY[endedKind].description
                 : errorObj?.message?.includes('not found')
                   ? 'We could not find this tracking link. Please double-check the link you opened.'
                   : errorObj?.message || 'Could not load tracking data. Please try again in a moment.'}
@@ -227,6 +321,7 @@ export default function PublicTrackPage({ token }: PublicTrackPageProps) {
             Try Again
           </Button>
         </Card>
+        {tripEndedDialog}
       </div>
     )
   }
@@ -258,24 +353,21 @@ export default function PublicTrackPage({ token }: PublicTrackPageProps) {
         {/* Page heading */}
         {!mapExpanded && <section className="mb-6">
           <h1 className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white">
-            {isTripCompleted ? 'Delivery Completed' : 'Live Tracking (ACTIVE)'}
+            {isTripCompleted ? 'Delivery Completed' : endedKind ? TRIP_ENDED_COPY[endedKind].title : 'Live Tracking (ACTIVE)'}
           </h1>
           <div className="mt-1 space-y-1">
             <p className="text-sm text-slate-600 dark:text-slate-400">
               {isTripCompleted
                 ? 'This delivery has been completed successfully.'
-                : 'Real-time vehicle location. Updates every 5 seconds.'}
+                : endedKind
+                  ? TRIP_ENDED_COPY[endedKind].description
+                  : 'Real-time vehicle location. Updates automatically.'}
             </p>
-            {!isTripCompleted && (
-              <p className="text-sm text-amber-600 dark:text-amber-400 font-medium">
-                Please allow location access in your browser (Chrome, Safari, or Firefox) — otherwise tracking will not work.
-              </p>
-            )}
           </div>
 
           {/* Status indicators */}
-          <div className="flex items-center gap-3 mt-3">
-            {!isTripCompleted && (
+          <div className="flex items-center gap-3 mt-3 flex-wrap">
+            {!isTripCompleted && !endedKind && (
               <>
                 {/* Socket connection indicator */}
                 <div className={cn(
@@ -317,8 +409,45 @@ export default function PublicTrackPage({ token }: PublicTrackPageProps) {
               <RefreshCw className={cn("h-3.5 w-3.5 mr-1", isManualRefreshing && "animate-spin")} />
               Refresh
             </Button>
+
+            {/* Task 32: always-available WhatsApp path — the visitor may want
+                to ask something without anything being wrong. */}
+            {!endedKind && (
+              <WhatsAppSupportButton
+                size="sm"
+                label="WhatsApp us"
+                buttonClassName="h-8 px-3 rounded-full text-xs"
+              />
+            )}
           </div>
+
+          {/* Task 32: the visitor was watching live and the trip just ended —
+              keep the page honest with a persistent banner under the header. */}
+          {endedKind && hasEverHadData.current && (
+            <div className="mt-3 p-4 rounded-2xl bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 flex items-start gap-3">
+              <AlertCircle className="h-5 w-5 text-slate-500 shrink-0 mt-0.5" />
+              <div className="min-w-0">
+                <p className="text-sm font-black text-slate-900 dark:text-white">{TRIP_ENDED_COPY[endedKind].title}</p>
+                <p className="text-xs text-slate-600 dark:text-slate-400 mt-0.5">{TRIP_ENDED_COPY[endedKind].description}</p>
+              </div>
+            </div>
+          )}
         </section>}
+
+        {/* Task 32: driver signal paused — explain it and offer a human path
+            instead of a silently frozen map. */}
+        {!mapExpanded && !endedKind && isDataStale && (
+          <div className="mb-6 p-4 rounded-2xl bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-900/30 flex items-start gap-3">
+            <AlertCircle className="h-5 w-5 text-amber-500 shrink-0 mt-0.5" />
+            <div className="min-w-0">
+              <p className="text-sm font-black text-slate-900 dark:text-white">No driver update for a few minutes</p>
+              <p className="text-xs text-slate-600 dark:text-slate-400 mt-0.5">
+                The driver's signal may be weak (tunnels, rural roads, parking garages). It usually resumes on its own — if you're worried, chat with us.
+              </p>
+              <WhatsAppSupportButton size="sm" label="Chat with us on WhatsApp" className="mt-2" buttonClassName="text-xs" />
+            </div>
+          </div>
+        )}
 
         {/* Map */}
         <Card className={cn(
@@ -480,11 +609,6 @@ export default function PublicTrackPage({ token }: PublicTrackPageProps) {
                     </div>
                   </div>
                 )}
-                {trackingData.expiresAt && !isTripCompleted && (
-                  <p className="text-[10px] text-amber-600 dark:text-amber-400 mt-1">
-                    Link expires at {new Date(trackingData.expiresAt).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: BUSINESS_TZ })}
-                  </p>
-                )}
               </div>
             </CardContent>
           </Card>
@@ -554,6 +678,8 @@ export default function PublicTrackPage({ token }: PublicTrackPageProps) {
         </footer>
         )}
       </main>
+
+      {tripEndedDialog}
     </div>
   )
 }

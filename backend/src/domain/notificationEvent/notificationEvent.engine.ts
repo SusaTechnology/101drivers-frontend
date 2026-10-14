@@ -959,6 +959,150 @@ private buildTripStartedTrackingLines(input: {
 }
 
 /**
+ * Task 32: resend the live tracking link — triggered by the admin
+ * "Send Tracking Link" action on the admin delivery details page.
+ * Emails the customer and the recipient with the fresh link and the same
+ * plain-English rules as the trip-started email (never expires mid-trip,
+ * closes on completion/cancel, fresh link on request). The driver is NOT
+ * emailed — they already know the trip is theirs.
+ *
+ * Returns the list of addresses the email actually went to (empty when the
+ * delivery has no email on file). One failing recipient must not block the
+ * other — each send is best-effort and failures are logged.
+ */
+async notifyTrackingLinkResent(input: {
+  deliveryId: string;
+  actorUserId?: string | null;
+  trackingUrl: string;
+}): Promise<string[]> {
+  const delivery = await this.prisma.deliveryRequest.findUnique({
+    where: { id: input.deliveryId },
+    select: {
+      id: true,
+      status: true,
+      customerId: true,
+      pickupAddress: true,
+      dropoffAddress: true,
+      recipientEmail: true,
+      recipientName: true,
+      customer: {
+        select: {
+          id: true,
+          contactEmail: true,
+          contactName: true,
+          businessName: true,
+          user: {
+            select: {
+              email: true,
+              fullName: true,
+            },
+          },
+        },
+      },
+    },
+  });
+
+  if (!delivery) {
+    throw new Error("Delivery not found");
+  }
+
+  const waLink = await this.buildDeliveryContact(delivery.pickupAddress);
+  const sentTo: string[] = [];
+
+  const customerEmail =
+    delivery.customer?.user?.email ?? delivery.customer?.contactEmail ?? null;
+  const customerName =
+    delivery.customer?.user?.fullName ??
+    delivery.customer?.contactName ??
+    delivery.customer?.businessName ??
+    "Customer";
+
+  if (customerEmail) {
+    try {
+      await this.queueAndSend({
+        actorUserId: input.actorUserId ?? null,
+        customerId: delivery.customerId,
+        deliveryId: delivery.id,
+        channel: EnumNotificationEventChannel.EMAIL,
+        type: EnumNotificationEventType.TRACKING_STARTED,
+        templateCode: "tracking-link-resent-customer",
+        toEmail: customerEmail,
+        subject: "Your 101 Drivers tracking link",
+        body: [
+          `Hi ${customerName.trim().split(/\s+/)[0] || "Customer"},`,
+          "",
+          "Here is the live tracking link for your delivery:",
+          "",
+          ...this.buildTripStartedTrackingLines({
+            trackingUrl: input.trackingUrl,
+            pickupAddress: delivery.pickupAddress,
+            dropoffAddress: delivery.dropoffAddress,
+            waLink,
+          }),
+        ].join("\n"),
+        payload: {
+          deliveryId: delivery.id,
+          status: delivery.status,
+          trackingUrl: input.trackingUrl,
+        },
+      });
+      sentTo.push(customerEmail);
+    } catch (error) {
+      this.logger.warn(
+        `notifyTrackingLinkResent: customer email failed for delivery ${delivery.id}: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
+    }
+  }
+
+  if (delivery.recipientEmail) {
+    try {
+      const recipientFirstName =
+        (delivery.recipientName ?? "Recipient").trim().split(/\s+/)[0] ||
+        "Recipient";
+
+      await this.queueAndSend({
+        actorUserId: input.actorUserId ?? null,
+        customerId: delivery.customerId,
+        deliveryId: delivery.id,
+        channel: EnumNotificationEventChannel.EMAIL,
+        type: EnumNotificationEventType.TRACKING_STARTED,
+        templateCode: "tracking-link-resent-recipient",
+        toEmail: delivery.recipientEmail,
+        subject: "Your vehicle tracking link",
+        body: [
+          `Hi ${recipientFirstName},`,
+          "",
+          "You can follow the vehicle delivery live here:",
+          "",
+          ...this.buildTripStartedTrackingLines({
+            trackingUrl: input.trackingUrl,
+            pickupAddress: delivery.pickupAddress,
+            dropoffAddress: delivery.dropoffAddress,
+            waLink,
+          }),
+        ].join("\n"),
+        payload: {
+          deliveryId: delivery.id,
+          status: delivery.status,
+          trackingUrl: input.trackingUrl,
+        },
+      });
+      sentTo.push(delivery.recipientEmail);
+    } catch (error) {
+      this.logger.warn(
+        `notifyTrackingLinkResent: recipient email failed for delivery ${delivery.id}: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
+    }
+  }
+
+  return sentTo;
+}
+
+/**
  * Notify the customer that their card was partially captured at trip start
  * (the non-refundable base fee). This closes the "surprise statement" gap —
  * previously the customer only learned about the base fee if they later
