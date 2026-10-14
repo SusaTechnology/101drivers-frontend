@@ -1,18 +1,24 @@
-// lib/navbar/adminActionItems.ts
+// lib/items/adminActionItems.tsx
 import { ThemeToggle } from "@/lib/theme/themeToggle";
-import { MobileMenuButton } from "./actions/MobileMenuButton";
 import { SignOutAction } from "./actions/SignOutAction";
 import { AdminBadge } from "./badges/AdminBadge";
 import NotificationBell from "@/components/notifications/NotificationBell";
 
 interface AdminActionHandlers {
   onSignOut: () => void;
-  onMobileMenuOpen: () => void;
+  /**
+   * Deprecated — accepted for backward compatibility (one page still passes
+   * it) and deliberately IGNORED. The mobile hamburger used to live here as
+   * an action item, but the state it toggled was never rendered anywhere,
+   * so the button did nothing except lock body scroll via useMobileMenu's
+   * side effect. The navbar (testNavbar) now owns its own hamburger +
+   * drawer, shown whenever the horizontal nav does not fit.
+   */
+  onMobileMenuOpen?: () => void;
 }
 
 export const getAdminActionItems = ({
   onSignOut,
-  onMobileMenuOpen,
 }: AdminActionHandlers) => [
     {
         key: 'badge',
@@ -30,10 +36,4 @@ export const getAdminActionItems = ({
     key: 'signout',
     component: <SignOutAction onSignOut={onSignOut} />,
   },
-  {
-    key: 'mobile-menu',
-    component: <MobileMenuButton onOpen={onMobileMenuOpen} />,
-  },
 ];
-
-
