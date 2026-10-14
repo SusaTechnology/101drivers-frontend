@@ -56,6 +56,20 @@
 //    npx ts-node scripts/delete-seeded-users.ts --apply
 //        Delete the exact-match seed accounts.
 //
+//    npx ts-node scripts/delete-seeded-users.ts --rotate
+//        Dry run for PASSWORD ROTATION — report only.
+//
+//    npx ts-node scripts/delete-seeded-users.ts --rotate --apply
+//        Keep the accounts but replace the hard-coded passwords with a
+//        strong random one (32-char, crypto-generated, unique per account).
+//        Writes BOTH `password` and `passwordHash` (login uses
+//        `passwordHash ?? password`, see src/auth/auth.service.ts), so the
+//        old hard-coded credential is dead no matter which column wins.
+//        The new passwords are printed once at the end — store them in a
+//        password manager; they cannot be recovered afterwards.
+//        Non-destructive: no rows are removed, no guards fire, sessions of
+//        other users are unaffected.
+//
 //    npx ts-node scripts/delete-seeded-users.ts --username admin,driver
 //        Limit the run to specific seed usernames (comma separated).
 //
@@ -66,11 +80,15 @@
 //        Override the real-data tripwire (5). Does NOT override the
 //        last-admin guard (3).
 //
-//  Requires DATABASE_URL (loaded automatically from backend/.env).
+//  Requires DATABASE_URL and (for --rotate) BCRYPT_SALT — both loaded
+//  automatically from backend/.env.
 // ─────────────────────────────────────────────────────────────────────────────
 
 import * as dotenv from "dotenv";
 import { EnumUserRoles, PrismaClient } from "@prisma/client";
+import { randomBytes } from "crypto";
+import { compare as bcryptCompare, hash as bcryptHash } from "bcrypt";
+import { parseSalt, Salt } from "../src/auth/password.service";
 
 dotenv.config();
 
@@ -87,16 +105,18 @@ type SeedIdentity = {
   email: string;
   role: EnumUserRoles;
   kind: SeedKind;
+  /** The hard-coded password from the repo — used ONLY to verify it stops working after rotation. */
+  oldPassword: string;
 };
 
 const SEED_ACCOUNTS: SeedIdentity[] = [
-  { username: "admin",    email: "admin@101drivers.techbee.et",            role: EnumUserRoles.ADMIN,             kind: "admin" },
-  { username: "private",  email: "private.customer@101drivers.techbee.et", role: EnumUserRoles.PRIVATE_CUSTOMER,  kind: "customer" },
-  { username: "business", email: "business.customer@101drivers.techbee.et", role: EnumUserRoles.BUSINESS_CUSTOMER, kind: "customer" },
-  { username: "dealer2",  email: "dealer2@101drivers.techbee.et",          role: EnumUserRoles.BUSINESS_CUSTOMER, kind: "customer" },
-  { username: "driver",   email: "driver@101drivers.techbee.et",           role: EnumUserRoles.DRIVER,            kind: "driver" },
-  { username: "driver2",  email: "driver2@101drivers.techbee.et",          role: EnumUserRoles.DRIVER,            kind: "driver" },
-  { username: "driver3",  email: "driver3@101drivers.techbee.et",          role: EnumUserRoles.DRIVER,            kind: "driver" },
+  { username: "admin",    email: "admin@101drivers.techbee.et",            role: EnumUserRoles.ADMIN,             kind: "admin",    oldPassword: "admin" },
+  { username: "private",  email: "private.customer@101drivers.techbee.et", role: EnumUserRoles.PRIVATE_CUSTOMER,  kind: "customer", oldPassword: "private" },
+  { username: "business", email: "business.customer@101drivers.techbee.et", role: EnumUserRoles.BUSINESS_CUSTOMER, kind: "customer", oldPassword: "business" },
+  { username: "dealer2",  email: "dealer2@101drivers.techbee.et",          role: EnumUserRoles.BUSINESS_CUSTOMER, kind: "customer", oldPassword: "dealer2" },
+  { username: "driver",   email: "driver@101drivers.techbee.et",           role: EnumUserRoles.DRIVER,            kind: "driver",   oldPassword: "driver" },
+  { username: "driver2",  email: "driver2@101drivers.techbee.et",          role: EnumUserRoles.DRIVER,            kind: "driver",   oldPassword: "driver2" },
+  { username: "driver3",  email: "driver3@101drivers.techbee.et",          role: EnumUserRoles.DRIVER,            kind: "driver",   oldPassword: "driver3" },
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -105,6 +125,7 @@ const SEED_ACCOUNTS: SeedIdentity[] = [
 const args = process.argv.slice(2);
 const APPLY = args.includes("--apply");
 const FORCE = args.includes("--force");
+const ROTATE = args.includes("--rotate");
 
 function csvFlag(name: string): string[] | null {
   const hit = args.find((a) => a === name || a.startsWith(`${name}=`));
@@ -462,6 +483,20 @@ async function purgeDriverAccount(t: Tx, userId: string, seedCustomerProfileIds:
   return deleted;
 }
 
+/**
+ * Password rotation (the --rotate mode): replace the hard-coded credential
+ * with a strong random one. Writes BOTH password columns — login reads
+ * `user.passwordHash ?? user.password` (src/auth/auth.service.ts), so any
+ * stale hash in either column would keep the old password alive.
+ */
+async function rotatePassword(t: Tx, userId: string, newPassword: string, salt: Salt): Promise<void> {
+  const hashed = await bcryptHash(newPassword, salt);
+  await t.user.update({
+    where: { id: userId },
+    data: { password: hashed, passwordHash: hashed },
+  });
+}
+
 async function purgeAdminAccount(t: Tx, userId: string): Promise<string[]> {
   // Rail (3) — LAST-ADMIN GUARD, evaluated on fresh data inside the
   // transaction and overridable by NO flag.
@@ -542,9 +577,17 @@ type Outcome =
   | { kind: "FAILED"; error: string };
 
 async function main(): Promise<void> {
-  console.log("101 Drivers — remove seeded demo accounts (hard-coded credentials)");
-  console.log(`Mode: ${APPLY ? "APPLY — rows WILL be deleted" : "DRY RUN — read-only report"}`);
-  if (FORCE) console.log("Flag: --force (real-data tripwire overridden where it fires)");
+  const action = ROTATE ? "ROTATE PASSWORDS" : "DELETE ACCOUNTS";
+  console.log("101 Drivers — seeded demo accounts (hard-coded credentials)");
+  console.log(`Action: ${action}`);
+  console.log(`Mode: ${APPLY ? `APPLY — ${ROTATE ? "passwords WILL be rotated" : "rows WILL be deleted"}` : "DRY RUN — read-only report"}`);
+  if (FORCE) {
+    if (ROTATE) console.log("Flag: --force ignored in rotate mode (no guards apply — nothing is removed)");
+    else console.log("Flag: --force (real-data tripwire overridden where it fires)");
+  }
+
+  // Fail fast in rotate mode: hashing needs the same salt the app uses.
+  if (ROTATE && APPLY) parseSalt(process.env.BCRYPT_SALT);
 
   // 1 ─ Resolve every identity (read-only)
   const resolutions: Resolution[] = [];
@@ -590,28 +633,43 @@ async function main(): Promise<void> {
 
   if (!APPLY) {
     console.log("\nDRY RUN — nothing was written.");
-    console.log("Review the report above, then re-run with --apply to delete the accounts listed as exact matches.");
+    console.log(
+      ROTATE
+        ? "Review the report above, then re-run with --rotate --apply to set strong random passwords on the exact-match accounts."
+        : "Review the report above, then re-run with --apply to delete the accounts listed as exact matches."
+    );
     return;
   }
 
   // 3 ─ Apply — customers first (frees their deliveries), then drivers
   // (tripwire compares against the customers actually being purged), then
   // the admin last. ONE transaction per account: a failure rolls back that
-  // account only and never leaves partial state.
+  // account only and never leaves partial state. Rotation touches ONLY the
+  // password columns, so ordering is irrelevant there but harmless.
   const order = [...exact].sort((a, b) => {
     const rank = (k: SeedKind) => (k === "customer" ? 0 : k === "driver" ? 1 : 2);
     return rank(a.identity.kind) - rank(b.identity.kind);
   });
 
   const outcomes = new Map<string, Outcome>();
-  console.log("\n──────────── APPLY ────────────");
+  const credentials: { username: string; email: string; password: string; identity: SeedIdentity }[] = [];
+  const salt = ROTATE ? parseSalt(process.env.BCRYPT_SALT) : null;
+  console.log(`\n──────────── APPLY (${action}) ────────────`);
   for (const res of order) {
     const { username, kind } = res.identity;
     const userId = res.user!.id;
-    process.stdout.write(`Deleting ${username} (${kind}) … `);
+    process.stdout.write(`${ROTATE ? "Rotating" : "Deleting"} ${username} (${kind}) … `);
     try {
       const deleted = await prisma.$transaction(async (t) => {
         await assertStillSeedRow(t, res.identity, userId);
+        if (ROTATE && salt) {
+          // 24 random bytes → 32-char URL-safe password, unique per account,
+          // far beyond bcrypt's 72-byte input limit.
+          const newPassword = randomBytes(24).toString("base64url");
+          await rotatePassword(t, userId, newPassword, salt);
+          credentials.push({ username, email: res.user!.email, password: newPassword, identity: res.identity });
+          return ["password + passwordHash replaced (strong random)"];
+        }
         if (kind === "customer") return purgeCustomerAccount(t, userId);
         if (kind === "driver") return purgeDriverAccount(t, userId, seedCustomerProfileIds);
         return purgeAdminAccount(t, userId);
@@ -631,40 +689,87 @@ async function main(): Promise<void> {
     }
   }
 
-  // 4 ─ Verify end state: none of the seed identities may remain,
-  // unless the account was intentionally skipped (guard fired).
+  // 4 ─ Verify end state.
   console.log("\n──────────── VERIFICATION ────────────");
   let remaining = 0;
-  for (const identity of targets) {
-    const after = await resolveIdentity(identity);
-    const outcome = outcomes.get(identity.username);
-    if (after.status === "NOT_FOUND") {
-      console.log(`  ✓ ${identity.username}: gone`);
-    } else if (outcome?.kind === "SKIPPED") {
-      console.log(`  ✓ ${identity.username}: intentionally kept — ${outcome.reason}`);
-    } else {
-      remaining += 1;
-      console.log(`  ⚠ ${identity.username}: still present (${after.status})`);
+  if (ROTATE) {
+    // Prove the security goal, not just the write: the OLD hard-coded
+    // password must be REJECTED and the NEW password must AUTHENTICATE.
+    for (const cred of credentials) {
+      const row = await prisma.user.findUnique({ where: { username: cred.username } });
+      if (!row) {
+        remaining += 1;
+        console.log(`  ⚠ ${cred.username}: row missing — unexpected in rotate mode`);
+        continue;
+      }
+      const stored = row.passwordHash ?? row.password;
+      const oldRejected = !(await bcryptCompare(cred.identity.oldPassword, stored));
+      const newAccepted = await bcryptCompare(cred.password, stored);
+      if (oldRejected && newAccepted) {
+        console.log(`  ✓ ${cred.username}: old hard-coded password rejected, new password verified`);
+      } else {
+        remaining += 1;
+        console.log(`  ⚠ ${cred.username}: verification failed (oldRejected=${oldRejected}, newAccepted=${newAccepted})`);
+      }
+    }
+  } else {
+    for (const identity of targets) {
+      const after = await resolveIdentity(identity);
+      const outcome = outcomes.get(identity.username);
+      if (after.status === "NOT_FOUND") {
+        console.log(`  ✓ ${identity.username}: gone`);
+      } else if (outcome?.kind === "SKIPPED") {
+        console.log(`  ✓ ${identity.username}: intentionally kept — ${outcome.reason}`);
+      } else {
+        remaining += 1;
+        console.log(`  ⚠ ${identity.username}: still present (${after.status})`);
+      }
     }
   }
 
-  // 5 ─ Exit code + operational notes
+  // 5 ─ Exit code + new credentials (rotate) + operational notes
   const failures = [...outcomes.values()].filter((o) => o.kind === "FAILED");
   if (failures.length > 0 || remaining > 0) {
-    console.error(`\n✗ Finished WITH ISSUES — ${failures.length} failed, ${remaining} still present. Investigate above.`);
+    console.error(`\n✗ Finished WITH ISSUES — ${failures.length} failed, ${remaining} verification problem(s). Investigate above.`);
     process.exitCode = 1;
+  } else if (ROTATE) {
+    console.log("\n✓ Done — every exact-match account now uses a strong random password.");
   } else {
     console.log("\n✓ Done — every targeted seed identity is gone or was safely skipped with a reason.");
   }
-  console.log(
-    "\nNotes:\n" +
-      "  • Existing JWTs of deleted accounts stay valid until they expire (stateless auth).\n" +
-      "    If tokens might be in the wild, rotate JWT_SECRET in backend/.env and restart the API\n" +
-      "    (signs everyone out once).\n" +
-      "  • npm run seed would recreate these accounts — as of this change the demo seed only\n" +
-      "    runs when SEED_DEMO_USERS=1 is set.\n" +
-      "  • Demo photos uploaded to the CDN (evidence/thumbnails) are not deleted — cosmetic only."
-  );
+
+  if (ROTATE && credentials.length > 0) {
+    console.log("\n──────────── NEW CREDENTIALS — STORE THEM NOW, SHOWN ONLY ONCE ────────────");
+    for (const cred of credentials) {
+      console.log(`  ${cred.username.padEnd(10)} ${cred.email.padEnd(42)} ${cred.password}`);
+    }
+    console.log(
+      "  These passwords are bcrypt-hashed in the DB and CANNOT be recovered later —\n" +
+        "  copy this block into a password manager before closing the terminal."
+    );
+  }
+
+  if (ROTATE) {
+    console.log(
+      "\nNotes:\n" +
+        "  • Existing JWTs of these accounts stay valid until they expire (stateless auth).\n" +
+        "    If a seed-account token might be in the wild, rotate JWT_SECRET in backend/.env\n" +
+        "    and restart the API (signs everyone out once).\n" +
+        "  • NEVER run the demo seed (SEED_DEMO_USERS=1 npm run seed) against this database —\n" +
+        "    it would reset these passwords back to the hard-coded ones. If that ever happens,\n" +
+        "    re-run this script with --rotate --apply."
+    );
+  } else {
+    console.log(
+      "\nNotes:\n" +
+        "  • Existing JWTs of deleted accounts stay valid until they expire (stateless auth).\n" +
+        "    If tokens might be in the wild, rotate JWT_SECRET in backend/.env and restart the API\n" +
+        "    (signs everyone out once).\n" +
+        "  • npm run seed would recreate these accounts — as of this change the demo seed only\n" +
+        "    runs when SEED_DEMO_USERS=1 is set.\n" +
+        "  • Demo photos uploaded to the CDN (evidence/thumbnails) are not deleted — cosmetic only."
+    );
+  }
 }
 
 main()
