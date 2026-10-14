@@ -13,9 +13,15 @@
 //      driver2  / driver2@101drivers.techbee.et          / password "driver2"
 //      driver3  / driver3@101drivers.techbee.et          / password "driver3"
 //
-//  WHY DELETE INSTEAD OF JUST CHANGING THE PASSWORD:
-//  these credentials are hard-coded in the repository, so anyone with repo
-//  access can sign in. Removing the rows closes the hole completely.
+//  TWO WAYS TO CLOSE THE HOLE (the credentials are hard-coded in the repo,
+//  so anyone with repo access can sign in with them):
+//  ─────────────────────────────────────────────────────────────────────────
+//  • ROTATE (DEFAULT): keep the accounts, replace the hard-coded passwords
+//    with strong random ones. NOTHING is deleted — use this when the demo
+//    accounts (or their history) should stay.
+//  • DELETE (--delete): remove the accounts and their related rows entirely.
+//    Use only when the accounts should not exist at all. Requires the
+//    explicit --delete flag — plain --apply always rotates.
 //
 //  SAFETY RAILS
 //  ────────────
@@ -51,24 +57,29 @@
 //  USAGE (from the backend folder)
 //  ───────────────────────────────
 //    npx ts-node scripts/delete-seeded-users.ts
-//        Dry run (default) — report only, no writes.
+//        Dry run (default) — ROTATE-mode report only. The database is only
+//        READ; nothing is written, nothing is deleted.
 //
 //    npx ts-node scripts/delete-seeded-users.ts --apply
-//        Delete the exact-match seed accounts.
+//        PASSWORD ROTATION (the default action): every exact-match seed
+//        account KEEPS all its data — profiles, deliveries, history — and
+//        only the hard-coded password is replaced with a strong random one
+//        (32-char, crypto-generated, unique per account). Writes BOTH
+//        `password` and `passwordHash` (login uses `passwordHash ?? password`,
+//        see src/auth/auth.service.ts), so the old hard-coded credential is
+//        dead no matter which column wins. This mode CANNOT delete rows —
+//        the script proves it by comparing the total user count before and
+//        after. The new passwords are printed once at the end; add
+//        --out=<file> to also save them to a local file. They cannot be
+//        recovered afterwards, and password-reset emails cannot reach the
+//        fake seed domain — store them immediately.
 //
-//    npx ts-node scripts/delete-seeded-users.ts --rotate
-//        Dry run for PASSWORD ROTATION — report only.
+//    npx ts-node scripts/delete-seeded-users.ts --delete
+//        Dry run of the DELETION mode — report only, nothing written.
 //
-//    npx ts-node scripts/delete-seeded-users.ts --rotate --apply
-//        Keep the accounts but replace the hard-coded passwords with a
-//        strong random one (32-char, crypto-generated, unique per account).
-//        Writes BOTH `password` and `passwordHash` (login uses
-//        `passwordHash ?? password`, see src/auth/auth.service.ts), so the
-//        old hard-coded credential is dead no matter which column wins.
-//        The new passwords are printed once at the end — store them in a
-//        password manager; they cannot be recovered afterwards.
-//        Non-destructive: no rows are removed, no guards fire, sessions of
-//        other users are unaffected.
+//    npx ts-node scripts/delete-seeded-users.ts --delete --apply
+//        Delete the exact-match seed accounts and all their related rows.
+//        Deletion is opt-in: it ALWAYS requires the explicit --delete flag.
 //
 //    npx ts-node scripts/delete-seeded-users.ts --username admin,driver
 //        Limit the run to specific seed usernames (comma separated).
@@ -76,17 +87,22 @@
 //    npx ts-node scripts/delete-seeded-users.ts --skip driver3
 //        Exclude specific seed usernames.
 //
-//    npx ts-node scripts/delete-seeded-users.ts --apply --force
-//        Override the real-data tripwire (5). Does NOT override the
-//        last-admin guard (3).
+//    npx ts-node scripts/delete-seeded-users.ts --out=seed-credentials.txt
+//        (with --apply) Also save the newly generated credentials to this
+//        file, created with owner-only permissions (600).
 //
-//  Requires DATABASE_URL and (for --rotate) BCRYPT_SALT — both loaded
-//  automatically from backend/.env.
+//    npx ts-node scripts/delete-seeded-users.ts --delete --apply --force
+//        Override the real-data tripwire (5). Does NOT override the
+//        last-admin guard (3). Ignored in rotation mode.
+//
+//  Requires DATABASE_URL (always) and BCRYPT_SALT (for --apply rotation) —
+//  both loaded automatically from backend/.env.
 // ─────────────────────────────────────────────────────────────────────────────
 
 import * as dotenv from "dotenv";
 import { EnumUserRoles, PrismaClient } from "@prisma/client";
 import { randomBytes } from "crypto";
+import { writeFileSync } from "fs";
 import { compare as bcryptCompare, hash as bcryptHash } from "bcrypt";
 import { parseSalt, Salt } from "../src/auth/password.service";
 
@@ -125,7 +141,14 @@ const SEED_ACCOUNTS: SeedIdentity[] = [
 const args = process.argv.slice(2);
 const APPLY = args.includes("--apply");
 const FORCE = args.includes("--force");
-const ROTATE = args.includes("--rotate");
+// SAFETY DEFAULT: rotation is the DEFAULT action — plain --apply can never
+// delete anything. Deletion is opt-in and requires the explicit --delete flag.
+const DELETE_MODE = args.includes("--delete");
+const ROTATE = !DELETE_MODE;
+if (DELETE_MODE && args.includes("--rotate")) {
+  console.error("✗ --delete and --rotate cannot be combined — pick one mode.");
+  process.exit(1);
+}
 
 function csvFlag(name: string): string[] | null {
   const hit = args.find((a) => a === name || a.startsWith(`${name}=`));
@@ -138,8 +161,20 @@ function csvFlag(name: string): string[] | null {
   return value!.split(",").map((s) => s.trim()).filter(Boolean);
 }
 
+function kvFlag(name: string): string | null {
+  const hit = args.find((a) => a.startsWith(`${name}=`));
+  if (!hit) return null;
+  const value = hit.split("=")[1]?.trim();
+  if (!value) {
+    console.error(`✗ ${name} requires a value, e.g. ${name}=seed-credentials.txt`);
+    process.exit(1);
+  }
+  return value;
+}
+
 const onlyUsernames = csvFlag("--username");
 const skipUsernames = new Set(csvFlag("--skip") ?? []);
+const outPath = kvFlag("--out"); // rotate mode: also save the new credentials to this file
 
 const targets = SEED_ACCOUNTS.filter((a) => {
   if (onlyUsernames && !onlyUsernames.includes(a.username)) return false;
@@ -579,12 +614,20 @@ type Outcome =
 async function main(): Promise<void> {
   const action = ROTATE ? "ROTATE PASSWORDS" : "DELETE ACCOUNTS";
   console.log("101 Drivers — seeded demo accounts (hard-coded credentials)");
-  console.log(`Action: ${action}`);
+  console.log(`Action: ${action}${ROTATE ? "   (default — pass --delete for deletion)" : ""}`);
   console.log(`Mode: ${APPLY ? `APPLY — ${ROTATE ? "passwords WILL be rotated" : "rows WILL be deleted"}` : "DRY RUN — read-only report"}`);
+  if (ROTATE) {
+    console.log(
+      APPLY
+        ? "Deletion safety: this mode CANNOT delete — it only UPDATEs the two password columns (row counts are verified at the end)."
+        : "Deletion safety: dry run — the database is only READ; nothing is written, nothing is deleted."
+    );
+  }
   if (FORCE) {
     if (ROTATE) console.log("Flag: --force ignored in rotate mode (no guards apply — nothing is removed)");
     else console.log("Flag: --force (real-data tripwire overridden where it fires)");
   }
+  if (outPath && !ROTATE) console.log("Flag: --out ignored in delete mode (no credentials are generated).");
 
   // Fail fast in rotate mode: hashing needs the same salt the app uses.
   if (ROTATE && APPLY) parseSalt(process.env.BCRYPT_SALT);
@@ -599,25 +642,34 @@ async function main(): Promise<void> {
   const seedUsernames = SEED_ACCOUNTS.map((a) => a.username);
 
   // Customer profile ids that WILL be purged this run — the driver tripwire
-  // compares against exactly this set.
+  // compares against exactly this set. (Deletion mode only — rotation never
+  // purges anything.)
   const seedCustomerProfileIds: string[] = [];
-  for (const res of exact) {
-    if (res.identity.kind !== "customer") continue;
-    const customer = await prisma.customer.findUnique({
-      where: { userId: res.user!.id },
-      select: { id: true },
-    });
-    if (customer) seedCustomerProfileIds.push(customer.id);
+  if (!ROTATE) {
+    for (const res of exact) {
+      if (res.identity.kind !== "customer") continue;
+      const customer = await prisma.customer.findUnique({
+        where: { userId: res.user!.id },
+        select: { id: true },
+      });
+      if (customer) seedCustomerProfileIds.push(customer.id);
+    }
   }
 
   // 2 ─ Report
   console.log("\n──────────── PRE-FLIGHT REPORT ────────────");
   for (const res of resolutions) {
     const counts =
-      res.status === "EXACT"
+      !ROTATE && res.status === "EXACT"
         ? await relatedCounts(res, seedCustomerProfileIds, seedUsernames)
         : null;
     printResolution(res, counts);
+    if (ROTATE && res.status === "EXACT") {
+      console.log(
+        "  → will be rotated: a new 32-char random password replaces the hard-coded one.\n" +
+          "    NOTHING else changes — no rows are deleted; profiles, deliveries and history all stay."
+      );
+    }
   }
 
   const exactCount = exact.length;
@@ -632,11 +684,11 @@ async function main(): Promise<void> {
   }
 
   if (!APPLY) {
-    console.log("\nDRY RUN — nothing was written.");
+    console.log("\nDRY RUN — nothing was written, nothing was deleted.");
     console.log(
       ROTATE
-        ? "Review the report above, then re-run with --rotate --apply to set strong random passwords on the exact-match accounts."
-        : "Review the report above, then re-run with --apply to delete the accounts listed as exact matches."
+        ? "Review the report above, then re-run with --apply to set strong random passwords on the exact-match accounts. Nothing is deleted in that mode."
+        : "Review the report above, then re-run with --delete --apply to delete the accounts listed as exact matches."
     );
     return;
   }
@@ -654,6 +706,9 @@ async function main(): Promise<void> {
   const outcomes = new Map<string, Outcome>();
   const credentials: { username: string; email: string; password: string; identity: SeedIdentity }[] = [];
   const salt = ROTATE ? parseSalt(process.env.BCRYPT_SALT) : null;
+  // Rotate mode proof-of-no-deletion: the total user-row count is compared
+  // before and after the run — it must be identical.
+  const usersBefore = ROTATE ? await prisma.user.count() : null;
   console.log(`\n──────────── APPLY (${action}) ────────────`);
   for (const res of order) {
     const { username, kind } = res.identity;
@@ -727,6 +782,22 @@ async function main(): Promise<void> {
     }
   }
 
+  // Rotate mode: prove nothing was deleted — the total user-row count must
+  // be identical before and after the run.
+  if (ROTATE && usersBefore !== null) {
+    const usersAfter = await prisma.user.count();
+    if (usersAfter === usersBefore) {
+      console.log(
+        `\n  ✓ Deletion check: user rows before=${usersBefore}, after=${usersAfter} — NOTHING was deleted (only the password columns changed).`
+      );
+    } else {
+      console.error(
+        `\n  ✗ Deletion check FAILED: user rows before=${usersBefore}, after=${usersAfter} — investigate immediately.`
+      );
+      process.exitCode = 1;
+    }
+  }
+
   // 5 ─ Exit code + new credentials (rotate) + operational notes
   const failures = [...outcomes.values()].filter((o) => o.kind === "FAILED");
   if (failures.length > 0 || remaining > 0) {
@@ -745,8 +816,39 @@ async function main(): Promise<void> {
     }
     console.log(
       "  These passwords are bcrypt-hashed in the DB and CANNOT be recovered later —\n" +
-        "  copy this block into a password manager before closing the terminal."
+        "  copy this block into a password manager before closing the terminal.\n" +
+        "  Password-reset emails cannot reach the fake seed domain, so this printout\n" +
+        "  (and the --out file, if requested) is the ONLY copy that will ever exist."
     );
+
+    if (outPath) {
+      const body = [
+        "101 Drivers — rotated seed-account credentials",
+        `Generated: ${new Date().toISOString()}`,
+        "Store these in a password manager, then DELETE this file from the server.",
+        "",
+        ...credentials.map((c) => `${c.username}\t${c.email}\t${c.password}`),
+        "",
+        "Sign in with the username or email above plus the new password.",
+      ].join("\n");
+      try {
+        writeFileSync(outPath, `${body}\n`, { mode: 0o600 });
+        console.log(`  ✓ Credentials also saved to ${outPath} (file permissions 600 — owner only).`);
+        console.log("    Move it somewhere safe and delete it from the server once stored.");
+      } catch (e) {
+        console.error(
+          `  ✗ Could not write ${outPath}: ${e instanceof Error ? e.message : e}\n` +
+            `    The passwords are printed above — copy them NOW before closing the terminal.`
+        );
+        process.exitCode = 1;
+      }
+    } else {
+      console.log(
+        "  Tip: for the NEXT rotation you can add --out=seed-credentials.txt to also save\n" +
+          "  a file copy. Do NOT re-run --apply just to get a file — that would rotate the\n" +
+          "  passwords AGAIN and the ones printed above would stop working."
+      );
+    }
   }
 
   if (ROTATE) {
@@ -757,7 +859,7 @@ async function main(): Promise<void> {
         "    and restart the API (signs everyone out once).\n" +
         "  • NEVER run the demo seed (SEED_DEMO_USERS=1 npm run seed) against this database —\n" +
         "    it would reset these passwords back to the hard-coded ones. If that ever happens,\n" +
-        "    re-run this script with --rotate --apply."
+        "    re-run this script with --apply (rotation)."
     );
   } else {
     console.log(
@@ -775,7 +877,7 @@ async function main(): Promise<void> {
 main()
   .catch((error) => {
     console.error("✗ Failed:", error instanceof Error ? error.message : error);
-    console.error("  (no changes were applied — deletions run per-account in transactions only after the report)");
+    console.error("  (nothing was changed — writes run per-account in transactions only after the report)");
     process.exit(1);
   })
   .finally(() => prisma.$disconnect());
