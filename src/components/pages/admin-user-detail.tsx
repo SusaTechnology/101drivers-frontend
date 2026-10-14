@@ -135,6 +135,7 @@ import {
 } from '@/types/users';
 import type { AdminUserDetail, AdminUpdateUserRequest, AdminInviteStatus } from '@/types/users';
 import { effectiveAdminStatus } from '@/lib/adminStatus';
+import { ServiceAreaBadge } from '@/components/admin/ServiceAreaBadge';
 import { navItems } from '@/lib/items/navItems';
 import { Brand } from '@/lib/items/brand';
 
@@ -2136,6 +2137,18 @@ export default function AdminUserDetailPage({ userId }: AdminUserDetailPageProps
                               Edit
                             </Button>
                           )}
+                          {/* Service-area eligibility — the SAME derived badge
+                              the Users table shows (green = ZIP inside the
+                              LA-metro polygon, eligible for review only;
+                              gray = outside, NOT rejected; amber = zip
+                              missing/unresolved, flagged). Stays visible
+                              during edits. Never means "approved to drive"
+                              — the Status badge next to it keeps that truth. */}
+                          <ServiceAreaBadge
+                            inArea={user.driver.serviceAreaInArea ?? null}
+                            flagged={user.driver.serviceAreaFlagged ?? false}
+                            className="text-[10px] px-2.5 py-1"
+                          />
                           <StatusBadge
                             status={DRIVER_STATUS_LABELS[user.driver.status]}
                             color={getDriverStatusColor(user.driver.status)}
@@ -2282,7 +2295,15 @@ export default function AdminUserDetailPage({ userId }: AdminUserDetailPageProps
                               <div className="text-sm">
                                 <div className="flex items-center gap-2">
                                   <MapPin className="w-4 h-4 text-slate-400" />
-                                  <span>{user.driver.residentialZip}</span>
+                                  <span className={cn(
+                                    // Green ZIP = home ZIP sits inside the
+                                    // service-area polygon (same truth as the
+                                    // eligibility badge in the card header).
+                                    user.driver.serviceAreaInArea === true &&
+                                      'font-semibold text-emerald-600 dark:text-emerald-400',
+                                  )}>
+                                    {user.driver.residentialZip}
+                                  </span>
                                 </div>
                               </div>
                             </div>

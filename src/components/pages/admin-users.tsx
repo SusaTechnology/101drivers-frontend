@@ -68,6 +68,7 @@ import {
   getActorUserId,
 } from '@/hooks/useAdminUsers';
 import { getUser } from '@/lib/tanstack/dataQuery';
+import { ServiceAreaBadge } from '@/components/admin/ServiceAreaBadge';
 import type {
   AdminUserRow,
   AdminUsersQueryParams,
@@ -279,6 +280,55 @@ function parseUsersDeepLink(
   return { role, status };
 }
 
+// ==================== FILTER PERSISTENCE (per browser tab) ====================
+// The admin's filters survive navigation: leave the Users page, come back
+// (menu, back button, another tile) and the same filter set is still
+// applied to the table. Scope is deliberately sessionStorage — per tab,
+// dies with the tab — so a filter chosen today can never leak into some
+// future session's "why is my list empty" confusion. The ONLY things that
+// clear it are the admin's own hand: fixing fields one by one or the
+// Clear filters button — both just change state, and the mirror effect
+// below persists exactly what the admin currently sees. Dashboard deep
+// links still win on a fresh mount (an explicit tile click is a fresh
+// intent), and page/pageSize are intentionally NOT persisted: a restored
+// page number past a changed result count would read as a broken table.
+const ADMIN_USERS_FILTERS_KEY = 'admin-users-filters-v1';
+
+interface StoredAdminUserFilters {
+  searchQuery: string;
+  roleFilter: string;
+  statusFilter: string;
+  adminStatusFilter: string;
+  zipFilter: string;
+  zipRegion: string;
+}
+
+function readStoredAdminUserFilters(): Partial<StoredAdminUserFilters> | null {
+  try {
+    const raw = sessionStorage.getItem(ADMIN_USERS_FILTERS_KEY);
+    if (!raw) return null;
+    const parsed: unknown = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object') return null;
+    const source = parsed as Record<string, unknown>;
+    const out: Partial<StoredAdminUserFilters> = {};
+    for (const key of [
+      'searchQuery',
+      'roleFilter',
+      'statusFilter',
+      'adminStatusFilter',
+      'zipFilter',
+      'zipRegion',
+    ] as const) {
+      const value = source[key];
+      if (typeof value === 'string') out[key] = value.slice(0, 200);
+    }
+    return out;
+  } catch {
+    // Private mode / quota / corrupt JSON — persistence is best-effort.
+    return null;
+  }
+}
+
 // Dedicated admin lifecycle dropdown — swaps in for the unified Status
 // field when Role = Admin (same grid cell, identical UI, its own state).
 // Values are sent with an ADMIN_ prefix, which the backend /admin/v2
@@ -323,33 +373,10 @@ function RoleBadge({ role }: { role: UserRole }) {
   );
 }
 
-/**
- * Service-area badge (derived, not manual): green = inside the LA-metro
- * service-area polygon, gray = outside (waitlisted-for-review territory),
- * amber = no zip / unresolvable zip — flagged for review. This badge never
- * means "approved to drive" — the Status column keeps that truth manually.
- */
-function ServiceAreaBadge({ inArea, flagged }: { inArea: boolean | null; flagged: boolean }) {
-  if (inArea === true) {
-    return (
-      <Badge className="w-fit text-[9px] font-bold border bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-900/20 dark:text-emerald-300 dark:border-emerald-800">
-        In service area
-      </Badge>
-    );
-  }
-  if (flagged || inArea === null) {
-    return (
-      <Badge className="w-fit text-[9px] font-bold border bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-900/20 dark:text-amber-300 dark:border-amber-800">
-        Review needed
-      </Badge>
-    );
-  }
-  return (
-    <Badge className="w-fit text-[9px] font-bold border bg-slate-50 text-slate-600 border-slate-200 dark:bg-slate-900 dark:text-slate-400 dark:border-slate-700">
-      Outside area
-    </Badge>
-  );
-}
+// ServiceAreaBadge moved to @/components/admin/ServiceAreaBadge — the
+// admin user-detail page renders the SAME badge, so colors and meanings
+// can never drift apart. (green = in polygon, eligible for review only;
+// gray = outside, NOT rejected; amber = no/unresolvable zip, flagged).
 
 function StatusBadge({ isActive, disabledAt }: { isActive: boolean; disabledAt: string | null }) {
   if (disabledAt) {
@@ -542,19 +569,52 @@ export default function AdminUsersPage() {
   // ==================== FILTER STATE (V2 — simplified) ====================
   // Replaced the old 14 filter states with 5 clean ones.
   // The V2 backend endpoint handles the unified status mapping.
-  const [searchQuery, setSearchQuery] = useState('');
-  const [roleFilter, setRoleFilter] = useState(deepLink.role ?? 'all');
-  const [statusFilter, setStatusFilter] = useState(deepLink.status ?? 'all');
+  // Restore-on-mount: filters come back from sessionStorage (read exactly
+  // once per mount) so navigating away and back keeps the admin's working
+  // set. Priority on a fresh mount: deep link > stored > defaults — an
+  // explicit dashboard-tile click always means "show me that view NOW".
+  // Every restored value is re-validated against the option lists this
+  // page actually renders, so a stale stored value can never select
+  // itself into an invisible state.
+  const storedFilters = useMemo(readStoredAdminUserFilters, []);
+  const storedRoleValid =
+    storedFilters?.roleFilter !== undefined &&
+    ROLE_OPTIONS.some((o) => o.value === storedFilters.roleFilter);
+  const [searchQuery, setSearchQuery] = useState(storedFilters?.searchQuery ?? '');
+  const [roleFilter, setRoleFilter] = useState(
+    deepLink.role ??
+      (storedRoleValid ? (storedFilters?.roleFilter as string) : 'all'),
+  );
+  const [statusFilter, setStatusFilter] = useState(() => {
+    const initialRole =
+      deepLink.role ??
+      (storedRoleValid ? (storedFilters?.roleFilter as string) : 'all');
+    const candidate = deepLink.status ?? storedFilters?.statusFilter ?? 'all';
+    return candidate !== 'all' &&
+      statusOptionsForRole(initialRole).some((o) => o.value === candidate)
+      ? candidate
+      : 'all';
+  });
   // Dedicated ADMIN lifecycle status — only visible (and only sent) while
   // Role = Admin. Kept separate from statusFilter so each dropdown
   // remembers its own selection while the other one is hidden.
-  const [adminStatusFilter, setAdminStatusFilter] = useState('all');
+  const [adminStatusFilter, setAdminStatusFilter] = useState(
+    storedFilters?.adminStatusFilter !== undefined &&
+      ADMIN_STATUS_OPTIONS.some((o) => o.value === storedFilters.adminStatusFilter)
+      ? storedFilters.adminStatusFilter
+      : 'all',
+  );
   // ZIP filters — drivers only. zipFilter is a prefix ("900" = all 900xx,
   // the LA metro area); the Region picker is an exact county-backed list
   // from the backend. The old From/To range is gone: exact region lists
   // + prefix cover every real query, and guessed bands are what produced
   // wrong memberships in the first place.
-  const [zipFilter, setZipFilter] = useState('');
+  const [zipFilter, setZipFilter] = useState(
+    // Re-sanitize the stored value through the same digits-only/5-max rule
+    // the input enforces, so a tampered storage entry can't smuggle
+    // anything the field itself would never produce.
+    (storedFilters?.zipFilter ?? '').replace(/\D/g, '').slice(0, 5),
+  );
   // ZIP filtering is meaningful only for drivers — customers have NO ZIP
   // field in the database (the only ZIP column is Driver.residentialZip).
   // ZIP filters (Region + prefix) are hidden entirely until Role =
@@ -567,9 +627,33 @@ export default function AdminUsersPage() {
   // server-side, 'custom' = the admin hand-typed a ZIP prefix instead.
   // The list comes from the backend (generated from real ZIP→county
   // data) — nothing geographic is hardcoded in the frontend.
-  const [zipRegion, setZipRegion] = useState('any');
+  const [zipRegion, setZipRegion] = useState(
+    // 'any'/'custom' are this page's own reserved values; a stored region
+    // id is restored as-is and sanity-checked against the backend list
+    // once it loads (see the effect below) — region lists are generated
+    // data and can change, and a dead id must never sit invisibly in the
+    // picker.
+    storedFilters?.zipRegion && storedFilters.zipRegion !== ''
+      ? storedFilters.zipRegion
+      : 'any',
+  );
   const { data: zipRegionsData, isLoading: zipRegionsLoading } = useZipRegions();
   const zipRegionOptions = zipRegionsData?.regions ?? [];
+  // Restored-region sanity: once the backend list is here, a stored region
+  // id that no longer exists (generated data — regions can be renamed or
+  // dropped between visits) falls back to 'any' instead of lingering as an
+  // invisible value the picker can't render. Reserved values ('any',
+  // 'custom') always pass.
+  useEffect(() => {
+    if (zipRegionsLoading) return;
+    if (
+      zipRegion !== 'any' &&
+      zipRegion !== 'custom' &&
+      !zipRegionOptions.some((o) => o.value === zipRegion)
+    ) {
+      setZipRegion('any');
+    }
+  }, [zipRegionsLoading, zipRegion, zipRegionOptions]);
   const handleZipRegionChange = (v: string) => {
     setZipRegion(v);
     setPage(1);
@@ -601,6 +685,30 @@ export default function AdminUsersPage() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [deepLinkKey]);
+
+  // Mirror every filter change into sessionStorage. Writing unconditionally
+  // means "clearing" needs no special path: fixing a field one by one or
+  // hitting Clear filters just changes state, and what's stored always
+  // equals what the admin currently sees. Storage failures (private mode,
+  // quota) are swallowed — persistence is a convenience, never a feature
+  // the table depends on.
+  useEffect(() => {
+    try {
+      sessionStorage.setItem(
+        ADMIN_USERS_FILTERS_KEY,
+        JSON.stringify({
+          searchQuery,
+          roleFilter,
+          statusFilter,
+          adminStatusFilter,
+          zipFilter,
+          zipRegion,
+        }),
+      );
+    } catch {
+      // best-effort only
+    }
+  }, [searchQuery, roleFilter, statusFilter, adminStatusFilter, zipFilter, zipRegion]);
 
   // ==================== DIALOG STATE ====================
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -1503,7 +1611,18 @@ export default function AdminUsersPage() {
                             <div className="space-y-1">
                               <span className="text-xs text-slate-600 dark:text-slate-300 font-medium">Driver</span>
                               {user.driver.residentialZip && (
-                                <div className="text-xs text-slate-500">ZIP {user.driver.residentialZip}</div>
+                                <div className={cn(
+                                  'text-xs',
+                                  // Green ZIP = the driver's home ZIP sits
+                                  // inside the service-area polygon (same
+                                  // truth the badge below shows) — eligible
+                                  // for review. Plain slate = everything else.
+                                  user.driver.serviceAreaInArea === true
+                                    ? 'font-semibold text-emerald-600 dark:text-emerald-400'
+                                    : 'text-slate-500'
+                                )}>
+                                  ZIP {user.driver.residentialZip}
+                                </div>
                               )}
                               {/* Service-area badge — DERIVED from the LA-metro
                                   polygon (point-in-polygon on the driver's zip).

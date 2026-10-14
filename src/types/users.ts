@@ -418,6 +418,12 @@ export interface AdminUserDriverDetail {
   residentialCity: string | null;
   residentialState: string | null;
   residentialZip: string | null;
+  // Derived service-area badge (LA-metro polygon) — same meaning as
+  // AdminDriverEmbed. inArea null = no zip / unresolvable; flagged =
+  // needs review. NEVER drives `status`.
+  serviceAreaInArea?: boolean | null;
+  serviceAreaZip?: string | null;
+  serviceAreaFlagged?: boolean;
   location: DriverLocationDetail | null;
   preferences: DriverPreferencesDetail | null;
   alerts: DriverAlertsDetail | null;

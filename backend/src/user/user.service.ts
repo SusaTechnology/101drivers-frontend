@@ -1365,6 +1365,13 @@ async getAdminUserDetail(id: string): Promise<any> {
           residentialCity: true,
           residentialState: true,
           residentialZip: true,
+          // Derived service-area badge (LA-metro polygon, point-in-polygon
+          // on the zip) — the detail page shows the same green/gray/amber
+          // eligibility the Users table does. Read-only derived fields:
+          // they never drive Driver.status.
+          serviceAreaInArea: true,
+          serviceAreaZip: true,
+          serviceAreaFlagged: true,
           location: {
             select: {
               id: true,
