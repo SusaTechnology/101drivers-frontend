@@ -10,6 +10,8 @@ import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
 import { Label } from '@/components/ui/label'
 import { Separator } from '@/components/ui/separator'
+import { PhotoDialog } from '@/components/ui/photo-dialog'
+import { useSupportAttachments } from '@/hooks/useSupportAttachments'
 import {
   Select,
   SelectContent,
@@ -32,6 +34,9 @@ import {
   HelpCircle,
   Clock,
   Truck,
+  Paperclip,
+  Upload,
+  Loader2,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { getUser, useDataQuery, useCreate, performSignOut } from '@/lib/tanstack/dataQuery'
@@ -71,6 +76,23 @@ export default function DealerSupportRequest() {
   const [priority, setPriority] = useState<SupportRequestPriority>('NORMAL')
   const [subject, setSubject] = useState('')
   const [message, setMessage] = useState('')
+
+  // Photos for the support team (optional). User-scoped upload endpoint —
+  // works with or without a related delivery; URLs are embedded into the
+  // message text where Operations can open them.
+  const {
+    attachments,
+    isUploading: isUploadingAttachment,
+    inputRef: photoInputRef,
+    dialogOpen: photoDialogOpen,
+    dialogSrc: photoDialogSrc,
+    openPicker: openAttachmentPicker,
+    handleChosen: handleAttachmentChosen,
+    removeAttachment,
+    openPreview,
+    setDialogOpen: setPhotoDialogOpen,
+    buildAttachmentBlock,
+  } = useSupportAttachments()
 
   // Determine customer type from roles array (NOT userType — that field
   // doesn't exist on the user object, so this was always false before,
@@ -142,7 +164,7 @@ export default function DealerSupportRequest() {
       category,
       priority,
       subject: subject.trim(),
-      message: message.trim(),
+      message: message.trim() + buildAttachmentBlock(),
     }
 
     createSupportMutation.mutate(payload)
@@ -402,6 +424,73 @@ export default function DealerSupportRequest() {
               />
             </div>
 
+            {/* Attachments (optional) — user-scoped upload, no delivery needed */}
+            <div className="p-5 rounded-2xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <p className="text-sm font-extrabold text-slate-900 dark:text-white">
+                    Attachments (optional)
+                  </p>
+                  <p className="text-[11px] text-slate-600 dark:text-slate-400 mt-1">
+                    Add photos or screenshots as evidence — tap a photo to view it full size.
+                  </p>
+                </div>
+                <Paperclip className="w-5 h-5 text-lime-500 shrink-0" />
+              </div>
+
+              <Button
+                type="button"
+                variant="outline"
+                onClick={openAttachmentPicker}
+                disabled={isUploadingAttachment}
+                className="mt-4 w-full py-4 rounded-2xl font-extrabold bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:bg-lime-50 transition inline-flex items-center justify-center gap-2 disabled:opacity-50"
+              >
+                <Upload className="w-4 h-4 text-lime-500" />
+                {isUploadingAttachment ? 'Uploading...' : 'Add photo'}
+              </Button>
+
+              <input
+                ref={photoInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={handleAttachmentChosen}
+              />
+
+              {(attachments.length > 0 || isUploadingAttachment) && (
+                <div className="mt-4 p-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700">
+                  <p className="text-xs font-bold text-slate-700 dark:text-slate-300 mb-2">
+                    Attached evidence{attachments.length > 0 ? ` (${attachments.length})` : ''}:
+                  </p>
+                  <div className="flex flex-wrap gap-3">
+                    {attachments.map((url, idx) => (
+                      <div key={url} className="relative">
+                        <img
+                          src={url}
+                          alt={`Evidence ${idx + 1}`}
+                          className="w-20 h-20 object-cover rounded-xl border border-slate-200 dark:border-slate-700 cursor-pointer hover:opacity-80 transition-opacity"
+                          onClick={() => openPreview(url)}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => removeAttachment(idx)}
+                          className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-slate-900 dark:bg-white text-white dark:text-slate-900 flex items-center justify-center shadow hover:bg-red-500 dark:hover:bg-red-500 dark:hover:text-white transition"
+                          aria-label="Remove attachment"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      </div>
+                    ))}
+                    {isUploadingAttachment && (
+                      <div className="w-20 h-20 rounded-xl border-2 border-dashed border-slate-300 dark:border-slate-600 flex items-center justify-center text-slate-400">
+                        <Loader2 className="w-5 h-5 animate-spin" />
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+
             <Separator />
 
             {/* Action buttons */}
@@ -415,7 +504,7 @@ export default function DealerSupportRequest() {
               </Button>
               <Button
                 onClick={handleSubmit}
-                disabled={createSupportMutation.isPending || !subject.trim() || !message.trim()}
+                disabled={createSupportMutation.isPending || isUploadingAttachment || !subject.trim() || !message.trim()}
                 className="flex-1 py-4 rounded-2xl bg-lime-500 text-slate-950 hover:bg-lime-600 font-extrabold gap-2"
               >
                 {createSupportMutation.isPending ? 'Submitting...' : 'Submit Request'}
@@ -432,6 +521,14 @@ export default function DealerSupportRequest() {
             </div>
           </CardContent>
         </Card>
+
+        {/* Full-size attachment preview (tap a thumbnail) */}
+        <PhotoDialog
+          open={photoDialogOpen}
+          onOpenChange={setPhotoDialogOpen}
+          src={photoDialogSrc}
+          title="Attachment"
+        />
 
         {/* Quick links */}
         <div className="mt-6 flex flex-col sm:flex-row gap-3">

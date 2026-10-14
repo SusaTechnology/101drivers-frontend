@@ -1,5 +1,6 @@
 import { Module, forwardRef } from "@nestjs/common";
 import { AuthModule } from "../auth/auth.module";
+import { GatewayModule } from "../gateways/gateway.module";
 import { SupportRequestModuleBase } from "./base/supportRequest.module.base";
 import { SupportRequestService } from "./supportRequest.service";
 import { SupportRequestController } from "./supportRequest.controller";
@@ -11,7 +12,7 @@ import { NotificationEventEngine } from "src/domain/notificationEvent/notificati
 import { MailService } from "src/common/mail/mail.service";
 
 @Module({
-  imports: [SupportRequestModuleBase, forwardRef(() => AuthModule)],
+  imports: [SupportRequestModuleBase, forwardRef(() => AuthModule), GatewayModule],
   controllers: [SupportRequestController],
   providers: [
     SupportRequestService,

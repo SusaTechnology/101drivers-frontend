@@ -1,5 +1,5 @@
 // Driver Issue Report Page - Updated with real API
-import React, { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect } from 'react'
 import { Link, useNavigate, useLocation } from '@tanstack/react-router'
 import { cn } from '@/lib/utils'
 import { useTheme } from '@/lib/theme'
@@ -54,7 +54,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { getUser, useDataQuery, useCreate, useFileUpload } from '@/lib/tanstack/dataQuery'
+import { getUser, useDataQuery, useCreate } from '@/lib/tanstack/dataQuery'
+import { useSupportAttachments } from '@/hooks/useSupportAttachments'
 import {
   CATEGORIES_BY_ROLE,
   PRIORITY_OPTIONS,
@@ -63,7 +64,6 @@ import {
   type CreateSupportRequestPayload,
   type CreateSupportRequestResponse,
 } from '@/types/support'
-import { compressPhoto } from '@/lib/image-compress'
 
 // Issue types for drivers (mapped to categories)
 const issueTypes = [
@@ -128,18 +128,22 @@ export default function DriverIssueReportPage() {
   const [priority, setPriority] = useState<SupportRequestPriority>('NORMAL')
   const [subject, setSubject] = useState('')
   const [description, setDescription] = useState('')
-  // Real attachment uploads. Reuses the authenticated /uploads/delivery-evidence
-  // endpoint (jpeg/png/webp, 5MB after compression, delivery-scoped storage).
-  // SupportRequest has no attachments column, so the returned CDN URLs are
-  // embedded into the report message where Operations can open them. A
-  // delivery context is required because the upload endpoint is
-  // delivery-scoped by design.
-  const [attachments, setAttachments] = useState<string[]>([])
-  const [isUploadingAttachment, setIsUploadingAttachment] = useState(false)
-  const photoInputRef = useRef<HTMLInputElement | null>(null)
-  // Full-size preview dialog state (tap a thumbnail to open).
-  const [photoDialogOpen, setPhotoDialogOpen] = useState(false)
-  const [photoDialogSrc, setPhotoDialogSrc] = useState('')
+  // Attachments upload to the USER-scoped /uploads/support-attachment
+  // endpoint (shared hook) — photos work with or without a delivery
+  // context. A deliveryId here only labels the ticket, never gates uploads.
+  const {
+    attachments,
+    isUploading: isUploadingAttachment,
+    inputRef: photoInputRef,
+    dialogOpen: photoDialogOpen,
+    dialogSrc: photoDialogSrc,
+    openPicker,
+    handleChosen: handleAttachmentChosen,
+    removeAttachment,
+    openPreview,
+    setDialogOpen: setPhotoDialogOpen,
+    buildAttachmentBlock,
+  } = useSupportAttachments()
 
   // Fetch delivery details if deliveryId is provided
   const {
@@ -172,32 +176,6 @@ export default function DriverIssueReportPage() {
     }
   )
 
-  // Single-file upload per pick; the endpoint accepts up to 6 files per
-  // request but evidence comes one photo at a time from the camera/gallery.
-  const uploadAttachmentMutation = useFileUpload<{ ok: boolean; files: Array<{ slotIndex: number; url: string }> }>(
-    `${import.meta.env.VITE_API_URL}/api/uploads/delivery-evidence`,
-    {
-      onSuccess: (data) => {
-        setIsUploadingAttachment(false)
-        const url = data?.files?.[0]?.url
-        if (!url) {
-          toast.error('Upload failed', {
-            description: 'The server did not return a file URL. Please try again.',
-          })
-          return
-        }
-        setAttachments((prev) => [...prev, url])
-        toast.success('Attachment added')
-      },
-      onError: (error: any) => {
-        setIsUploadingAttachment(false)
-        toast.error('Upload failed', {
-          description: error?.message || 'Please try again.',
-        })
-      },
-    }
-  )
-
   // Theme handling
   useEffect(() => {
     setMounted(true)
@@ -224,13 +202,9 @@ export default function DriverIssueReportPage() {
       return
     }
 
-    // SupportRequest has no attachments column — embed the uploaded file
-    // URLs into the message so Operations can open the evidence.
-    const attachmentBlock = attachments.length
-      ? `\n\n[Attachments]\n${attachments
-          .map((url, i) => `Photo ${i + 1}: ${url}`)
-          .join('\n')}`
-      : ''
+    // Attachment URLs are embedded into the message so Operations can open
+    // the evidence (no attachments column on SupportRequest).
+    const attachmentBlock = buildAttachmentBlock()
 
     const payload: CreateSupportRequestPayload = {
       deliveryId: deliveryId || undefined,
@@ -250,43 +224,7 @@ export default function DriverIssueReportPage() {
     navigate({ to: '/driver-active' })
   }
 
-  const openAttachmentPicker = () => {
-    if (!deliveryId) {
-      toast.error('Delivery context required', {
-        description:
-          'Evidence files are stored with the delivery. Open Report issue from an active delivery to attach photos.',
-      })
-      return
-    }
-    photoInputRef.current?.click()
-  }
-
-  const handleAttachmentChosen = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0]
-    // Reset the input so picking the SAME file again still fires onChange.
-    event.target.value = ''
-    if (!file || !deliveryId) return
-
-    setIsUploadingAttachment(true)
-    try {
-      // Compress first — the endpoint rejects files over 5MB and phone
-      // cameras produce far larger photos.
-      const compressed = await compressPhoto(file)
-      const formData = new FormData()
-      formData.append('files', compressed)
-      formData.append('deliveryId', deliveryId)
-      uploadAttachmentMutation.mutate(formData)
-    } catch (error: any) {
-      setIsUploadingAttachment(false)
-      toast.error('Could not process image', {
-        description: error?.message || 'Please try a different photo.',
-      })
-    }
-  }
-
-  const removeAttachment = (index: number) => {
-    setAttachments((prev) => prev.filter((_, i) => i !== index))
-  }
+  const openAttachmentPicker = openPicker
 
   // Determine delivery context
   const delivery = deliveryData ? {
@@ -552,12 +490,6 @@ export default function DriverIssueReportPage() {
                 onChange={handleAttachmentChosen}
               />
 
-              {!deliveryId && (
-                <p className="mt-3 text-[11px] text-amber-600 dark:text-amber-400">
-                  Attachments are stored with the delivery — open Report issue from an active delivery to add photos.
-                </p>
-              )}
-
               {(attachments.length > 0 || isUploadingAttachment) && (
                 <div className="mt-4 p-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700">
                   <p className="text-xs font-bold text-slate-700 dark:text-slate-300 mb-2">
@@ -570,10 +502,7 @@ export default function DriverIssueReportPage() {
                           src={url}
                           alt={`Evidence ${idx + 1}`}
                           className="w-20 h-20 object-cover rounded-xl border border-slate-200 dark:border-slate-700 cursor-pointer hover:opacity-80 transition-opacity"
-                          onClick={() => {
-                            setPhotoDialogSrc(url)
-                            setPhotoDialogOpen(true)
-                          }}
+                          onClick={() => openPreview(url)}
                         />
                         <button
                           type="button"

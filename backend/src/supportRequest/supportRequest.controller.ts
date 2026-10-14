@@ -104,9 +104,13 @@ export class SupportRequestController extends SupportRequestControllerBase {
   @swagger.ApiOkResponse({ type: SupportRequestListResponseDto })
 
   async adminSupportRequests(
-    @common.Query() query: AdminSupportRequestListQueryDto
+    @common.Query() query: AdminSupportRequestListQueryDto,
+    @common.Req() req: Request
   ): Promise<SupportRequestListResponseDto> {
+    const user = req.user as any;
+
     return this.service.getAdminSupportRequests({
+      actorRoles: user?.roles ?? [],
       status: query.status ?? null,
       category: query.category ?? null,
       priority: query.priority ?? null,

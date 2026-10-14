@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from "@nestjs/common";
+import { ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
 import {
   EnumSupportActorRole,
   EnumSupportActorType,
@@ -31,6 +31,35 @@ export class SupportRequestService extends SupportRequestServiceBase {
       return value as string;
     }
     return value.trim();
+  }
+
+  // ── Conversation privacy ──
+  // A support request is a PRIVATE 1:1 conversation between the user who
+  // raised it and Operations. Everything below enforces: ADMIN sees all,
+  // everyone else only their own ticket — and never the internal notes.
+  private isAdmin(roles?: string[] | null): boolean {
+    return Array.isArray(roles) && roles.includes("ADMIN");
+  }
+
+  private assertAdmin(roles?: string[] | null): void {
+    if (!this.isAdmin(roles)) {
+      throw new ForbiddenException("Admin role required");
+    }
+  }
+
+  /**
+   * Enforce that the actor may open the given support request.
+   * Admins pass; the ticket owner passes; everyone else gets a NotFound —
+   * identical response to a missing row so ids cannot be probed.
+   */
+  private assertCanAccessRequest(
+    item: { userId: string | null },
+    actorUserId?: string | null,
+    actorRoles?: string[] | null
+  ): void {
+    if (this.isAdmin(actorRoles)) return;
+    if (actorUserId && item.userId === actorUserId) return;
+    throw new NotFoundException("SupportRequest not found");
   }
 
   private trimOptionalString(value: unknown): string | null | undefined {
@@ -190,6 +219,7 @@ export class SupportRequestService extends SupportRequestServiceBase {
   }
 
   async getAdminSupportRequests(input: {
+    actorRoles?: string[] | null;
     status?: any | null;
     category?: any | null;
     priority?: any | null;
@@ -199,6 +229,9 @@ export class SupportRequestService extends SupportRequestServiceBase {
     take?: number;
     skip?: number;
   }): Promise<{ items: any[]; count: number }> {
+    // The ops queue lists EVERY user's tickets — strictly admin-only.
+    this.assertAdmin(input.actorRoles);
+
     const where: Prisma.SupportRequestWhereInput = {
       ...(input.status ? { status: input.status } : {}),
       ...(input.category ? { category: input.category } : {}),
@@ -234,6 +267,16 @@ export class SupportRequestService extends SupportRequestServiceBase {
       throw new NotFoundException("SupportRequest not found");
     }
 
+    // Only the ticket owner and admins may read a conversation.
+    this.assertCanAccessRequest(item, input.actorUserId, input.actorRoles);
+
+    // Internal notes are staff-only — strip them from every non-admin
+    // response (the old frontend filtered client-side, but the payload
+    // itself leaked the content over the wire).
+    if (!this.isAdmin(input.actorRoles) && Array.isArray(item.notes)) {
+      item.notes = item.notes.filter((n: any) => !n.isInternal);
+    }
+
     return item;
   }
 
@@ -255,6 +298,9 @@ export class SupportRequestService extends SupportRequestServiceBase {
     if (!item) {
       throw new NotFoundException("SupportRequest not found");
     }
+
+    // Replying writes into a private conversation — owner or admin only.
+    this.assertCanAccessRequest(item, input.actorUserId, input.actorRoles);
 
     // ── Determine the replier's role from their actual user roles ──
     // Previously this used `item.actorRole` (the original request creator's
@@ -298,6 +344,8 @@ export class SupportRequestService extends SupportRequestServiceBase {
     actorRoles?: string[];
     message: string;
   }): Promise<PrismaSupportRequestNote> {
+    this.assertAdmin(input.actorRoles);
+
     const existing = await this.prisma.supportRequest.findUnique({
       where: { id: input.supportRequestId },
       select: { id: true },
@@ -322,6 +370,8 @@ export class SupportRequestService extends SupportRequestServiceBase {
     actorRoles?: string[];
     assignedToUserId: string;
   }): Promise<any> {
+    this.assertAdmin(input.actorRoles);
+
     const updated = await this.orchestrator.assignSupportRequest({
       supportRequestId: input.supportRequestId,
       actorUserId: input.actorUserId ?? null,
@@ -337,6 +387,8 @@ export class SupportRequestService extends SupportRequestServiceBase {
     actorRoles?: string[];
     status: EnumSupportStatus;
   }): Promise<any> {
+    this.assertAdmin(input.actorRoles);
+
     const updated = await this.orchestrator.changeSupportRequestStatus({
       supportRequestId: input.supportRequestId,
       actorUserId: input.actorUserId ?? null,

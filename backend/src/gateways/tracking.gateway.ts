@@ -11,6 +11,7 @@ import { Server, Socket } from "socket.io";
 import { UseGuards, Logger, Optional, Inject, forwardRef } from "@nestjs/common";
 import { WsJwtGuard } from "../auth/guards/ws-jwt.guard";
 import { DeliveryLifecycleService } from "../delivery-logistics/delivery-lifecycle.service";
+import { PrismaService } from "../prisma/prisma.service";
 
 /** Socket augmented by WsJwtGuard with decoded JWT payload */
 type AuthenticatedSocket = Socket & {
@@ -26,6 +27,10 @@ type AuthenticatedSocket = Socket & {
  *   dealer:<dealerId>       — dealer dashboard receives status + new delivery events
  *   driver-feed             — all drivers viewing the gig board
  *   user:<userId>           — per-user room for personal notifications (bell dropdown)
+ *   support:<requestId>     — one private support conversation (owner + staff)
+ *   support:<requestId>:staff — staff-only slice of the same conversation
+ *                             (internal notes are NEVER broadcast to the
+ *                             public conversation room)
  *
  * Events emitted (server → client):
  *   delivery:location-update  { deliveryId, lat, lng, recordedAt, drivenMiles }
@@ -33,6 +38,11 @@ type AuthenticatedSocket = Socket & {
  *   delivery:feed-update      { deliveryId, status, bookedByDriverId }
  *   delivery:created          { delivery (summary object) }
  *   notification:created      { id, type, subject, body, deliveryId?, customerId?, driverId?, createdAt, payload? }
+ *   support:message           { supportRequestId, note }            — new note in an open conversation
+ *   support:request-updated   { supportRequestId, status }          — ticket status/assignment changed
+ *   support:inbox             { supportRequestId, status }          — ping to the OWNER's user room
+ *                                                                   (list pages refresh; internal notes
+ *                                                                   produce a contentless ping, never text)
  */
 @WebSocketGateway({
   cors: {
@@ -52,6 +62,7 @@ export class TrackingGateway
   constructor(
     @Optional() @Inject(forwardRef(() => DeliveryLifecycleService))
     private readonly lifecycleService?: DeliveryLifecycleService,
+    private readonly prisma?: PrismaService,
   ) {}
 
   afterInit() {
@@ -173,6 +184,65 @@ export class TrackingGateway
     }
     const room = `user:${userId}`;
     client.leave(room);
+    return { left: room };
+  }
+
+  // ── Support conversation rooms ──
+  // A support request is a private 1:1 thread: the user who raised it plus
+  // Operations. join:support is a SECURITY BOUNDARY, not a convenience —
+  // membership is re-verified against the DB on every join, so a stolen or
+  // guessed ticket id is useless to anyone who is not the owner or staff.
+
+  /** Authenticated: join a support conversation room (owner or admin only) */
+  @UseGuards(WsJwtGuard)
+  @SubscribeMessage("join:support")
+  async handleJoinSupport(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() data: { supportRequestId: string },
+  ) {
+    const user = (client as AuthenticatedSocket).user;
+    const supportRequestId = `${data?.supportRequestId ?? ""}`.trim();
+    if (!user?.sub || !supportRequestId) {
+      return { joined: null, reason: "bad_request" };
+    }
+
+    const roles: string[] = user.roles ?? [];
+    const isStaff = roles.includes("ADMIN");
+
+    if (!isStaff) {
+      const ticket = await this.prisma?.supportRequest.findUnique({
+        where: { id: supportRequestId },
+        select: { userId: true },
+      });
+      if (!ticket || ticket.userId !== user.sub) {
+        // Same shape as a failed join for a nonexistent room — no probing.
+        return { joined: null, reason: "forbidden" };
+      }
+    }
+
+    const room = `support:${supportRequestId}`;
+    client.join(room);
+    // Staff additionally joins the internal-notes slice of the thread.
+    if (isStaff) {
+      client.join(`${room}:staff`);
+    }
+    this.logger.debug(`User ${user.sub} joined ${room}${isStaff ? " (+staff)" : ""}`);
+    return { joined: room };
+  }
+
+  @UseGuards(WsJwtGuard)
+  @SubscribeMessage("leave:support")
+  handleLeaveSupport(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() data: { supportRequestId: string },
+  ) {
+    const supportRequestId = `${data?.supportRequestId ?? ""}`.trim();
+    if (!supportRequestId) {
+      return { left: null };
+    }
+    const room = `support:${supportRequestId}`;
+    client.leave(room);
+    client.leave(`${room}:staff`);
     return { left: room };
   }
 
@@ -403,5 +473,79 @@ export class TrackingGateway
     this.logger.debug(
       `emitNotificationCreated -> room=${room} type=${data.notification.type} subject="${data.notification.subject ?? ""}"`
     );
+  }
+
+  // ── Support conversation emit helpers (called from the orchestrator) ──
+
+  /**
+   * Broadcast a new note to the private support conversation.
+   * Public replies go to the conversation room (owner + staff clients that
+   * currently have the thread open). INTERNAL notes go ONLY to the staff
+   * room — the owner's socket never receives their content.
+   */
+  emitSupportMessage(data: {
+    supportRequestId: string;
+    note: {
+      id: string;
+      authorRole: string;
+      authorUserId: string | null;
+      message: string;
+      isInternal: boolean;
+      createdAt: Date;
+    };
+  }) {
+    if (!this.server) {
+      this.logger.warn("emitSupportMessage: server not initialized, skipping");
+      return;
+    }
+    const room = `support:${data.supportRequestId}`;
+    const payload = {
+      supportRequestId: data.supportRequestId,
+      note: {
+        id: data.note.id,
+        authorRole: data.note.authorRole,
+        authorUserId: data.note.authorUserId ?? null,
+        message: data.note.message,
+        isInternal: data.note.isInternal,
+        createdAt: data.note.createdAt,
+      },
+    };
+
+    if (data.note.isInternal) {
+      this.server.to(`${room}:staff`).emit("support:message", payload);
+    } else {
+      this.server.to(room).emit("support:message", payload);
+      this.server.to(`${room}:staff`).emit("support:message", payload);
+    }
+  }
+
+  /**
+   * Broadcast a ticket-level change (status / assignment) to the open
+   * conversation and ping the owner's personal room so their support LIST
+   * page refreshes even when the thread itself is not open.
+   */
+  emitSupportRequestUpdated(data: {
+    supportRequestId: string;
+    status: string;
+    ownerUserId?: string | null;
+  }) {
+    if (!this.server) {
+      this.logger.warn("emitSupportRequestUpdated: server not initialized, skipping");
+      return;
+    }
+    const room = `support:${data.supportRequestId}`;
+    const payload = {
+      supportRequestId: data.supportRequestId,
+      status: data.status,
+    };
+
+    this.server.to(room).emit("support:request-updated", payload);
+    this.server.to(`${room}:staff`).emit("support:request-updated", payload);
+
+    if (data.ownerUserId) {
+      this.server
+        .to(`user:${data.ownerUserId}`)
+        .emit("support:inbox", payload);
+    }
   }
 }

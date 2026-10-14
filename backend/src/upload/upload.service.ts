@@ -211,6 +211,41 @@ buildAppSettingPublicUrl(input: {
   return `${base}/app-settings/${input.scope}/${input.filename}`;
   }
 
+  // ==================== SUPPORT ATTACHMENTS (USER-SCOPED) ====================
+  // Support conversations are NOT tied to a delivery — a dealer or driver can
+  // contact support from anywhere in the app. Files therefore live under the
+  // AUTHENTICATED USER's folder (support/{userId}/), never under a
+  // deliveryId, so no "delivery context required" gate is ever needed.
+
+  getSupportAttachmentDiskRoot(userId: string): string {
+    const root =
+      this.configService.get<string>("DRIVERS_MEDIA_ROOT") ??
+      "/srv/cdn/101-drivers";
+
+    return path.join(root, "support", userId);
+  }
+
+  buildSupportAttachmentFilename(originalName: string): string {
+    const ext = path.extname(originalName || "").toLowerCase() || ".jpg";
+    const safeExt = [".jpg", ".jpeg", ".png", ".webp"].includes(ext)
+      ? ext
+      : ".jpg";
+    const unique = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
+    return `att-${unique}${safeExt}`;
+  }
+
+  buildSupportAttachmentPublicUrl(input: {
+    userId: string;
+    filename: string;
+  }): string {
+    const base =
+      (
+        this.configService.get<string>("DRIVERS_MEDIA_BASE_URL") ??
+        "https://cdn.techbee.et/101-drivers"
+      ).replace(/\/+$/, "");
+    return `${base}/support/${input.userId}/${input.filename}`;
+  }
+
   // ==================== DRIVER SELFIE (PUBLIC) ====================
 
   getDriverSelfieDiskRoot(): string {

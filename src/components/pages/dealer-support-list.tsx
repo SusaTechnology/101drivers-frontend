@@ -36,6 +36,8 @@ import {
 import { cn } from '@/lib/utils'
 import { WhatsAppUrgentCallout } from '@/components/shared/WhatsAppSupportButton'
 import { getUser, useDataQuery, performSignOut } from '@/lib/tanstack/dataQuery'
+import { useQueryClient } from '@tanstack/react-query'
+import { useSocketEvent } from '@/hooks/useSocket'
 import { BUSINESS_TZ } from '@/lib/timezone'
 import {
   STATUS_OPTIONS,
@@ -108,6 +110,19 @@ const formatTime = (dateString: string) => {
 
 export default function DealerSupportList() {
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
+
+  // Real-time list refresh: when Support replies to any of my tickets the
+  // server pings my user room (support:inbox) — invalidate the support
+  // list queries so the new reply/status shows without a manual refresh.
+  useSocketEvent('support:inbox', () => {
+    queryClient.invalidateQueries({
+      predicate: (q) =>
+        Array.isArray(q.queryKey) &&
+        typeof q.queryKey[1] === 'string' &&
+        q.queryKey[1].includes('/supportRequests/'),
+    })
+  })
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [mounted, setMounted] = useState(false)
   const { theme, setTheme } = useTheme()

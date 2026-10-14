@@ -10,6 +10,8 @@ import { Textarea } from '@/components/ui/textarea'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Skeleton } from '@/components/ui/skeleton'
+import { PhotoDialog } from '@/components/ui/photo-dialog'
+import { SupportMessageBody } from '@/components/shared/SupportMessageBody'
 import {
   Select,
   SelectContent,
@@ -42,6 +44,8 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { getUser, useDataQuery, useCreate } from '@/lib/tanstack/dataQuery'
+import { useSocketEvent } from '@/hooks/useSocket'
+import { socketJoinSupport, socketLeaveSupport } from '@/lib/socket'
 import { Navbar } from '@/components/shared/layout/testNavbar'
 import { navItems } from '@/lib/items/navItems'
 import { Brand } from '@/lib/items/brand'
@@ -122,11 +126,19 @@ export default function AdminSupportDetailPage({ supportRequestId }: { supportRe
   const [replyMessage, setReplyMessage] = useState('')
   const [internalNote, setInternalNote] = useState('')
   const [newStatus, setNewStatus] = useState<SupportRequestStatus | ''>('')
+  // Full-size preview for embedded attachment thumbnails
+  const [photoDialogOpen, setPhotoDialogOpen] = useState(false)
+  const [photoDialogSrc, setPhotoDialogSrc] = useState('')
 
   // Fetch support request details
   const {
     data: request,
     isLoading,
+    // While switching conversations the previous request's payload is kept
+    // as placeholder data (useDataQuery uses keepPreviousData). Rendering it
+    // under the new URL is EXACTLY the "another dealer's messages in this
+    // chat" bug — gate on it and show the skeleton until the real fetch lands.
+    isPlaceholderData,
     error,
     refetch,
     isFetching,
@@ -135,6 +147,33 @@ export default function AdminSupportDetailPage({ supportRequestId }: { supportRe
     noFilter: true,
     enabled: !!requestId,
   })
+
+  // ── Live conversation updates (WebSocket) ──
+  // Join the private room for THIS conversation; the backend verifies
+  // owner/admin membership on every join. Re-join whenever the conversation
+  // changes; leave the previous room on unmount/id change.
+  const isStaff = !!user?.roles?.includes('ADMIN')
+
+  useEffect(() => {
+    if (!requestId) return
+    socketJoinSupport(requestId, isStaff)
+    return () => socketLeaveSupport(requestId)
+  }, [requestId, isStaff])
+
+  // New message in THIS thread → refetch the conversation.
+  useSocketEvent<{ supportRequestId: string }>('support:message', (data) => {
+    if (data?.supportRequestId === requestId) refetch()
+  })
+
+  // Status/assignment changed → refetch (badge + composer state stay live).
+  useSocketEvent<{ supportRequestId: string }>('support:request-updated', (data) => {
+    if (data?.supportRequestId === requestId) refetch()
+  })
+
+  const openAttachmentPreview = (url: string) => {
+    setPhotoDialogSrc(url)
+    setPhotoDialogOpen(true)
+  }
 
   // Reply mutation
   const replyMutation = useCreate<ReplySupportRequestPayload, ReplySupportRequestResponse>(
@@ -262,7 +301,7 @@ export default function AdminSupportDetailPage({ supportRequestId }: { supportRe
       />
 
       <main className="w-full max-w-[1400px] mx-auto px-4 lg:px-5 py-4 lg:py-5">
-        {isLoading ? (
+        {isLoading || isPlaceholderData ? (
           <div className="space-y-4">
             <Skeleton className="h-10 w-48" />
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
@@ -271,7 +310,7 @@ export default function AdminSupportDetailPage({ supportRequestId }: { supportRe
             </div>
             <Skeleton className="h-60 rounded-xl" />
           </div>
-        ) : error || !request ? (
+        ) : error || !request || request.id !== requestId ? (
           <Card className="border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/10">
             <CardContent className="p-6 flex items-center gap-3">
               <AlertCircle className="h-5 w-5 text-red-500" />
@@ -356,9 +395,11 @@ export default function AdminSupportDetailPage({ supportRequestId }: { supportRe
                     </div>
                   </CardHeader>
                   <CardContent>
-                    <p className="text-sm text-slate-700 dark:text-slate-300 whitespace-pre-wrap">
-                      {request.message}
-                    </p>
+                    <SupportMessageBody
+                      message={request.message}
+                      proseClassName="text-slate-700 dark:text-slate-300"
+                      onOpenImage={openAttachmentPreview}
+                    />
                   </CardContent>
                 </Card>
 
@@ -440,14 +481,15 @@ export default function AdminSupportDetailPage({ supportRequestId }: { supportRe
                                   {formatTime(note.createdAt)}
                                 </span>
                               </div>
-                              <p className={cn(
-                                "text-sm whitespace-pre-wrap break-words",
-                                isFromAdmin
-                                  ? "text-white"
-                                  : "text-slate-700 dark:text-slate-300"
-                              )}>
-                                {note.message}
-                              </p>
+                              <SupportMessageBody
+                                message={note.message}
+                                proseClassName={
+                                  isFromAdmin
+                                    ? 'text-white'
+                                    : 'text-slate-700 dark:text-slate-300'
+                                }
+                                onOpenImage={openAttachmentPreview}
+                              />
                             </div>
                           </div>
                         )
@@ -613,6 +655,14 @@ export default function AdminSupportDetailPage({ supportRequestId }: { supportRe
           </>
         )}
       </main>
+
+      {/* Full-size attachment preview (tap a thumbnail) */}
+      <PhotoDialog
+        open={photoDialogOpen}
+        onOpenChange={setPhotoDialogOpen}
+        src={photoDialogSrc}
+        title="Attachment"
+      />
 
       {/* Footer */}
       <footer className="bg-white dark:bg-slate-950 border-t border-slate-200 dark:border-slate-800 pt-8 pb-8">

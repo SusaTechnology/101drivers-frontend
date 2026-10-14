@@ -40,6 +40,8 @@ import { BUSINESS_TZ } from '@/lib/timezone'
 import { cn } from '@/lib/utils'
 import { WhatsAppUrgentCallout } from '@/components/shared/WhatsAppSupportButton'
 import { getUser, useDataQuery } from '@/lib/tanstack/dataQuery'
+import { useQueryClient } from '@tanstack/react-query'
+import { useSocketEvent } from '@/hooks/useSocket'
 import {
   STATUS_OPTIONS,
   type SupportRequestListItem,
@@ -87,6 +89,19 @@ const statusColors: Record<SupportRequestStatus, string> = {
 
 export default function DriverSupportListPage() {
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
+
+  // Real-time list refresh: when Support replies to any of my tickets the
+  // server pings my user room (support:inbox) — invalidate the support
+  // list queries so the new reply/status shows without a manual refresh.
+  useSocketEvent('support:inbox', () => {
+    queryClient.invalidateQueries({
+      predicate: (q) =>
+        Array.isArray(q.queryKey) &&
+        typeof q.queryKey[1] === 'string' &&
+        q.queryKey[1].includes('/supportRequests/'),
+    })
+  })
   const [mounted, setMounted] = useState(false)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [statusFilter, setStatusFilter] = useState<SupportRequestStatus | 'ALL'>('ALL')

@@ -32,6 +32,8 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { getUser, useDataQuery } from '@/lib/tanstack/dataQuery'
+import { useQueryClient } from '@tanstack/react-query'
+import { useSocketEvent } from '@/hooks/useSocket'
 import { Navbar } from '@/components/shared/layout/testNavbar'
 import { navItems } from '@/lib/items/navItems'
 import { Brand } from '@/lib/items/brand'
@@ -98,6 +100,19 @@ export default function AdminSupportListPage() {
   const { actionItems, signOut } = useAdminActions()
   const user = getUser()
   const adminId = user?.id
+  const queryClient = useQueryClient()
+
+  // Real-time list refresh: any activity pushed to a conversation this
+  // admin participates in reorders rows (updatedAt ordering). Scoped to
+  // supportRequests URLs so unrelated cached queries are untouched.
+  useSocketEvent('support:inbox', () => {
+    queryClient.invalidateQueries({
+      predicate: (q) =>
+        Array.isArray(q.queryKey) &&
+        typeof q.queryKey[1] === 'string' &&
+        q.queryKey[1].includes('/supportRequests/'),
+    })
+  })
 
   // Filter state
   const [statusFilter, setStatusFilter] = useState<SupportRequestStatus | 'ALL'>('ALL')

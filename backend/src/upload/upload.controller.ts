@@ -3,6 +3,7 @@ import {
   Body,
   Controller,
   Post,
+  Req,
   UploadedFile,
   UploadedFiles,
   UseGuards,
@@ -298,6 +299,166 @@ export class UploadController {
 
       const url = this.uploadService.buildDeliveryEvidencePublicUrl({
         deliveryId,
+        filename: finalFilename,
+      });
+
+      return {
+        ok: true,
+        slotIndex,
+        url,
+        filename: finalFilename,
+        mimeType: file.mimetype,
+        size: file.size,
+      };
+    });
+
+    return {
+      ok: true,
+      files: uploaded,
+    };
+  }
+
+@Post("support-attachment")
+  @swagger.ApiConsumes("multipart/form-data")
+  @swagger.ApiBody({
+    schema: {
+      type: "object",
+      properties: {
+        files: {
+          type: "array",
+          items: {
+            type: "string",
+            format: "binary",
+          },
+        },
+      },
+      required: ["files"],
+    },
+  })
+  @swagger.ApiOkResponse({
+    schema: {
+      type: "object",
+      properties: {
+        ok: { type: "boolean" },
+        files: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              ok: { type: "boolean" },
+              slotIndex: { type: "number" },
+              url: { type: "string" },
+              filename: { type: "string" },
+              mimeType: { type: "string" },
+              size: { type: "number" },
+            },
+          },
+        },
+      },
+    },
+  })
+  // USER-scoped support attachments (photos in contact-support / issue-report
+  // conversations). No deliveryId — the owning folder comes from the JWT, so
+  // a caller can never write into another user's space. Response shape matches
+  // delivery-evidence so the frontend hook stays symmetric.
+  @UseInterceptors(
+    FilesInterceptor("files", 6, {
+      storage: diskStorage({
+        destination: (
+          req: Request,
+          file: Express.Multer.File,
+          cb: (error: Error | null, destination: string) => void
+        ) => {
+          try {
+            const tmpDir = "/srv/cdn/101-drivers/tmp";
+            fs.mkdirSync(tmpDir, { recursive: true });
+            cb(null, tmpDir);
+          } catch (error) {
+            cb(error as Error, "");
+          }
+        },
+        filename: (
+          req: Request,
+          file: Express.Multer.File,
+          cb: (error: Error | null, filename: string) => void
+        ) => {
+          try {
+            const ext =
+              path.extname(file.originalname || "").toLowerCase() || ".jpg";
+
+            const safeExt = [".jpg", ".jpeg", ".png", ".webp"].includes(ext)
+              ? ext
+              : ".jpg";
+
+            const unique = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
+            cb(null, `tmp-support-${unique}${safeExt}`);
+          } catch (error) {
+            cb(error as Error, "");
+          }
+        },
+      }),
+      fileFilter: (
+        req: Request,
+        file: Express.Multer.File,
+        cb: (error: Error | null, acceptFile: boolean) => void
+      ) => {
+        const allowed = ["image/jpeg", "image/png", "image/webp"];
+        if (!allowed.includes(file.mimetype)) {
+          return cb(
+            new BadRequestException(
+              "Only jpeg, png, and webp images are allowed"
+            ),
+            false
+          );
+        }
+        cb(null, true);
+      },
+      limits: {
+        fileSize: 5 * 1024 * 1024,
+      },
+    })
+  )
+  async uploadSupportAttachment(
+    @UploadedFiles() files: Express.Multer.File[],
+    @Req() req: Request
+  ): Promise<{
+    ok: boolean;
+    files: Array<{
+      ok: boolean;
+      slotIndex: number;
+      url: string;
+      filename: string;
+      mimeType: string;
+      size: number;
+    }>;
+  }> {
+    const user = (req as any).user as { id?: string; sub?: string } | undefined;
+    const userId = `${user?.id ?? user?.sub ?? ""}`.trim();
+    if (!userId) {
+      throw new BadRequestException("Authenticated user is required");
+    }
+
+    if (!files || files.length === 0) {
+      throw new BadRequestException("At least one file is required");
+    }
+
+    const finalDir = this.uploadService.getSupportAttachmentDiskRoot(userId);
+    this.uploadService.ensureDirectory(finalDir);
+
+    const uploaded = files.map((file, index) => {
+      this.uploadService.validateMimeType(file.mimetype);
+
+      const slotIndex = index + 1;
+
+      const finalFilename =
+        this.uploadService.buildSupportAttachmentFilename(file.originalname);
+
+      const finalAbsolutePath = path.join(finalDir, finalFilename);
+
+      fs.renameSync(file.path, finalAbsolutePath);
+
+      const url = this.uploadService.buildSupportAttachmentPublicUrl({
+        userId,
         filename: finalFilename,
       });
 

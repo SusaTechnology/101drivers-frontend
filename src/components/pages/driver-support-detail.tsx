@@ -33,6 +33,10 @@ import {
 import { BUSINESS_TZ } from '@/lib/timezone'
 import { cn } from '@/lib/utils'
 import { getUser, useDataQuery, useCreate } from '@/lib/tanstack/dataQuery'
+import { useSocketEvent } from '@/hooks/useSocket'
+import { socketJoinSupport, socketLeaveSupport } from '@/lib/socket'
+import { SupportMessageBody } from '@/components/shared/SupportMessageBody'
+import { PhotoDialog } from '@/components/ui/photo-dialog'
 import {
   STATUS_OPTIONS,
   type SupportRequestDetail,
@@ -90,6 +94,9 @@ export default function DriverSupportDetailPage({ supportRequestId }: { supportR
   const [mounted, setMounted] = useState(false)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [replyMessage, setReplyMessage] = useState('')
+  // Full-size preview for embedded attachment thumbnails
+  const [photoDialogOpen, setPhotoDialogOpen] = useState(false)
+  const [photoDialogSrc, setPhotoDialogSrc] = useState('')
   const { theme, setTheme } = useTheme()
   const user = getUser()
 
@@ -97,6 +104,10 @@ export default function DriverSupportDetailPage({ supportRequestId }: { supportR
   const {
     data: request,
     isLoading,
+    // Switching conversations keeps the previous payload as placeholder
+    // data (useDataQuery) — rendering it here would show another ticket's
+    // chat under this URL. Skeleton until the real fetch lands.
+    isPlaceholderData,
     error,
     refetch,
   } = useDataQuery<SupportRequestDetail>({
@@ -104,6 +115,29 @@ export default function DriverSupportDetailPage({ supportRequestId }: { supportR
     noFilter: true,
     enabled: !!requestId,
   })
+
+  // ── Live conversation updates (WebSocket) ──
+  // The backend verifies owner/admin membership on every join.
+  const isStaff = !!user?.roles?.includes('ADMIN')
+
+  useEffect(() => {
+    if (!requestId) return
+    socketJoinSupport(requestId, isStaff)
+    return () => socketLeaveSupport(requestId)
+  }, [requestId, isStaff])
+
+  useSocketEvent<{ supportRequestId: string }>('support:message', (data) => {
+    if (data?.supportRequestId === requestId) refetch()
+  })
+
+  useSocketEvent<{ supportRequestId: string }>('support:request-updated', (data) => {
+    if (data?.supportRequestId === requestId) refetch()
+  })
+
+  const openAttachmentPreview = (url: string) => {
+    setPhotoDialogSrc(url)
+    setPhotoDialogOpen(true)
+  }
 
   // Reply mutation
   const replyMutation = useCreate<ReplySupportRequestPayload, ReplySupportRequestResponse>(
@@ -224,12 +258,12 @@ export default function DriverSupportDetailPage({ supportRequestId }: { supportR
       </header>
 
       <main className="max-w-[900px] mx-auto px-5 sm:px-6 py-6 pb-28 space-y-6">
-        {isLoading ? (
+        {isLoading || isPlaceholderData ? (
           <>
             <Skeleton className="h-40 w-full rounded-3xl" />
             <Skeleton className="h-60 w-full rounded-3xl" />
           </>
-        ) : error || !request ? (
+        ) : error || !request || request.id !== requestId ? (
           <Card className="border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/10">
             <CardContent className="p-6 flex items-center gap-3">
               <AlertCircle className="h-5 w-5 text-red-500" />
@@ -305,9 +339,11 @@ export default function DriverSupportDetailPage({ supportRequestId }: { supportR
                 </div>
               </CardHeader>
               <CardContent>
-                <p className="text-sm text-slate-700 dark:text-slate-300 whitespace-pre-wrap">
-                  {request.message}
-                </p>
+                <SupportMessageBody
+                  message={request.message}
+                  proseClassName="text-slate-700 dark:text-slate-300"
+                  onOpenImage={openAttachmentPreview}
+                />
               </CardContent>
             </Card>
 
@@ -384,14 +420,15 @@ export default function DriverSupportDetailPage({ supportRequestId }: { supportR
                               {formatTime(note.createdAt)}
                             </span>
                           </div>
-                          <p className={cn(
-                            "text-sm whitespace-pre-wrap break-words",
-                            isFromDriver
-                              ? "text-slate-900"
-                              : "text-slate-700 dark:text-slate-300"
-                          )}>
-                            {note.message}
-                          </p>
+                          <SupportMessageBody
+                            message={note.message}
+                            proseClassName={
+                              isFromDriver
+                                ? 'text-slate-900'
+                                : 'text-slate-700 dark:text-slate-300'
+                            }
+                            onOpenImage={openAttachmentPreview}
+                          />
                         </div>
                       </div>
                     )
@@ -451,6 +488,14 @@ export default function DriverSupportDetailPage({ supportRequestId }: { supportR
           </>
         )}
       </main>
+
+      {/* Full-size attachment preview (tap a thumbnail) */}
+      <PhotoDialog
+        open={photoDialogOpen}
+        onOpenChange={setPhotoDialogOpen}
+        src={photoDialogSrc}
+        title="Attachment"
+      />
 
       {/* Bottom navigation */}
       {/* <nav className="fixed bottom-0 left-0 right-0 z-50 bg-white/95 dark:bg-slate-950/95 backdrop-blur-sm border-t border-slate-200 dark:border-slate-800">

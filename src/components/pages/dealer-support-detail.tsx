@@ -29,6 +29,10 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { getUser, useDataQuery, useCreate } from '@/lib/tanstack/dataQuery'
+import { useSocketEvent } from '@/hooks/useSocket'
+import { socketJoinSupport, socketLeaveSupport } from '@/lib/socket'
+import { SupportMessageBody } from '@/components/shared/SupportMessageBody'
+import { PhotoDialog } from '@/components/ui/photo-dialog'
 import { BUSINESS_TZ } from '@/lib/timezone'
 import {
   STATUS_OPTIONS,
@@ -129,6 +133,9 @@ export default function DealerSupportDetail({ supportRequestId }: DealerSupportD
   const dealerId = user?.profileId
 
   const [replyMessage, setReplyMessage] = useState('')
+  // Full-size preview for embedded attachment thumbnails
+  const [photoDialogOpen, setPhotoDialogOpen] = useState(false)
+  const [photoDialogSrc, setPhotoDialogSrc] = useState('')
 
   // Determine customer type from roles array (NOT userType — that field
   // doesn't exist on the user object, so this was always false before).
@@ -143,6 +150,10 @@ export default function DealerSupportDetail({ supportRequestId }: DealerSupportD
   const {
     data: supportData,
     isLoading,
+    // Switching conversations keeps the previous payload as placeholder
+    // data (useDataQuery) — rendering it here would show another ticket's
+    // chat under this URL. Skeleton until the real fetch lands.
+    isPlaceholderData,
     isError,
     error,
     refetch,
@@ -151,6 +162,31 @@ export default function DealerSupportDetail({ supportRequestId }: DealerSupportD
     noFilter: true,
     enabled: !!id,
   })
+
+  // ── Live conversation updates (WebSocket) ──
+  // The backend verifies owner/admin membership on every join, so this is
+  // safe for any ticket id shown to this user.
+  const isStaff = !!user?.roles?.includes('ADMIN')
+
+  useEffect(() => {
+    if (!id) return
+    socketJoinSupport(id, isStaff)
+    return () => socketLeaveSupport(id)
+  }, [id, isStaff])
+
+  // New message in THIS thread → refetch (auto-scroll effect follows).
+  useSocketEvent<{ supportRequestId: string }>('support:message', (data) => {
+    if (data?.supportRequestId === id) refetch()
+  })
+
+  useSocketEvent<{ supportRequestId: string }>('support:request-updated', (data) => {
+    if (data?.supportRequestId === id) refetch()
+  })
+
+  const openAttachmentPreview = (url: string) => {
+    setPhotoDialogSrc(url)
+    setPhotoDialogOpen(true)
+  }
 
   // Reply mutation
   const replyMutation = useCreate<ReplySupportRequestPayload, ReplySupportRequestResponse>(
@@ -288,8 +324,9 @@ export default function DealerSupportDetail({ supportRequestId }: DealerSupportD
     </footer>
   )
 
-  // Loading state
-  if (isLoading) {
+  // Loading state — also covers the placeholder-data window while the
+  // freshly selected conversation is still fetching.
+  if (isLoading || isPlaceholderData) {
     return (
       <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
         <Header />
@@ -326,8 +363,9 @@ export default function DealerSupportDetail({ supportRequestId }: DealerSupportD
     )
   }
 
-  // Error state
-  if (isError || !supportData) {
+  // Error state — `supportData.id !== id` guards against a stale payload
+  // for a DIFFERENT ticket ever reaching the render path.
+  if (isError || !supportData || supportData.id !== id) {
     return (
       <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
         <Header />
@@ -426,9 +464,11 @@ export default function DealerSupportDetail({ supportRequestId }: DealerSupportD
                     {formatTime(supportData.createdAt)}
                   </span>
                 </div>
-                <p className="text-sm whitespace-pre-wrap break-words text-slate-700 dark:text-slate-300">
-                  {supportData.message}
-                </p>
+                <SupportMessageBody
+                  message={supportData.message}
+                  proseClassName="text-slate-700 dark:text-slate-300"
+                  onOpenImage={openAttachmentPreview}
+                />
               </div>
             </div>
 
@@ -481,14 +521,15 @@ export default function DealerSupportDetail({ supportRequestId }: DealerSupportD
                             </span>
                           </div>
                           {/* Message body */}
-                          <p className={cn(
-                            "text-sm whitespace-pre-wrap break-words",
-                            isFromDealer
-                              ? "text-slate-900"
-                              : "text-slate-700 dark:text-slate-300"
-                          )}>
-                            {note.message}
-                          </p>
+                          <SupportMessageBody
+                            message={note.message}
+                            proseClassName={
+                              isFromDealer
+                                ? 'text-slate-900'
+                                : 'text-slate-700 dark:text-slate-300'
+                            }
+                            onOpenImage={openAttachmentPreview}
+                          />
                         </div>
                       </div>
                     )
@@ -547,6 +588,14 @@ export default function DealerSupportDetail({ supportRequestId }: DealerSupportD
           )}
         </Card>
       </main>
+
+      {/* Full-size attachment preview (tap a thumbnail) */}
+      <PhotoDialog
+        open={photoDialogOpen}
+        onOpenChange={setPhotoDialogOpen}
+        src={photoDialogSrc}
+        title="Attachment"
+      />
     </div>
   )
 }

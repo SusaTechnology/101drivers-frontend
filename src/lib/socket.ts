@@ -342,3 +342,44 @@ export function socketLeaveUser(): void {
     socket.emit('leave:user');
   }
 }
+
+/**
+ * Join a private support-conversation room (authenticated).
+ *
+ * `staff` must be true only for admin users — it additionally joins the
+ * staff-only slice of the thread where internal notes are broadcast. The
+ * backend re-verifies membership (owner or ADMIN) on every join, so a
+ * guessed ticket id is rejected with { joined: null }.
+ */
+export function socketJoinSupport(supportRequestId: string, staff = false): void {
+  if (!socket || !supportRequestId) return;
+  trackRoom(`support:${supportRequestId}`, 'join:support', { supportRequestId });
+  if (staff) {
+    // Tracked separately so a non-admin token refresh can never silently
+    // keep the staff room alive — staff state is part of the room key.
+    trackRoom(`support:${supportRequestId}:staff`, 'join:support', { supportRequestId });
+  }
+  const doJoin = () => {
+    socket!.emit('join:support', { supportRequestId }, (ack: any) => {
+      if (socket?.connected && !ack?.joined) {
+        console.warn(`[Socket] Failed to join support:${supportRequestId} — not owner/admin`);
+      }
+    });
+  };
+  if (socket.connected) {
+    doJoin();
+  } else {
+    socket.once('connect', doJoin);
+  }
+}
+
+/**
+ * Leave a support-conversation room (and its staff slice).
+ */
+export function socketLeaveSupport(supportRequestId: string): void {
+  untrackRoom(`support:${supportRequestId}`);
+  untrackRoom(`support:${supportRequestId}:staff`);
+  if (socket?.connected) {
+    socket.emit('leave:support', { supportRequestId });
+  }
+}

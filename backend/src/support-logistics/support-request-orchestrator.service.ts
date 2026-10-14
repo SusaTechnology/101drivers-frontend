@@ -17,6 +17,7 @@ import {
 
 import { PrismaService } from "../prisma/prisma.service";
 import { NotificationEventEngine } from "../domain/notificationEvent/notificationEvent.engine";
+import { TrackingGateway } from "../gateways/tracking.gateway";
 
 type Tx = Prisma.TransactionClient;
 
@@ -24,7 +25,8 @@ type Tx = Prisma.TransactionClient;
 export class SupportRequestOrchestratorService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly notificationEventEngine: NotificationEventEngine
+    private readonly notificationEventEngine: NotificationEventEngine,
+    private readonly trackingGateway: TrackingGateway
   ) {}
 
   // ==============================
@@ -168,6 +170,30 @@ export class SupportRequestOrchestratorService {
         }
       }
 
+      // ── Real-time chat push ──
+      // Public replies reach everyone currently viewing the thread (owner
+      // + staff clients); internal notes stay in the staff-only room. The
+      // owner also gets a contentless inbox ping for the LIST page when a
+      // staff member replied — internal notes never ping the owner.
+      this.trackingGateway.emitSupportMessage({
+        supportRequestId: input.supportRequestId,
+        note: {
+          id: note.id,
+          authorRole: input.authorRole,
+          authorUserId: input.actorUserId ?? null,
+          message: note.message,
+          isInternal: note.isInternal,
+          createdAt: note.createdAt,
+        },
+      });
+      if (!input.isInternal && request.userId) {
+        this.trackingGateway.emitSupportRequestUpdated({
+          supportRequestId: request.id,
+          status: EnumSupportStatus.IN_PROGRESS,
+          ownerUserId: request.userId,
+        });
+      }
+
       return note;
     });
   }
@@ -232,6 +258,13 @@ export class SupportRequestOrchestratorService {
       await tx.supportRequest.update({
         where: { id: input.supportRequestId },
         data: { status: input.status },
+      });
+
+      // ── Real-time push so an open thread updates its status badge live ──
+      this.trackingGateway.emitSupportRequestUpdated({
+        supportRequestId: input.supportRequestId,
+        status: input.status,
+        ownerUserId: request.userId,
       });
 
       if (request.userId) {
