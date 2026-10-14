@@ -2,7 +2,6 @@ import {
   AlignLeft,
   ArrowDown,
   ArrowUp,
-  CheckCircle2,
   CircleHelp,
   Copy,
   DollarSign,
@@ -16,19 +15,10 @@ import {
   Table2,
   Tags,
   Trash2,
-  XCircle,
   X,
 } from "lucide-react";
-import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -42,7 +32,6 @@ import {
   CmsTableField,
   PricingRowsField,
 } from "@/components/admin/cms/CmsTableField";
-import { renderCmsInline } from "@/lib/cms-inline";
 import type { BlogBlock } from "@/content/types";
 
 /**
@@ -57,8 +46,9 @@ import type { BlogBlock } from "@/content/types";
  * no syntax memorization. Tables and pricing rows are visual grids
  * (CmsTableField / PricingRowsField).
  *
- * The preview dialog re-renders the blocks with the SAME styling as the
- * public blog page so what the editor sees is what visitors get.
+ * Live preview rendering lives in CmsLivePreview (shared with the news and
+ * careers preview) — it re-renders these blocks with the SAME styling as the
+ * public blog page, updating live while the admin types.
  */
 
 // ── Block type registry ──
@@ -430,174 +420,4 @@ function TextField({
       className="h-9 text-sm"
     />
   );
-}
-
-// ── Preview ──
-export function CmsBlockPreviewDialog({
-  open,
-  onOpenChange,
-  blocks,
-  title,
-  excerpt,
-  imageUrl,
-}: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  blocks: BlogBlock[];
-  title: string;
-  excerpt: string;
-  imageUrl?: string;
-}) {
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle className="text-left text-xl font-black">{title || "(untitled)"}</DialogTitle>
-          <DialogDescription className="text-left">{excerpt || ""}</DialogDescription>
-        </DialogHeader>
-        {imageUrl && (
-          <img src={imageUrl} alt="Cover preview" className="aspect-video w-full rounded-xl object-cover" />
-        )}
-        <div className="space-y-4">
-          {blocks.length === 0 && (
-            <p className="text-sm text-slate-400">Nothing to preview yet — the body is empty.</p>
-          )}
-          {blocks.map((block, i) => (
-            <PreviewBlock key={i} block={block} />
-          ))}
-        </div>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-/** Mirrors the public blog renderer's styling AND formatting. */
-function PreviewBlock({ block }: { block: BlogBlock }) {
-  switch (block.type) {
-    case "p":
-      return <p className="text-sm text-slate-600 dark:text-slate-300 leading-relaxed">{renderCmsInline(block.text)}</p>;
-    case "h2":
-      return <h2 className="text-xl font-black text-slate-900 dark:text-white mt-6 mb-2">{renderCmsInline(block.text)}</h2>;
-    case "h3":
-      return <h3 className="text-base font-black text-slate-900 dark:text-white mt-4 mb-2">{renderCmsInline(block.text)}</h3>;
-    case "ul":
-      return (
-        <ul className="list-disc list-inside text-sm text-slate-600 dark:text-slate-300 space-y-1">
-          {block.items.map((item, i) => (
-            <li key={i} className={block.marker ? "flex items-start gap-2 list-none" : ""}>
-              {block.marker === "check" && <CheckCircle2 className="w-4 h-4 text-lime-500 shrink-0 mt-0.5" />}
-              {block.marker === "cross" && <XCircle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />}
-              <span>{renderCmsInline(item)}</span>
-            </li>
-          ))}
-        </ul>
-      );
-    case "ol":
-      return (
-        <ol className="list-decimal list-inside text-sm text-slate-600 dark:text-slate-300 space-y-1">
-          {block.items.map((item, i) => (
-            <li key={i}>{renderCmsInline(item)}</li>
-          ))}
-        </ol>
-      );
-    case "callout":
-      return (
-        <div className="bg-lime-50 dark:bg-lime-500/10 border-l-4 border-lime-500 p-4 rounded-r-lg">
-          {block.label && <strong className="text-slate-900 dark:text-white">{block.label} </strong>}
-          <span className="text-sm text-slate-700 dark:text-slate-300">{renderCmsInline(block.text)}</span>
-        </div>
-      );
-    case "table":
-      return (
-        <div className="overflow-x-auto">
-          <table className="w-full border-collapse text-xs">
-            <thead>
-              <tr className="bg-slate-100 dark:bg-slate-800">
-                {block.head.map((cell, i) => (
-                  <th
-                    key={i}
-                    className={`p-2 text-left font-bold border-b-2 border-slate-200 dark:border-slate-700 ${
-                      block.highlightCol === i ? "text-lime-600 dark:text-lime-400" : ""
-                    }`}
-                  >
-                    {renderCmsInline(cell)}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {block.rows.map((row, r) => (
-                <tr key={r} className={block.highlightRow === r ? "bg-lime-50 dark:bg-lime-500/10" : ""}>
-                  {row.map((cell, c) => (
-                    <td
-                      key={c}
-                      className={`p-2 border-b border-slate-200 dark:border-slate-800 ${
-                        block.highlightCol === c ? "font-bold text-lime-700 dark:text-lime-400" : ""
-                      }`}
-                    >
-                      {renderCmsInline(cell)}
-                    </td>
-                  ))}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          {block.note && <p className="text-xs text-slate-400 mt-1">{renderCmsInline(block.note)}</p>}
-        </div>
-      );
-    case "pricing":
-      return (
-        <div className="rounded-xl border border-slate-200 dark:border-slate-800 p-4">
-          <div className="text-center mb-2">
-            <div className="text-3xl font-black text-slate-900 dark:text-white">{block.big}</div>
-            <p className="text-slate-500 text-xs">{block.label}</p>
-          </div>
-          <div className="border-t border-slate-200 dark:border-slate-800 pt-2 space-y-1">
-            {block.rows.map((row, i) => (
-              <div key={i} className="flex justify-between text-xs">
-                <span className="text-slate-600 dark:text-slate-300">{renderCmsInline(row.k)}</span>
-                <span className={`font-bold ${row.included ? "text-lime-600 dark:text-lime-400" : "text-slate-900 dark:text-white"}`}>
-                  {renderCmsInline(row.v)}
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
-      );
-    case "faq":
-      return (
-        <div className="space-y-2">
-          {block.items.map((faq, i) => (
-            <div key={i} className="rounded-xl border border-slate-200 dark:border-slate-800 p-3">
-              <h3 className="font-bold text-sm mb-1">{renderCmsInline(faq.q)}</h3>
-              <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">{renderCmsInline(faq.a)}</p>
-            </div>
-          ))}
-        </div>
-      );
-    case "chips":
-      return (
-        <div className="flex flex-wrap gap-1.5">
-          {block.items.map((chip) => (
-            <span key={chip} className="bg-slate-100 dark:bg-slate-800 px-2.5 py-1 rounded text-xs text-slate-700 dark:text-slate-300">
-              {chip}
-            </span>
-          ))}
-        </div>
-      );
-    case "related":
-      return (
-        <div className="grid grid-cols-2 gap-2">
-          {block.items.map((item) => (
-            <div key={item.label} className="p-3 bg-slate-50 dark:bg-slate-800/50 rounded-lg">
-              <div className="text-lime-600 dark:text-lime-400 text-xs font-bold">{item.label}</div>
-              <p className="text-xs text-slate-500 dark:text-slate-400">{item.description}</p>
-            </div>
-          ))}
-        </div>
-      );
-    default:
-      toast.error("Unknown block type in preview");
-      return null;
-  }
 }

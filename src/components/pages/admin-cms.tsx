@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 import {
   ArrowLeft,
   Eye,
+  EyeOff,
   FileText,
   Loader2,
   Newspaper,
@@ -39,10 +40,12 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { CmsBlockEditor, CmsBlockPreviewDialog } from "@/components/admin/cms/CmsBlockEditor";
+import { CmsBlockEditor } from "@/components/admin/cms/CmsBlockEditor";
 import { CmsImageField } from "@/components/admin/cms/CmsImageField";
+import { CmsLivePreview } from "@/components/admin/cms/CmsLivePreview";
 import { RichField } from "@/components/admin/cms/RichField";
-import { CmsTextPreviewDialog } from "@/components/admin/cms/CmsTextPreviewDialog";
+import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
+import { useMediaQuery } from "@/hooks/use-media-query";
 import {
   CMS_API,
   slugifyTitle,
@@ -62,7 +65,10 @@ import type { BlogBlock } from "@/content/types";
  * published — no code changes, no rebuilds. This page is the single entry
  * point: section tabs → list (draft/published with actions) → a focused
  * editor per section (blog uses the structured block editor that mirrors the
- * public renderer; news and careers use a fast paragraphs field).
+ * public renderer; news and careers use a fast paragraphs field). Writing
+ * happens against a LIVE split preview — the draft renders on the right
+ * (draggable divider with a 320px floor) exactly as the public page will,
+ * instead of hiding the preview behind a dialog.
  *
  * Hard rules honored here: all hooks run unconditionally at the top of the
  * component (the Task 129 lesson), every mutation invalidates both the admin
@@ -219,8 +225,12 @@ export default function AdminCmsPage() {
   const [section, setSection] = useState<CmsSection>("blog");
   const [draft, setDraft] = useState<Draft | null>(null);
   const [snapshot, setSnapshot] = useState<string>("");
-  const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewVisible, setPreviewVisible] = useState(true);
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; title: string } | null>(null);
+  // Split view (editor left / live preview right) only from lg up — smaller
+  // screens stack the preview below the editor. The hook reads the match
+  // during render, so desktop gets the split on first paint (no flash).
+  const isSplit = useMediaQuery("(min-width: 1024px)");
 
   // All hooks run unconditionally (Task 129 lesson) — one list + 3×3
   // mutations per section, regardless of which section is active.
@@ -350,23 +360,76 @@ export default function AdminCmsPage() {
 
   // ── Editor view ──
   if (draft) {
+    // One preview body for both layouts — the draft rendered with the SAME
+    // inline formatter and block styling as the public pages (cover image
+    // included), live-updating on every keystroke.
+    const previewBody =
+      draft.section === "blog" ? (
+        <CmsLivePreview
+          title={draft.title}
+          excerpt={draft.excerpt}
+          imageUrl={resolveCmsAssetUrl(draft.image)}
+          imageAlt={draft.imageAlt}
+          blocks={draft.body}
+          emptyHint="Nothing to preview yet — add your first block."
+        />
+      ) : draft.section === "news" ? (
+        <CmsLivePreview
+          title={draft.title}
+          metaLine={[draft.tag, draft.date].filter(Boolean).join(" · ")}
+          imageUrl={resolveCmsAssetUrl(draft.image)}
+          imageAlt={draft.imageAlt}
+          paragraphs={splitParagraphs(draft.bodyText)}
+        />
+      ) : (
+        <CmsLivePreview
+          title={draft.title}
+          metaLine={[draft.type, draft.location].filter(Boolean).join(" · ")}
+          paragraphs={splitParagraphs(draft.bodyText)}
+          emptyHint="Nothing to preview yet — write the job description first."
+        />
+      );
+
+    const editorBody = (
+      <>
+        {draft.section === "blog" && <BlogEditor draft={draft} onChange={setDraft} />}
+        {draft.section === "news" && <NewsEditor draft={draft} onChange={setDraft} />}
+        {draft.section === "careers" && <CareerEditor draft={draft} onChange={setDraft} />}
+
+        {/* Hint */}
+        <p className="mt-6 text-xs text-slate-400 dark:text-slate-500 leading-relaxed">
+          Drafts are private until you publish. Publishing puts the content live on the public site
+          immediately — no rebuild needed. Unpublishing keeps a copy as a draft.
+        </p>
+      </>
+    );
+
     return (
-      <div className="min-h-screen bg-background-light dark:bg-background-dark">
+      <div className="min-h-screen flex flex-col bg-background-light dark:bg-background-dark">
         <Navbar brand={<Brand />} items={navItems} actions={actionItems} onSignOut={signOut} title="Admin" />
-        <main className="max-w-[900px] mx-auto px-6 py-6 pb-24">
-          {/* Sticky action bar */}
-          <div className="sticky top-16 lg:top-20 z-30 -mx-2 px-2 py-2 mb-4 bg-background-light dark:bg-background-dark border-b border-slate-200 dark:border-slate-800 flex flex-wrap items-center justify-between gap-2">
-            <div className="flex items-center gap-2">
-              <Button type="button" variant="ghost" size="sm" onClick={closeEditor} className="text-xs">
-                <ArrowLeft className="h-4 w-4" /> Back
-              </Button>
-              <StatusPill status={draft.status} />
-              {dirty && <span className="text-xs text-amber-600 dark:text-amber-400 font-semibold">Unsaved changes</span>}
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <Button type="button" variant="outline" size="sm" className="text-xs" onClick={() => setPreviewOpen(true)}>
-                <Eye className="h-3.5 w-3.5" /> Preview
-              </Button>
+
+        {/* Action bar — sticks under the navbar while the page scrolls on
+            small screens; on the desktop split it is simply the frame's
+            first row (the panes scroll, the window does not). */}
+        <div className="sticky top-16 lg:top-20 z-30 shrink-0 px-4 sm:px-6 py-2 bg-background-light/95 dark:bg-background-dark/95 backdrop-blur border-b border-slate-200 dark:border-slate-800 flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <Button type="button" variant="ghost" size="sm" onClick={closeEditor} className="text-xs">
+              <ArrowLeft className="h-4 w-4" /> Back
+            </Button>
+            <StatusPill status={draft.status} />
+            {dirty && <span className="text-xs text-amber-600 dark:text-amber-400 font-semibold">Unsaved changes</span>}
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="text-xs"
+              onClick={() => setPreviewVisible((v) => !v)}
+            >
+              {previewVisible ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+              {previewVisible ? "Hide preview" : "Preview"}
+            </Button>
               {draft.status === "PUBLISHED" && (
                 <Button type="button" variant="outline" size="sm" className="text-xs" disabled={saving} onClick={handleUnpublish}>
                   <Undo2 className="h-3.5 w-3.5" /> Unpublish
@@ -389,47 +452,44 @@ export default function AdminCmsPage() {
             </div>
           </div>
 
-          {draft.section === "blog" && <BlogEditor draft={draft} onChange={setDraft} />}
-          {draft.section === "news" && <NewsEditor draft={draft} onChange={setDraft} />}
-          {draft.section === "careers" && <CareerEditor draft={draft} onChange={setDraft} />}
-
-          {/* Hint */}
-          <p className="mt-6 text-xs text-slate-400 dark:text-slate-500 leading-relaxed">
-            Drafts are private until you publish. Publishing puts the content live on the public site
-            immediately — no rebuild needed. Unpublishing keeps a copy as a draft.
-          </p>
-        </main>
-
-        {draft.section === "blog" && (
-          <CmsBlockPreviewDialog
-            open={previewOpen}
-            onOpenChange={setPreviewOpen}
-            blocks={draft.body}
-            title={draft.title}
-            excerpt={draft.excerpt}
-            imageUrl={resolveCmsAssetUrl(draft.image)}
-          />
-        )}
-        {draft.section === "news" && (
-          <CmsTextPreviewDialog
-            open={previewOpen}
-            onOpenChange={setPreviewOpen}
-            title={draft.title}
-            metaLine={[draft.tag, draft.date].filter(Boolean).join(" · ")}
-            imageUrl={resolveCmsAssetUrl(draft.image)}
-            paragraphs={splitParagraphs(draft.bodyText)}
-          />
-        )}
-        {draft.section === "careers" && (
-          <CmsTextPreviewDialog
-            open={previewOpen}
-            onOpenChange={setPreviewOpen}
-            title={draft.title}
-            metaLine={[draft.type, draft.location].filter(Boolean).join(" · ")}
-            paragraphs={splitParagraphs(draft.bodyText)}
-            emptyHint="Nothing to preview yet — write the job description first."
-          />
-        )}
+          {isSplit ? (
+            // ── Desktop: editor left, LIVE preview right, draggable divider.
+            // The preview floors at 320px and caps at 62% so the editor never
+            // gets squeezed out; the divider is also keyboard-resizable
+            // (focus it, then use the arrow keys).
+            <div className="flex-1 min-h-0">
+              <ResizablePanelGroup orientation="horizontal" className="h-full">
+                <ResizablePanel id="editor" defaultSize="58%" minSize="38%" className="h-full">
+                  <div className="h-full overflow-y-auto">
+                    <main className="max-w-[900px] mx-auto px-4 sm:px-6 py-6 pb-16">{editorBody}</main>
+                  </div>
+                </ResizablePanel>
+                {previewVisible && (
+                  <>
+                    <ResizableHandle
+                      withHandle
+                      className="w-1.5 bg-slate-200 dark:bg-slate-800 hover:bg-lime-300 dark:hover:bg-lime-500/40 transition-colors"
+                    />
+                    <ResizablePanel id="preview" defaultSize="42%" minSize="320px" maxSize="62%" className="h-full">
+                      <LivePreviewPane onHide={() => setPreviewVisible(false)}>{previewBody}</LivePreviewPane>
+                    </ResizablePanel>
+                  </>
+                )}
+              </ResizablePanelGroup>
+            </div>
+          ) : (
+            // ── Small screens: editor on top, live preview stacked below.
+            <div className="flex-1">
+              <main className="max-w-[900px] mx-auto px-4 sm:px-6 py-6 pb-10">{editorBody}</main>
+              {previewVisible && (
+                <section className="border-t border-slate-200 dark:border-slate-800">
+                  <LivePreviewPane stacked onHide={() => setPreviewVisible(false)}>
+                    {previewBody}
+                  </LivePreviewPane>
+                </section>
+              )}
+            </div>
+          )}
 
         <DeleteDialog
           open={deleteTarget !== null}
@@ -666,6 +726,45 @@ function FieldLabel({ children }: { children: React.ReactNode }) {
     <Label className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
       {children}
     </Label>
+  );
+}
+
+// ── Live preview pane ──
+// Scrolling surface with a slim header (pulsing "live" dot + Hide) hosting
+// CmsLivePreview. In the desktop split it fills the right panel; on small
+// screens it stacks below the editor (no fixed height → document flow),
+// where the header simply scrolls with the page.
+function LivePreviewPane({
+  children,
+  onHide,
+  stacked = false,
+}: {
+  children: ReactNode;
+  onHide: () => void;
+  stacked?: boolean;
+}) {
+  return (
+    <div
+      className={
+        stacked
+          ? "bg-slate-100/70 dark:bg-slate-950/70"
+          : "h-full overflow-y-auto bg-slate-100/70 dark:bg-slate-950/70"
+      }
+    >
+      <div className="sticky top-0 z-10 flex items-center justify-between gap-2 px-4 sm:px-6 py-2 bg-slate-100/90 dark:bg-slate-950/85 backdrop-blur border-b border-slate-200 dark:border-slate-800">
+        <span className="flex items-center gap-2 text-[10px] font-extrabold uppercase tracking-widest text-slate-500 dark:text-slate-400">
+          <span className="relative flex h-2 w-2 shrink-0">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-lime-400 opacity-75" />
+            <span className="relative inline-flex rounded-full h-2 w-2 bg-lime-500" />
+          </span>
+          Live preview — updates as you type
+        </span>
+        <Button type="button" variant="ghost" size="sm" className="h-7 text-xs" onClick={onHide}>
+          <EyeOff className="h-3.5 w-3.5" /> Hide
+        </Button>
+      </div>
+      <div className="max-w-[680px] mx-auto px-4 sm:px-6 py-6 pb-16">{children}</div>
+    </div>
   );
 }
 

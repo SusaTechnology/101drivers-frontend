@@ -1,4 +1,5 @@
 import type { QueryClient } from '@tanstack/react-query'
+import { nudgeSocketReconnect } from '@/lib/socket'
 
 /**
  * Resume-sync — what happens when an app tab/PWA that sat idle comes back.
@@ -38,9 +39,11 @@ import type { QueryClient } from '@tanstack/react-query'
  *       refetches the mounted ones once, deduplicated per query key.
  *     - queryClient.resumePausedMutations() — mutations queued while offline
  *       (TanStack offline pause) flush as soon as connectivity is back.
- *     - socket nudge — dynamically imported so socket.io-client stays OUT of
- *       the main bundle; reconnects instantly instead of waiting for the
+ *     - socket nudge — reconnects instantly instead of waiting for the
  *       engine's post-resume heartbeat to notice the dead TCP connection.
+ *       (Static import: a dozen components statically import socket.ts, so
+ *       socket.io-client ships in the main bundle regardless — the dynamic
+ *       import only produced Rollup's mixed-import build warning.)
  *
  *   Expiry of the access token during the idle window needs NOTHING here:
  *   the first refetch gets a 401, the fetch wrapper runs the single-flight
@@ -88,12 +91,13 @@ export function installResumeSync(
       queryClient.invalidateQueries({ refetchType: 'active' })
     ).catch(() => {})
 
-    // Dynamic import keeps socket.io-client out of the main chunk; if the
-    // chunk itself is stale (mid-deploy edge), the failure is silent —
-    // the socket engine's own reconnect remains the safety net.
-    void import('@/lib/socket')
-      .then((m) => m.nudgeSocketReconnect())
-      .catch(() => {})
+    // Static import (was dynamic): socket.ts is statically imported by a
+    // dozen components, so socket.io-client ships in the main chunk either
+    // way — the dynamic form only produced Rollup's "dynamic import will
+    // not move module into another chunk" warning. The nudge itself is a
+    // guarded no-op when no socket was ever created (see socket.ts), so a
+    // synchronous call is safe here.
+    nudgeSocketReconnect()
 
     console.log(`[ResumeSync] Revalidated app state (${reason})`)
   }
