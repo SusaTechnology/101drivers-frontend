@@ -141,12 +141,17 @@ export default function PublicTrackPage({ token }: PublicTrackPageProps) {
   }, [])
   useSocketEvent('delivery:location-update', handleLocationUpdate)
 
-  // Handle token expiration
+  // Handle token expiration — the backend is the single source of truth.
+  // An ACTIVE trip never expires mid-trip (the lifecycle service slides the
+  // 24h window forward on read), so a freshly served payload with an old
+  // timestamp is still valid data. Only react when the backend itself says
+  // the link is expired — a client-side clock comparison against served
+  // data used to toast "expired" on a perfectly working live trip.
   useEffect(() => {
-    if (errorObj?.message?.includes('expired') || (trackingData?.expiresAt && new Date(trackingData.expiresAt) < new Date())) {
+    if (errorObj?.message?.includes('expired')) {
       toast.error('Tracking link expired', { description: 'Please request a new tracking link from 101 Drivers.' })
     }
-  }, [errorObj, trackingData])
+  }, [errorObj])
 
   // Check if tracking data is stale (no update for > 2 min)
   const isDataStale = (() => {
@@ -209,7 +214,11 @@ export default function PublicTrackPage({ token }: PublicTrackPageProps) {
           <p className="mt-2 text-slate-600 dark:text-slate-400">
             {errorObj?.message?.includes('expired')
               ? 'This tracking link has expired. Please request a new one.'
-              : errorObj?.message || 'Could not load tracking data. The link may be invalid or expired.'}
+              : errorObj?.message?.includes('not available')
+                ? 'This delivery is no longer in progress, so live tracking has closed.'
+                : errorObj?.message?.includes('not found')
+                  ? 'We could not find this tracking link. Please double-check the link you opened.'
+                  : errorObj?.message || 'Could not load tracking data. Please try again in a moment.'}
           </p>
           <Button
             onClick={() => refetchTracking()}

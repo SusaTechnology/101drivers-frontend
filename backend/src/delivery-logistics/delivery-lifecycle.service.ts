@@ -1620,9 +1620,15 @@ async getTrackingLink(input: {
     };
   }
 
+  const freshExpiry = await this.slideTrackingExpiryIfStale({
+    deliveryId: delivery.id,
+    status: delivery.status,
+    expiresAt: delivery.trackingShareExpiresAt,
+  });
+
   return {
     token: delivery.trackingShareToken,
-    expiresAt: delivery.trackingShareExpiresAt?.toISOString() ?? null,
+    expiresAt: freshExpiry?.toISOString() ?? null,
     trackingUrl: this.buildPublicTrackingUrl(delivery.trackingShareToken),
   };
 }
@@ -1677,6 +1683,15 @@ async getTrackingLink(input: {
       throw new ConflictException("Tracking is not available for this delivery status");
     }
 
+    // Task 31: slide the housekeeping window forward on live-trip reads so
+    // the stored stamp stays truthful and the public page never labels an
+    // in-progress trip "expired" (status is guaranteed ACTIVE here).
+    const freshExpiry = await this.slideTrackingExpiryIfStale({
+      deliveryId: delivery.id,
+      status: delivery.status,
+      expiresAt: delivery.trackingShareExpiresAt,
+    });
+
     const points = delivery.trackingSession?.points ?? [];
     const latestPoint = points.length > 0 ? points[points.length - 1] : null;
 
@@ -1685,7 +1700,7 @@ async getTrackingLink(input: {
       status: delivery.status,
       serviceType: delivery.serviceType,
       pickupPin: delivery.pickupPin,
-      expiresAt: delivery.trackingShareExpiresAt?.toISOString() ?? null,
+      expiresAt: freshExpiry?.toISOString() ?? null,
       pickup: {
         address: delivery.pickupAddress,
         lat: delivery.pickupLat,
@@ -1708,6 +1723,37 @@ async getTrackingLink(input: {
           }
         : null,
     };
+  }
+
+  /**
+   * Task 31: the 24h trackingShareExpiresAt stamp is a housekeeping window,
+   * NOT a trip cutoff. Product rule (see getPublicTracking): a tracking link
+   * must NEVER expire mid-trip while the delivery is ACTIVE. When a read
+   * finds an ACTIVE delivery whose window has lapsed, slide it forward one
+   * more window instead of letting any client label a live trip "expired".
+   * The write only happens on reads after the stamp actually lapsed, so
+   * steady-state traffic performs zero extra writes. Completed/cancelled
+   * deliveries keep their original stamp — their links are already closed
+   * (the public endpoint rejects non-ACTIVE statuses).
+   */
+  private async slideTrackingExpiryIfStale(input: {
+    deliveryId: string;
+    status: EnumDeliveryRequestStatus;
+    expiresAt: Date | null;
+  }): Promise<Date | null> {
+    if (input.status !== EnumDeliveryRequestStatus.ACTIVE) {
+      return input.expiresAt;
+    }
+    if (!input.expiresAt || input.expiresAt.getTime() > Date.now()) {
+      return input.expiresAt;
+    }
+
+    const nextExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000);
+    await this.prisma.deliveryRequest.update({
+      where: { id: input.deliveryId },
+      data: { trackingShareExpiresAt: nextExpiry },
+    });
+    return nextExpiry;
   }
 
   private async assertDriverAssignedToDeliveryTx(

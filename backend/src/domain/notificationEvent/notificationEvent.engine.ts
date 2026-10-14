@@ -819,6 +819,14 @@ async notifyTripStarted(input: {
 
   // CUSTOMER EMAIL
   if (customerEmail) {
+    // Task 31: same admin-editable WhatsApp contact channel as the
+    // delivery-listed email (Task 139) — a settings-read failure falls back
+    // to the default link and must never block the trip-started email.
+    const waLink = await this.buildDeliveryContact(delivery.pickupAddress);
+    // Task 131 style: greet by FIRST name only ("Jake Buffett" -> "Jake").
+    const customerFirstName =
+      customerName.trim().split(/\s+/)[0] || "Customer";
+
     await this.queueAndSend({
       actorUserId: input.actorUserId ?? null,
       customerId: delivery.customerId,
@@ -829,20 +837,17 @@ async notifyTripStarted(input: {
       toEmail: customerEmail,
       subject: "Your vehicle delivery is in progress",
       body: [
-        `Hi ${customerName},`,
+        `Hi ${customerFirstName},`,
         "",
-        "Your driver has started the trip.",
-        `Pickup: ${delivery.pickupAddress}`,
-        `Drop-off: ${delivery.dropoffAddress}`,
-        `Status: ${delivery.status}`,
+        "Your driver has started the trip. You can follow the vehicle live:",
         "",
-        `Tracking link: ${input.trackingUrl}`,
-        delivery.trackingShareExpiresAt
-          ? `Link expires at: ${delivery.trackingShareExpiresAt.toISOString()}`
-          : "",
-      ]
-        .filter(Boolean)
-        .join("\n"),
+        ...this.buildTripStartedTrackingLines({
+          trackingUrl: input.trackingUrl,
+          pickupAddress: delivery.pickupAddress,
+          dropoffAddress: delivery.dropoffAddress,
+          waLink,
+        }),
+      ].join("\n"),
       payload: {
         deliveryId: delivery.id,
         status: delivery.status,
@@ -853,6 +858,11 @@ async notifyTripStarted(input: {
 
   // RECIPIENT EMAIL
   if (delivery.recipientEmail) {
+    const waLink = await this.buildDeliveryContact(delivery.pickupAddress);
+    const recipientFirstName =
+      (delivery.recipientName ?? "Recipient").trim().split(/\s+/)[0] ||
+      "Recipient";
+
     await this.queueAndSend({
       actorUserId: input.actorUserId ?? null,
       customerId: delivery.customerId,
@@ -863,20 +873,17 @@ async notifyTripStarted(input: {
       toEmail: delivery.recipientEmail,
       subject: "Vehicle delivery tracking is now live",
       body: [
-        `Hi ${delivery.recipientName ?? "Recipient"},`,
+        `Hi ${recipientFirstName},`,
         "",
-        "The vehicle delivery is now in progress.",
-        `Pickup: ${delivery.pickupAddress}`,
-        `Drop-off: ${delivery.dropoffAddress}`,
-        `Status: ${delivery.status}`,
+        "The vehicle delivery is now in progress. You can follow it live:",
         "",
-        `Tracking link: ${input.trackingUrl}`,
-        delivery.trackingShareExpiresAt
-          ? `Link expires at: ${delivery.trackingShareExpiresAt.toISOString()}`
-          : "",
-      ]
-        .filter(Boolean)
-        .join("\n"),
+        ...this.buildTripStartedTrackingLines({
+          trackingUrl: input.trackingUrl,
+          pickupAddress: delivery.pickupAddress,
+          dropoffAddress: delivery.dropoffAddress,
+          waLink,
+        }),
+      ].join("\n"),
       payload: {
         deliveryId: delivery.id,
         status: delivery.status,
@@ -911,6 +918,44 @@ async notifyTripStarted(input: {
   }
 
   return true;
+}
+
+/**
+ * Task 31: shared body lines for the two trip-started tracking emails
+ * (customer + recipient). Replaces the cryptic "Link expires at: <ISO>"
+ * line with plain-English rules that match actual behavior:
+ *   - the link never expires mid-trip (the lifecycle service slides the
+ *     24h housekeeping window forward while the delivery is ACTIVE),
+ *   - tracking closes automatically on completion/cancellation,
+ *   - if a page stops working mid-trip, the recipient can get a fresh
+ *     link instantly by contacting us (ops mints one via the
+ *     tracking-link API — no redeploy, no manual token fiddling).
+ * wrapSimpleHtml() linkifies the tracking + WhatsApp URLs in the HTML part.
+ */
+private buildTripStartedTrackingLines(input: {
+  trackingUrl: string;
+  pickupAddress: string;
+  dropoffAddress: string;
+  waLink: string;
+}): string[] {
+  return [
+    `Tracking link: ${input.trackingUrl}`,
+    "",
+    `Pickup: ${input.pickupAddress}`,
+    `Drop-off: ${input.dropoffAddress}`,
+    "",
+    "About this tracking link:",
+    "- It stays live for as long as the delivery is on the road — it will not expire mid-trip.",
+    "- Tracking closes automatically once the delivery is completed or cancelled.",
+    "- If the page ever stops working while the delivery is still in progress, just reach out and we'll send you a fresh link right away.",
+    "",
+    "Questions? Chat with us on WhatsApp — the link opens a chat with your pickup address already typed in:",
+    input.waLink,
+    "",
+    "Or email info@101drivers.com",
+    "",
+    "— 101 Drivers Inc",
+  ];
 }
 
 /**

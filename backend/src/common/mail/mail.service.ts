@@ -24,9 +24,17 @@ export class MailService {
     const user = this.configService.get<string>("SMTP_USER");
     const pass = this.configService.get<string>("SMTP_PASS");
 
+    // Task 31: never send as "TechBee ERP" — every email leaving this app
+    // is 101 Drivers (verification codes, admin invites, driver approval,
+    // delivery updates, trip tracking). Ops can override via SMTP_FROM;
+    // recommended header format with display name:
+    //   "101 Drivers <noreply@101drivers.com>"
+    // Note: with Gmail SMTP the address must be the authenticated account
+    // or a verified "Send mail as" alias on it, otherwise Gmail rewrites
+    // the From header (see .env.example).
     this.from =
       this.configService.get<string>("SMTP_FROM") ??
-      "TechBee ERP <innovationstechbee@gmail.com>";
+      "101 Drivers <noreply@101drivers.com>";
 
     this.appDomain =
       this.normalizeBaseUrl(
