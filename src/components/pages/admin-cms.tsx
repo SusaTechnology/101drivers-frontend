@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 import {
   ArrowLeft,
+  CircleHelp,
   Eye,
   EyeOff,
   FileText,
@@ -15,6 +16,7 @@ import {
   Briefcase,
 } from "lucide-react";
 
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Navbar } from "../shared/layout/testNavbar";
 import { navItems } from "@/lib/items/navItems";
 import { Brand } from "@/lib/items/brand";
@@ -68,7 +70,11 @@ import type { BlogBlock } from "@/content/types";
  * public renderer; news and careers use a fast paragraphs field). Writing
  * happens against a LIVE split preview — the draft renders on the right
  * (draggable divider with a 320px floor) exactly as the public page will,
- * instead of hiding the preview behind a dialog.
+ * instead of hiding the preview behind a dialog. On desktop the editor view
+ * is a fixed-height frame: the two panes scroll INDEPENDENTLY while the
+ * action bar and the preview header never move. The public web address is
+ * generated from the title (kept unique automatically) — there is no slug
+ * field for the admin to think about.
  *
  * Hard rules honored here: all hooks run unconditionally at the top of the
  * component (the Task 129 lesson), every mutation invalidates both the admin
@@ -131,6 +137,14 @@ const SECTIONS: { key: CmsSection; label: string; icon: typeof FileText; newLabe
 const splitParagraphs = (text: string): string[] =>
   text.split(/\n\s*\n/).map((p) => p.trim()).filter((p) => p.length > 0);
 const joinParagraphs = (items: string[]): string => items.join("\n\n");
+
+/** Append -2, -3, … until the slug is free of everything in `taken`. */
+function ensureUniqueSlug(base: string, taken: string[]): string {
+  if (!taken.includes(base)) return base;
+  let n = 2;
+  while (taken.includes(`${base}-${n}`)) n += 1;
+  return `${base}-${n}`;
+}
 
 function newDraft(section: CmsSection): Draft {
   if (section === "blog") {
@@ -254,6 +268,14 @@ export default function AdminCmsPage() {
 
   const dirty = draft !== null && JSON.stringify(draft) !== snapshot;
 
+  // Slugs already used in this section (minus the item being edited) — the
+  // auto-generated web address is de-duplicated against these so the backend
+  // never rejects a save with its "slug taken" conflict.
+  const takenSlugs = useMemo(
+    () => blogList.rows.filter((r) => r.id !== draft?.id).map((r) => r.slug),
+    [blogList.rows, draft?.id],
+  );
+
   // Guard against losing unsaved edits on tab close / refresh.
   useEffect(() => {
     if (!dirty) return;
@@ -291,6 +313,9 @@ export default function AdminCmsPage() {
       return;
     }
     const payload = payloadOf(draft, statusOverride);
+    // New items get a guaranteed-unique web address generated from the title
+    // (the exact value shown as "Web address" in the editor).
+    if (!draft.id) payload.slug = ensureUniqueSlug(payload.slug, takenSlugs);
     const mutation = draft.id
       ? updateFor(section)
       : createFor(section);
@@ -298,25 +323,43 @@ export default function AdminCmsPage() {
       ? { pathParams: { id: draft.id }, ...payload }
       : payload;
 
+    const applySaved = (saved: { id?: string; publishedAt?: string | null }, slug: string) => {
+      const next = { ...draft, status: payload.status, slug } as Draft;
+      if (!draft.id && saved.id) next.id = saved.id;
+      if (saved.publishedAt) next.publishedAt = saved.publishedAt;
+      setDraft(next);
+      setSnapshot(JSON.stringify(next));
+      toast.success(
+        payload.status === "PUBLISHED"
+          ? section === "blog"
+            ? "Published — it's live on the blog"
+            : section === "news"
+              ? "Published — it's live on the news page"
+              : "Published — it's live on the careers page"
+          : "Draft saved",
+      );
+    };
+
     mutation.mutate(variables, {
-      onSuccess: (row) => {
-        const saved = row as { id?: string; publishedAt?: string | null };
-        const next = { ...draft, status: payload.status } as Draft;
-        if (!draft.id && saved.id) next.id = saved.id;
-        if (saved.publishedAt) next.publishedAt = saved.publishedAt;
-        setDraft(next);
-        setSnapshot(JSON.stringify(next));
-        toast.success(
-          payload.status === "PUBLISHED"
-            ? section === "blog"
-              ? "Published — it's live on the blog"
-              : section === "news"
-                ? "Published — it's live on the news page"
-                : "Published — it's live on the careers page"
-            : "Draft saved",
-        );
-      },
+      onSuccess: (row) =>
+        applySaved(row as { id?: string; publishedAt?: string | null }, payload.slug),
       onError: (error: Error) => {
+        // Rare: the in-memory list was stale and the backend still found the
+        // generated address taken. Retry ONCE with a freshly-unique slug.
+        const conflict = !draft.id && error.message.match(/slug "([^"]+)" is already taken/);
+        if (conflict) {
+          const retrySlug = ensureUniqueSlug(payload.slug, [...takenSlugs, conflict[1]]);
+          mutation.mutate(
+            { ...payload, slug: retrySlug },
+            {
+              onSuccess: (row) =>
+                applySaved(row as { id?: string; publishedAt?: string | null }, retrySlug),
+              onError: (retryError: Error) =>
+                toast.error(retryError.message || "Saving failed — please try again."),
+            },
+          );
+          return;
+        }
         toast.error(error.message || "Saving failed — please try again.");
       },
     });
@@ -392,9 +435,15 @@ export default function AdminCmsPage() {
 
     const editorBody = (
       <>
-        {draft.section === "blog" && <BlogEditor draft={draft} onChange={setDraft} />}
-        {draft.section === "news" && <NewsEditor draft={draft} onChange={setDraft} />}
-        {draft.section === "careers" && <CareerEditor draft={draft} onChange={setDraft} />}
+        {draft.section === "blog" && (
+          <BlogEditor draft={draft} onChange={setDraft} takenSlugs={takenSlugs} />
+        )}
+        {draft.section === "news" && (
+          <NewsEditor draft={draft} onChange={setDraft} takenSlugs={takenSlugs} />
+        )}
+        {draft.section === "careers" && (
+          <CareerEditor draft={draft} onChange={setDraft} takenSlugs={takenSlugs} />
+        )}
 
         {/* Hint */}
         <p className="mt-6 text-xs text-slate-400 dark:text-slate-500 leading-relaxed">
@@ -405,12 +454,13 @@ export default function AdminCmsPage() {
     );
 
     return (
-      <div className="min-h-screen flex flex-col bg-background-light dark:bg-background-dark">
+      <div className="min-h-screen lg:h-[100dvh] lg:overflow-hidden flex flex-col bg-background-light dark:bg-background-dark">
         <Navbar brand={<Brand />} items={navItems} actions={actionItems} onSignOut={signOut} title="Admin" />
 
-        {/* Action bar — sticks under the navbar while the page scrolls on
-            small screens; on the desktop split it is simply the frame's
-            first row (the panes scroll, the window does not). */}
+        {/* Action bar — fixed in view at all times: on small screens it sticks
+            under the navbar while the page scrolls; on the desktop split it is
+            the frame's first row and both panes scroll BENEATH it (the window
+            itself never scrolls). */}
         <div className="sticky top-16 lg:top-20 z-30 shrink-0 px-4 sm:px-6 py-2 bg-background-light/95 dark:bg-background-dark/95 backdrop-blur border-b border-slate-200 dark:border-slate-800 flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <Button type="button" variant="ghost" size="sm" onClick={closeEditor} className="text-xs">
@@ -721,19 +771,80 @@ function DeleteDialog({
   );
 }
 
-function FieldLabel({ children }: { children: React.ReactNode }) {
+function FieldLabel({ children, hint }: { children: React.ReactNode; hint?: string }) {
   return (
-    <Label className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-      {children}
-    </Label>
+    <div className="flex items-center gap-1">
+      <Label className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+        {children}
+      </Label>
+      {hint && (
+        <TooltipProvider delayDuration={150}>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                aria-label="What is this field for?"
+                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors"
+              >
+                <CircleHelp className="h-3.5 w-3.5" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent className="max-w-[240px] font-medium normal-case tracking-normal">
+              {hint}
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+      )}
+    </div>
+  );
+}
+
+// ── Web address (auto slug) ──
+// Replaces the old editable URL-slug input: non-technical users should never
+// have to think about slugs. The address is generated from the title and
+// de-duplicated against the other items in the section (ensureUniqueSlug at
+// save time + live here), so the backend's unique-slug rule never bites.
+function LinkAddress({
+  section,
+  title,
+  draftId,
+  storedSlug,
+  takenSlugs,
+}: {
+  section: CmsSection;
+  title: string;
+  draftId?: string;
+  storedSlug: string;
+  takenSlugs: string[];
+}) {
+  const slug = draftId ? storedSlug : ensureUniqueSlug(slugifyTitle(title), takenSlugs);
+  return (
+    <div className="space-y-1.5">
+      <FieldLabel>Web address (automatic)</FieldLabel>
+      {title.trim() ? (
+        <div className="rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 px-3 py-2 text-xs font-mono text-slate-600 dark:text-slate-300 break-all">
+          101drivers.com/{section}/{slug}
+        </div>
+      ) : (
+        <p className="text-xs italic text-slate-400 dark:text-slate-500">
+          Created automatically from the title — nothing to type here.
+        </p>
+      )}
+      <p className="text-[10px] text-slate-400 dark:text-slate-500">
+        {draftId
+          ? "This link is already live — it stays the same even if you edit the title."
+          : "Built from the title and kept unique automatically."}
+      </p>
+    </div>
   );
 }
 
 // ── Live preview pane ──
-// Scrolling surface with a slim header (pulsing "live" dot + Hide) hosting
-// CmsLivePreview. In the desktop split it fills the right panel; on small
-// screens it stacks below the editor (no fixed height → document flow),
-// where the header simply scrolls with the page.
+// Flex column: the slim header (pulsing "live" dot + Hide) is a structural
+// row that NEVER scrolls — only the content below it scrolls, independently
+// of the editor pane. In the desktop split it fills the right panel (h-full);
+// on small screens it stacks below the editor as a self-contained 70vh frame
+// so its header stays fixed there too.
 function LivePreviewPane({
   children,
   onHide,
@@ -747,11 +858,11 @@ function LivePreviewPane({
     <div
       className={
         stacked
-          ? "bg-slate-100/70 dark:bg-slate-950/70"
-          : "h-full overflow-y-auto bg-slate-100/70 dark:bg-slate-950/70"
+          ? "h-[70vh] min-h-[320px] flex flex-col bg-slate-100/70 dark:bg-slate-950/70"
+          : "h-full flex flex-col bg-slate-100/70 dark:bg-slate-950/70"
       }
     >
-      <div className="sticky top-0 z-10 flex items-center justify-between gap-2 px-4 sm:px-6 py-2 bg-slate-100/90 dark:bg-slate-950/85 backdrop-blur border-b border-slate-200 dark:border-slate-800">
+      <div className="shrink-0 flex items-center justify-between gap-2 px-4 sm:px-6 py-2 bg-slate-100/95 dark:bg-slate-950/90 border-b border-slate-200 dark:border-slate-800">
         <span className="flex items-center gap-2 text-[10px] font-extrabold uppercase tracking-widest text-slate-500 dark:text-slate-400">
           <span className="relative flex h-2 w-2 shrink-0">
             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-lime-400 opacity-75" />
@@ -763,7 +874,9 @@ function LivePreviewPane({
           <EyeOff className="h-3.5 w-3.5" /> Hide
         </Button>
       </div>
-      <div className="max-w-[680px] mx-auto px-4 sm:px-6 py-6 pb-16">{children}</div>
+      <div className="flex-1 overflow-y-auto">
+        <div className="max-w-[680px] mx-auto px-4 sm:px-6 py-6 pb-16">{children}</div>
+      </div>
     </div>
   );
 }
@@ -772,9 +885,11 @@ function LivePreviewPane({
 function BlogEditor({
   draft,
   onChange,
+  takenSlugs,
 }: {
   draft: BlogDraft;
   onChange: (draft: BlogDraft) => void;
+  takenSlugs: string[];
 }) {
   const set = (patch: Partial<BlogDraft>) => onChange({ ...draft, ...patch });
   return (
@@ -794,15 +909,13 @@ function BlogEditor({
             className="text-lg font-bold h-11"
           />
         </div>
-        <div className="space-y-1.5">
-          <FieldLabel>URL slug — 101drivers.com/blog/…</FieldLabel>
-          <Input
-            value={draft.slug}
-            onChange={(e) => set({ slug: slugifyTitle(e.target.value), slugTouched: true })}
-            placeholder="how-flat-rate-pricing-works"
-            className="h-9 font-mono text-xs"
-          />
-        </div>
+        <LinkAddress
+          section="blog"
+          title={draft.title}
+          draftId={draft.id}
+          storedSlug={draft.slug}
+          takenSlugs={takenSlugs}
+        />
         <div className="space-y-1.5">
           <FieldLabel>Summary — shown on cards and in search results</FieldLabel>
           <Textarea
@@ -819,7 +932,11 @@ function BlogEditor({
             <Input type="date" value={draft.date} onChange={(e) => set({ date: e.target.value })} className="h-9 text-sm" />
           </div>
           <div className="space-y-1.5">
-            <FieldLabel>Kicker (optional)</FieldLabel>
+            <FieldLabel
+              hint={'A short label shown above the headline — like a topic or audience tag, e.g. "For dealerships". Optional.'}
+            >
+              Kicker (optional)
+            </FieldLabel>
             <Input value={draft.kicker} onChange={(e) => set({ kicker: e.target.value })} placeholder="For dealerships" className="h-9 text-sm" />
           </div>
           <div className="space-y-1.5">
@@ -827,7 +944,11 @@ function BlogEditor({
             <Input value={draft.author} onChange={(e) => set({ author: e.target.value })} placeholder="101 Drivers Team" className="h-9 text-sm" />
           </div>
           <div className="space-y-1.5">
-            <FieldLabel>Read time, min (optional)</FieldLabel>
+            <FieldLabel
+              hint={'Shown on the post as a "6 min read" label. A rough estimate is fine — it is purely informational. Leave blank to hide it.'}
+            >
+              Read time, min (optional)
+            </FieldLabel>
             <Input type="number" min={1} value={draft.readingMinutes} onChange={(e) => set({ readingMinutes: e.target.value })} placeholder="6" className="h-9 text-sm" />
           </div>
         </div>
@@ -850,9 +971,11 @@ function BlogEditor({
 function NewsEditor({
   draft,
   onChange,
+  takenSlugs,
 }: {
   draft: NewsDraft;
   onChange: (draft: NewsDraft) => void;
+  takenSlugs: string[];
 }) {
   const set = (patch: Partial<NewsDraft>) => onChange({ ...draft, ...patch });
   return (
@@ -872,7 +995,7 @@ function NewsEditor({
             className="text-lg font-bold h-11"
           />
         </div>
-        <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
+        <div className="grid grid-cols-2 gap-3">
           <div className="space-y-1.5">
             <FieldLabel>Date</FieldLabel>
             <Input type="date" value={draft.date} onChange={(e) => set({ date: e.target.value })} className="h-9 text-sm" />
@@ -881,11 +1004,14 @@ function NewsEditor({
             <FieldLabel>Category tag</FieldLabel>
             <Input value={draft.tag} onChange={(e) => set({ tag: e.target.value })} placeholder="Product, Service Update, Company" className="h-9 text-sm" />
           </div>
-          <div className="space-y-1.5">
-            <FieldLabel>URL slug — /news/…</FieldLabel>
-            <Input value={draft.slug} onChange={(e) => set({ slug: slugifyTitle(e.target.value), slugTouched: true })} className="h-9 font-mono text-xs" />
-          </div>
         </div>
+        <LinkAddress
+          section="news"
+          title={draft.title}
+          draftId={draft.id}
+          storedSlug={draft.slug}
+          takenSlugs={takenSlugs}
+        />
         <div className="space-y-1.5">
           <FieldLabel>Summary — shown on cards</FieldLabel>
           <Textarea value={draft.excerpt} onChange={(e) => set({ excerpt: e.target.value })} rows={2} className="text-sm" placeholder="One sentence summarizing the announcement." />
@@ -918,9 +1044,11 @@ function NewsEditor({
 function CareerEditor({
   draft,
   onChange,
+  takenSlugs,
 }: {
   draft: CareerDraft;
   onChange: (draft: CareerDraft) => void;
+  takenSlugs: string[];
 }) {
   const set = (patch: Partial<CareerDraft>) => onChange({ ...draft, ...patch });
   return (
@@ -940,6 +1068,13 @@ function CareerEditor({
             className="text-lg font-bold h-11"
           />
         </div>
+        <LinkAddress
+          section="careers"
+          title={draft.title}
+          draftId={draft.id}
+          storedSlug={draft.slug}
+          takenSlugs={takenSlugs}
+        />
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
           <div className="space-y-1.5">
             <FieldLabel>Location</FieldLabel>

@@ -49,6 +49,10 @@ import type { BlogBlock } from "@/content/types";
  * Live preview rendering lives in CmsLivePreview (shared with the news and
  * careers preview) — it re-renders these blocks with the SAME styling as the
  * public blog page, updating live while the admin types.
+ *
+ * A second "Add block" button is pinned to the bottom of the editor pane on
+ * desktop (lg:sticky lg:bottom-0): with a long article the admin can append
+ * the next block without scrolling back up to the header row.
  */
 
 // ── Block type registry ──
@@ -167,6 +171,29 @@ export function CmsBlockEditor({
           </div>
         </div>
       ))}
+
+      {/* Quick add — pinned to the bottom of the editor pane on desktop so a
+          long article never forces a scroll back up just to append a block.
+          It rests right under the last block once you scroll to the end. */}
+      {blocks.length > 0 && (
+        <div className="lg:sticky lg:bottom-0 lg:z-20 lg:-mx-4 lg:-mb-4 lg:mt-4 lg:px-3 lg:py-2.5 lg:bg-white dark:lg:bg-slate-900 lg:border-t lg:border-slate-200 lg:dark:border-slate-800 lg:rounded-b-2xl">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button type="button" variant="outline" size="sm" className="w-full h-8 text-xs">
+                <Plus className="h-3.5 w-3.5" /> Add block
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" side="top">
+              {BLOCK_TYPES.map(({ type, label, icon: Icon, make }) => (
+                <DropdownMenuItem key={type} onClick={() => add(make())}>
+                  <Icon className="h-4 w-4 mr-2 text-lime-600" />
+                  {label}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      )}
     </div>
   );
 }
