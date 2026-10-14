@@ -181,7 +181,17 @@ export class ServiceAreaService {
         this.prisma.driver.count({ where: { serviceAreaInArea: true } }),
         this.prisma.driver.count({ where: { serviceAreaInArea: false } }),
         this.prisma.driver.count({ where: { serviceAreaInArea: null } }),
-        this.prisma.driver.count({ where: { serviceAreaFlagged: true } }),
+        // "Review needed" must be counted with the SAME definition the
+        // admin Users page uses for the amber badge: flagged=true OR the
+        // driver was never resolved (inArea=null — no zip, unresolvable
+        // zip, or a row that predates the feature). Counting only the
+        // flag column under-reports, because rows evaluated before the
+        // flag existed keep flagged=false while still showing amber.
+        this.prisma.driver.count({
+          where: {
+            OR: [{ serviceAreaFlagged: true }, { serviceAreaInArea: null }],
+          },
+        }),
       ]);
     return { totalDrivers, inArea, outOfArea, unresolved, flagged };
   }
@@ -310,6 +320,7 @@ export class ServiceAreaService {
         id: true,
         residentialZip: true,
         serviceAreaInArea: true,
+        serviceAreaFlagged: true,
       },
     });
 
@@ -356,9 +367,15 @@ export class ServiceAreaService {
           if (zip) summary.flippedZipsOut.push(zip);
         }
         updates.push({ driverId: driver.id, zip, next, prev, flagged });
-      } else if (flagged && next === null) {
-        // Still unresolved but flagged state may have drifted — skip; the
-        // per-driver paths own flagged corrections for individual drivers.
+      } else if (flagged !== driver.serviceAreaFlagged) {
+        // Badge unchanged, but the flagged column drifted (or was never
+        // set): rows that predate the feature carry inArea=null +
+        // flagged=false, and the old write filter (prev !== next) skipped
+        // them forever because null !== null is false — the stats card
+        // then showed 0 flagged while the Users page showed amber
+        // "Review needed" for the same drivers. Heal the flag column so
+        // both pages agree. Not a badge flip — no audit row below.
+        updates.push({ driverId: driver.id, zip, next, prev, flagged });
       }
     }
 
@@ -378,16 +395,19 @@ export class ServiceAreaService {
         ),
       );
 
-      // Per-driver audit rows for every flip (owner: "log every badge
-      // change ... with timestamp and triggering zip").
+      // Per-driver audit rows for every badge FLIP (owner: "log every
+      // badge change ... with timestamp and triggering zip"). Flag-only
+      // heal writes (prev === next) are not flips — excluded here.
       await this.prisma.adminAuditLog
         .createMany({
-          data: updates.map((u) => ({
-            action: EnumAdminAuditLogAction.DRIVER_SERVICE_AREA_CHANGE,
-            actorType: EnumAdminAuditLogActorType.SYSTEM,
-            driverId: u.driverId,
-            reason: `Service-area badge ${u.next === null ? "unresolved (flagged for review)" : u.next ? "GREEN" : "gray"} — zip ${u.zip ?? "none"} (polygon saved).`,
-          })),
+          data: updates
+            .filter((u) => u.prev !== u.next)
+            .map((u) => ({
+              action: EnumAdminAuditLogAction.DRIVER_SERVICE_AREA_CHANGE,
+              actorType: EnumAdminAuditLogActorType.SYSTEM,
+              driverId: u.driverId,
+              reason: `Service-area badge ${u.next === null ? "unresolved (flagged for review)" : u.next ? "GREEN" : "gray"} — zip ${u.zip ?? "none"} (polygon saved).`,
+            })),
         })
         .catch((e) =>
           this.logger.warn(`Bulk service-area audit write failed: ${e?.message}`),

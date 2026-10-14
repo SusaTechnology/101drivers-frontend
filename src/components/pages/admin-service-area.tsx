@@ -301,7 +301,14 @@ export default function AdminServiceAreaPage() {
               </div>
               <div>
                 <div className="text-xl font-black text-slate-900 dark:text-white">{stats?.flagged ?? '—'}</div>
-                <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Flagged for review</div>
+                {/* Same definition as the amber badge on the Users page
+                    (flagged OR never resolved) — the two numbers always match. */}
+                <div
+                  className="text-[11px] font-bold text-slate-500 uppercase tracking-wider"
+                  title="Matches the amber 'Review needed' badges on the Users page — no usable ZIP, or it could not be resolved."
+                >
+                  Review needed
+                </div>
               </div>
             </CardContent>
           </Card>
