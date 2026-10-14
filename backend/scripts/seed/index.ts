@@ -81,6 +81,22 @@ type DemoRefs = {
 };
 
 export async function seedAll(bcryptSalt: Salt) {
+  // SECURITY GUARD — the demo accounts (admin/admin, business/business,
+  // driver/driver, …) carry hard-coded credentials published in the repo.
+  // They must never silently reappear in a real database after
+  // scripts/delete-seeded-users.ts removed them. Demo seeding therefore
+  // only runs when explicitly requested with SEED_DEMO_USERS=1
+  // (local dev / fresh demo environments). Reference data that is safe to
+  // (re)seed — the referral program settings row — still runs.
+  if (!["1", "true"].includes((process.env.SEED_DEMO_USERS || "").toLowerCase())) {
+    console.info(
+      "Skipped demo seed (admin/business/driver demo accounts + demo deliveries): " +
+        "set SEED_DEMO_USERS=1 to run it. Referral program settings were still seeded."
+    );
+    await seedReferralProgramSettings();
+    return;
+  }
+
   await seedAdmin(bcryptSalt);
   await seedPrivateCustomer(bcryptSalt);
   await seedBusinessCustomer(bcryptSalt);
