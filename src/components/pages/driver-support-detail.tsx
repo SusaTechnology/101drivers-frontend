@@ -38,6 +38,10 @@ import { socketJoinSupport, socketLeaveSupport } from '@/lib/socket'
 import { SupportMessageBody } from '@/components/shared/SupportMessageBody'
 import { PhotoDialog } from '@/components/ui/photo-dialog'
 import {
+  SupportAvatar,
+  SupportContactLine,
+} from '@/components/shared/SupportSenderIdentity'
+import {
   STATUS_OPTIONS,
   type SupportRequestDetail,
   type SupportRequestCategory,
@@ -392,10 +396,19 @@ export default function DriverSupportDetailPage({ supportRequestId }: { supportR
                       <div
                         key={note.id}
                         className={cn(
-                          "flex",
+                          "flex items-end gap-2",
                           (isOwnNote || (isFromDriver && !note.authorUserId)) ? "justify-end" : "justify-start"
                         )}
                       >
+                        {/* Sender avatar (selfie for drivers, initials
+                            otherwise) — own messages need no avatar */}
+                        {!isOwnNote && (
+                          <SupportAvatar
+                            identity={note.authorUser}
+                            className="h-8 w-8"
+                            onOpenPhoto={openAttachmentPreview}
+                          />
+                        )}
                         <div
                           className={cn(
                             "max-w-[75%] rounded-2xl px-4 py-3 shadow-sm",
@@ -431,6 +444,14 @@ export default function DriverSupportDetailPage({ supportRequestId }: { supportR
                             }
                             onOpenImage={openAttachmentPreview}
                           />
+                          {/* Sender contact strip — email · phone of whoever
+                              sent this message (e.g. the support agent) */}
+                          {!isOwnNote && (
+                            <SupportContactLine
+                              identity={note.authorUser}
+                              variant={isFromDriver ? 'dark' : 'light'}
+                            />
+                          )}
                         </div>
                       </div>
                     )

@@ -33,6 +33,10 @@ import { useSocketEvent } from '@/hooks/useSocket'
 import { socketJoinSupport, socketLeaveSupport } from '@/lib/socket'
 import { SupportMessageBody } from '@/components/shared/SupportMessageBody'
 import { PhotoDialog } from '@/components/ui/photo-dialog'
+import {
+  SupportAvatar,
+  SupportContactLine,
+} from '@/components/shared/SupportSenderIdentity'
 import { BUSINESS_TZ } from '@/lib/timezone'
 import {
   STATUS_OPTIONS,
@@ -493,10 +497,19 @@ export default function DealerSupportDetail({ supportRequestId }: DealerSupportD
                       <div
                         key={note.id}
                         className={cn(
-                          "flex",
+                          "flex items-end gap-2",
                           (isOwnNote || (isFromDealer && !note.authorUserId)) ? "justify-end" : "justify-start"
                         )}
                       >
+                        {/* Sender avatar (selfie for drivers, initials
+                            otherwise) — own messages need no avatar */}
+                        {!isOwnNote && (
+                          <SupportAvatar
+                            identity={note.authorUser}
+                            className="h-8 w-8"
+                            onOpenPhoto={openAttachmentPreview}
+                          />
+                        )}
                         <div
                           className={cn(
                             "max-w-[75%] rounded-2xl px-4 py-3 shadow-sm",
@@ -534,6 +547,14 @@ export default function DealerSupportDetail({ supportRequestId }: DealerSupportD
                             }
                             onOpenImage={openAttachmentPreview}
                           />
+                          {/* Sender contact strip — email · phone of whoever
+                              sent this message (e.g. the support agent) */}
+                          {!isOwnNote && (
+                            <SupportContactLine
+                              identity={note.authorUser}
+                              variant={isFromDealer ? 'dark' : 'light'}
+                            />
+                          )}
                         </div>
                       </div>
                     )

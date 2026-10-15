@@ -111,6 +111,78 @@ export interface AdminListSupportRequestsParams {
   deliveryId?: string;
 }
 
+// ==================== SENDER IDENTITY ====================
+
+// Full identity of a person in a support conversation, exactly as the
+// backend's enriched select (SupportRequestDomain.SUPPORT_USER_IDENTITY_SELECT)
+// sends it: account fields from the User row plus the role profile that owns
+// the real contact/photo data (Driver.selfiePhotoUrl / profilePhotoUrl,
+// Customer.businessName / businessPhone / contactPhone). Used for the ticket
+// owner (user), the assignee (assignedTo) and every note author
+// (note.authorUser) so the UI can show name + email + phone + selfie.
+export interface SupportUserIdentity {
+  id: string;
+  username?: string;
+  email?: string;
+  fullName?: string | null;
+  phone?: string | null;
+  roles?: string[];
+  driver?: {
+    phone?: string | null;
+    profilePhotoUrl?: string | null;
+    selfiePhotoUrl?: string | null;
+  } | null;
+  customer?: {
+    businessName?: string | null;
+    businessPhone?: string | null;
+    contactName?: string | null;
+    contactPhone?: string | null;
+    phone?: string | null;
+  } | null;
+}
+
+export interface ResolvedSupportIdentity {
+  name: string;
+  email: string | null;
+  phone: string | null;
+  photoUrl: string | null;
+  businessName: string | null;
+  initials: string;
+}
+
+// Resolve the display identity from the payload. Fallbacks mirror how the
+// rest of the app treats these fields:
+//   photo  — Driver.selfiePhotoUrl first (the onboarding selfie), then
+//            Driver.profilePhotoUrl; dealers/admins have no photo field.
+//   phone  — account phone, then customer (contact) phones, then driver phone.
+//   name   — fullName, then username; callers supply their own last fallback.
+export function resolveSupportIdentity(
+  identity?: SupportUserIdentity | null
+): ResolvedSupportIdentity {
+  const name = identity?.fullName?.trim() || identity?.username || 'Unknown';
+  const email = identity?.email?.trim() || null;
+  const phone =
+    identity?.phone?.trim() ||
+    identity?.customer?.phone?.trim() ||
+    identity?.customer?.contactPhone?.trim() ||
+    identity?.customer?.businessPhone?.trim() ||
+    identity?.driver?.phone?.trim() ||
+    null;
+  const photoUrl =
+    identity?.driver?.selfiePhotoUrl ||
+    identity?.driver?.profilePhotoUrl ||
+    null;
+  const businessName = identity?.customer?.businessName?.trim() || null;
+  const initials = name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]!.toUpperCase())
+    .join('') || '?';
+
+  return { name, email, phone, photoUrl, businessName, initials };
+}
+
 // Support Request Detail
 // NOTE: the backend sends the author's identity as `authorUser` (enriched
 // select in SupportRequestDomain) — there has never been an `authorName`
@@ -123,13 +195,7 @@ export interface SupportRequestNote {
   isInternal: boolean;
   createdAt: string;
   authorUserId?: string | null;
-  authorUser?: {
-    id: string;
-    username?: string;
-    email?: string;
-    fullName?: string | null;
-    roles?: string[];
-  } | null;
+  authorUser?: SupportUserIdentity | null;
 }
 
 export interface SupportRequestDetail {
@@ -142,14 +208,12 @@ export interface SupportRequestDetail {
   deliveryId?: string;
   actorRole: SupportRequestActorRole;
   assignedToUserId?: string;
+  // The ticket owner — full identity (name/email/phone/selfie) so the
+  // viewer can see WHO raised the request and how to reach them.
+  user?: SupportUserIdentity | null;
   // The backend relation is `assignedTo` (enriched select). The old
   // `assignedToUser` key never existed in the payload.
-  assignedTo?: {
-    id: string;
-    username?: string;
-    fullName?: string | null;
-    roles?: string[];
-  } | null;
+  assignedTo?: SupportUserIdentity | null;
   delivery?: {
     id: string;
     pickupAddress: string;

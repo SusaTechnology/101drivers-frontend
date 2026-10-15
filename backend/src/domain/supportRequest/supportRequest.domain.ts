@@ -11,6 +11,41 @@ type WhereUnique = Prisma.SupportRequestWhereUniqueInput;
 type FindMany = Prisma.SupportRequestFindManyArgs;
 type FindUnique = Prisma.SupportRequestFindUniqueArgs;
 
+/**
+ * Full sender identity for support conversations — name, email, phone AND
+ * photo. The User row is the account-level source (email/phone/fullName);
+ * the role profiles carry the canonical contact + photo data:
+ *   - Driver.selfiePhotoUrl / profilePhotoUrl (the onboarding selfie) + phone
+ *   - Customer.businessName / businessPhone / contactPhone / phone (dealers)
+ * Included for the ticket owner (user), the assignee (assignedTo) and every
+ * note author (notes.authorUser) so any viewer of a conversation sees WHO
+ * sent each message and how to reach them.
+ */
+const SUPPORT_USER_IDENTITY_SELECT: Prisma.UserSelect = {
+  id: true,
+  username: true,
+  email: true,
+  fullName: true,
+  phone: true,
+  roles: true,
+  driver: {
+    select: {
+      phone: true,
+      profilePhotoUrl: true,
+      selfiePhotoUrl: true,
+    },
+  },
+  customer: {
+    select: {
+      businessName: true,
+      businessPhone: true,
+      contactName: true,
+      contactPhone: true,
+      phone: true,
+    },
+  },
+};
+
 @Injectable()
 export class SupportRequestDomain extends BaseDomain<
   Select,
@@ -40,23 +75,11 @@ export class SupportRequestDomain extends BaseDomain<
     closedAt: true,
 
     user: {
-      select: {
-        id: true,
-        username: true,
-        email: true,
-        fullName: true,
-        roles: true,
-      },
+      select: SUPPORT_USER_IDENTITY_SELECT,
     },
 
     assignedTo: {
-      select: {
-        id: true,
-        username: true,
-        email: true,
-        fullName: true,
-        roles: true,
-      },
+      select: SUPPORT_USER_IDENTITY_SELECT,
     },
 
     delivery: {
@@ -83,13 +106,7 @@ export class SupportRequestDomain extends BaseDomain<
         message: true,
         isInternal: true,
         authorUser: {
-          select: {
-            id: true,
-            username: true,
-            email: true,
-            fullName: true,
-            roles: true,
-          },
+          select: SUPPORT_USER_IDENTITY_SELECT,
         },
       },
     },

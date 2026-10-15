@@ -51,6 +51,11 @@ import { navItems } from '@/lib/items/navItems'
 import { Brand } from '@/lib/items/brand'
 import { useAdminActions } from '@/hooks/useAdminActions'
 import {
+  SupportAvatar,
+  SupportContactLine,
+  SupportIdentityCard,
+} from '@/components/shared/SupportSenderIdentity'
+import {
   STATUS_OPTIONS,
   PRIORITY_OPTIONS,
   type SupportRequestDetail,
@@ -457,10 +462,19 @@ export default function AdminSupportDetailPage({ supportRequestId }: { supportRe
                           <div
                             key={note.id}
                             className={cn(
-                              "flex",
+                              "flex items-end gap-2",
                               isFromAdmin ? "justify-end" : "justify-start"
                             )}
                           >
+                            {/* Sender avatar (selfie for drivers, initials
+                                otherwise) — own messages need no avatar */}
+                            {!isOwnAdminNote && (
+                              <SupportAvatar
+                                identity={note.authorUser}
+                                className="h-8 w-8"
+                                onOpenPhoto={openAttachmentPreview}
+                              />
+                            )}
                             <div
                               className={cn(
                                 "max-w-[75%] rounded-2xl px-4 py-3 shadow-sm",
@@ -496,6 +510,14 @@ export default function AdminSupportDetailPage({ supportRequestId }: { supportRe
                                 }
                                 onOpenImage={openAttachmentPreview}
                               />
+                              {/* Sender contact strip — email · phone of
+                                  whoever sent this message */}
+                              {!isOwnAdminNote && (
+                                <SupportContactLine
+                                  identity={note.authorUser}
+                                  variant={isFromAdmin ? 'dark' : 'light'}
+                                />
+                              )}
                             </div>
                           </div>
                         )
@@ -621,6 +643,18 @@ export default function AdminSupportDetailPage({ supportRequestId }: { supportRe
                     >
                       {internalNoteMutation.isPending ? 'Adding...' : 'Add Note'}
                     </Button>
+                  </CardContent>
+                </Card>
+
+                {/* Requested By — the ticket owner's full identity:
+                    selfie/avatar, name, business (dealers), email + phone */}
+                <Card className="border-slate-200 dark:border-slate-800">
+                  <CardContent className="p-4">
+                    <SupportIdentityCard
+                      identity={request.user}
+                      title="Requested by"
+                      onOpenPhoto={openAttachmentPreview}
+                    />
                   </CardContent>
                 </Card>
 
