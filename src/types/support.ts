@@ -112,13 +112,24 @@ export interface AdminListSupportRequestsParams {
 }
 
 // Support Request Detail
+// NOTE: the backend sends the author's identity as `authorUser` (enriched
+// select in SupportRequestDomain) — there has never been an `authorName`
+// field; the old FE type/read of authorName was why sender names never
+// rendered (issue: "dealer doesn't see who is sending").
 export interface SupportRequestNote {
   id: string;
   authorRole: string;
   message: string;
   isInternal: boolean;
   createdAt: string;
-  authorName?: string;
+  authorUserId?: string | null;
+  authorUser?: {
+    id: string;
+    username?: string;
+    email?: string;
+    fullName?: string | null;
+    roles?: string[];
+  } | null;
 }
 
 export interface SupportRequestDetail {
@@ -131,10 +142,14 @@ export interface SupportRequestDetail {
   deliveryId?: string;
   actorRole: SupportRequestActorRole;
   assignedToUserId?: string;
-  assignedToUser?: {
+  // The backend relation is `assignedTo` (enriched select). The old
+  // `assignedToUser` key never existed in the payload.
+  assignedTo?: {
     id: string;
-    fullName: string;
-  };
+    username?: string;
+    fullName?: string | null;
+    roles?: string[];
+  } | null;
   delivery?: {
     id: string;
     pickupAddress: string;

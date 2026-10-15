@@ -31,6 +31,9 @@ type AuthenticatedSocket = Socket & {
  *   support:<requestId>:staff — staff-only slice of the same conversation
  *                             (internal notes are NEVER broadcast to the
  *                             public conversation room)
+ *   staff:ops               — all ADMIN sockets; receives contentless
+ *                             "new ticket / customer replied" pings so the
+ *                             ops support list live-refreshes
  *
  * Events emitted (server → client):
  *   delivery:location-update  { deliveryId, lat, lng, recordedAt, drivenMiles }
@@ -43,7 +46,13 @@ type AuthenticatedSocket = Socket & {
  *   support:inbox             { supportRequestId, status }          — ping to the OWNER's user room
  *                                                                   (list pages refresh; internal notes
  *                                                                   produce a contentless ping, never text)
+ *   support:staff-inbox       { supportRequestId, status }          — contentless ping to ALL staff
+ *                                                                   (staff:ops room) — admin list refresh;
+ *                                                                   message text is never included
  */
+
+/** Room every ADMIN socket can join for live ops-queue pings. */
+const STAFF_OPS_ROOM = "staff:ops";
 @WebSocketGateway({
   cors: {
     origin: true,
@@ -244,6 +253,31 @@ export class TrackingGateway
     client.leave(room);
     client.leave(`${room}:staff`);
     return { left: room };
+  }
+
+  // ── Ops staff room (admin support list live refresh) ──
+  // ADMIN-only room: receives contentless pings when a new ticket is created
+  // or a customer replies, so the ops list re-sorts/updates without the
+  // message text ever leaving the ticket. Mirrors join:support's security
+  // posture: role re-verified from the socket JWT on every join.
+  @UseGuards(WsJwtGuard)
+  @SubscribeMessage("join:staff-ops")
+  handleJoinStaffOps(@ConnectedSocket() client: Socket) {
+    const user = (client as AuthenticatedSocket).user;
+    const roles: string[] = user?.roles ?? [];
+    if (!user?.sub || !roles.includes("ADMIN")) {
+      return { joined: null, reason: "forbidden" };
+    }
+    client.join(STAFF_OPS_ROOM);
+    this.logger.debug(`Admin ${user.sub} joined ${STAFF_OPS_ROOM}`);
+    return { joined: STAFF_OPS_ROOM };
+  }
+
+  @UseGuards(WsJwtGuard)
+  @SubscribeMessage("leave:staff-ops")
+  handleLeaveStaffOps(@ConnectedSocket() client: Socket) {
+    client.leave(STAFF_OPS_ROOM);
+    return { left: STAFF_OPS_ROOM };
   }
 
   // ── Driver GPS location streaming ──
@@ -547,5 +581,22 @@ export class TrackingGateway
         .to(`user:${data.ownerUserId}`)
         .emit("support:inbox", payload);
     }
+  }
+
+  /**
+   * Contentless ping to every ADMIN socket in the staff:ops room so the ops
+   * support list live-refreshes when a new ticket arrives or a customer
+   * replies. Deliberately carries NO message text — staff see that only by
+   * opening the ticket (conversation privacy).
+   */
+  emitStaffOpsPing(data: { supportRequestId: string; status?: string }) {
+    if (!this.server) {
+      this.logger.warn("emitStaffOpsPing: server not initialized, skipping");
+      return;
+    }
+    this.server.to(STAFF_OPS_ROOM).emit("support:staff-inbox", {
+      supportRequestId: data.supportRequestId,
+      status: data.status ?? null,
+    });
   }
 }

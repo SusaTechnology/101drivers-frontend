@@ -143,7 +143,7 @@ export default function AdminSupportDetailPage({ supportRequestId }: { supportRe
     refetch,
     isFetching,
   } = useDataQuery<SupportRequestDetail>({
-    apiEndPoint: `${import.meta.env.VITE_API_URL}/api/supportRequests/${requestId}`,
+    apiEndPoint: `${import.meta.env.VITE_API_URL}/api/supportRequests/${requestId}/detail`,
     noFilter: true,
     enabled: !!requestId,
   })
@@ -423,7 +423,7 @@ export default function AdminSupportDetailPage({ supportRequestId }: { supportRe
                                   Internal Note
                                 </span>
                                 <span className="text-[10px] text-amber-500 ml-2">
-                                  {note.authorName || note.authorRole} • {formatTime(note.createdAt)}
+                                  {note.authorUser?.fullName || note.authorRole} • {formatTime(note.createdAt)}
                                 </span>
                                 <p className="text-xs text-amber-700 dark:text-amber-300 mt-1 whitespace-pre-wrap">
                                   {note.message}
@@ -434,17 +434,23 @@ export default function AdminSupportDetailPage({ supportRequestId }: { supportRe
                         }
 
                         const isFromAdmin = note.authorRole === 'ADMIN' || note.authorRole === 'OPS'
+                        const isOwnAdminNote = !!note.authorUserId && note.authorUserId === adminId
 
-                        // Explicit label — no ambiguity
+                        // Sender identity from the payload's authorUser — the
+                        // old `authorName` field never existed, so the admin
+                        // always saw generic "Customer"/"Driver" labels and
+                        // the dealer/driver never saw WHO from support replied.
                         let senderLabel = 'Unknown'
-                        if (isFromAdmin) {
-                          senderLabel = note.authorName || 'You (Admin)'
+                        if (isOwnAdminNote) {
+                          senderLabel = 'You (Admin)'
+                        } else if (isFromAdmin) {
+                          senderLabel = note.authorUser?.fullName || 'Support Team'
                         } else if (note.authorRole === 'DEALER' || note.authorRole === 'PRIVATE_CUSTOMER') {
-                          senderLabel = note.authorName || 'Customer'
+                          senderLabel = note.authorUser?.fullName || 'Customer'
                         } else if (note.authorRole === 'DRIVER') {
-                          senderLabel = note.authorName || 'Driver'
+                          senderLabel = note.authorUser?.fullName || 'Driver'
                         } else {
-                          senderLabel = note.authorName || note.authorRole || 'Unknown'
+                          senderLabel = note.authorUser?.fullName || note.authorRole || 'Unknown'
                         }
 
                         return (
@@ -619,7 +625,7 @@ export default function AdminSupportDetailPage({ supportRequestId }: { supportRe
                 </Card>
 
                 {/* Assignment Info */}
-                {request.assignedToUser && (
+                {request.assignedTo?.fullName && (
                   <Card className="border-slate-200 dark:border-slate-800">
                     <CardHeader className="pb-3">
                       <CardTitle className="text-sm font-bold">Assigned To</CardTitle>
@@ -630,7 +636,7 @@ export default function AdminSupportDetailPage({ supportRequestId }: { supportRe
                           <User className="w-4 h-4 text-slate-600 dark:text-slate-400" />
                         </div>
                         <span className="font-medium text-slate-900 dark:text-white">
-                          {request.assignedToUser.fullName}
+                          {request.assignedTo.fullName}
                         </span>
                       </div>
                     </CardContent>

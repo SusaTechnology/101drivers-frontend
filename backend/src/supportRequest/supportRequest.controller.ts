@@ -288,44 +288,48 @@ export class SupportRequestController extends SupportRequestControllerBase {
   async supportRequests(
     @common.Req() request: Request
   ): Promise<SupportRequest[]> {
+    const user = request.user as any;
     const args = plainToClass(SupportRequestFindManyArgs, request.query);
-    return this.service.supportRequests({
-      ...args,
-      select: {
-        actorRole: true,
-        actorType: true,
+    return this.service.supportRequests(
+      {
+        ...args,
+        select: {
+          actorRole: true,
+          actorType: true,
 
-        assignedTo: {
-          select: {
-            id: true,
+          assignedTo: {
+            select: {
+              id: true,
+            },
           },
-        },
 
-        category: true,
-        closedAt: true,
-        createdAt: true,
+          category: true,
+          closedAt: true,
+          createdAt: true,
 
-        delivery: {
-          select: {
-            id: true,
+          delivery: {
+            select: {
+              id: true,
+            },
           },
-        },
 
-        id: true,
-        message: true,
-        priority: true,
-        resolvedAt: true,
-        status: true,
-        subject: true,
-        updatedAt: true,
+          id: true,
+          message: true,
+          priority: true,
+          resolvedAt: true,
+          status: true,
+          subject: true,
+          updatedAt: true,
 
-        user: {
-          select: {
-            id: true,
+          user: {
+            select: {
+              id: true,
+            },
           },
         },
       },
-    });
+      user?.roles ?? []
+    );
   }
 
   @common.Get("/:id")
@@ -336,8 +340,22 @@ export class SupportRequestController extends SupportRequestControllerBase {
     type: errors.ForbiddenException,
   })
   async supportRequest(
-    @common.Param() params: SupportRequestWhereUniqueInput
+    @common.Param() params: SupportRequestWhereUniqueInput,
+    // Optional so this override stays assignable to the base class method
+    // signature (Nest always supplies it via the decorator).
+    @common.Req() request?: Request
   ): Promise<SupportRequest | null> {
+    // PRIVACY: the enriched response includes the full conversation + user
+    // identities, so the generic single-resource route must enforce the same
+    // owner-or-admin rule as /detail. Without this, any authenticated user
+    // could read ANY ticket (and its notes) by id.
+    const user = (request?.user ?? null) as any;
+    await this.service.assertCanAccessRequestById(
+      (params as any).id,
+      user?.id ?? null,
+      user?.roles ?? []
+    );
+
     const result = await this.service.supportRequest({
       where: params,
       select: {
@@ -528,9 +546,27 @@ export class SupportRequestController extends SupportRequestControllerBase {
     @common.Req() request: Request,
     @common.Param() params: SupportRequestWhereUniqueInput
   ): Promise<SupportRequestNote[]> {
+    // PRIVACY: notes are the private conversation — owner or admin only,
+    // and non-staff never receive internal notes (same rule as /detail).
+    const user = request.user as any;
+    await this.service.assertCanAccessRequestById(
+      (params as any).id,
+      user?.id ?? null,
+      user?.roles ?? []
+    );
+    const isStaff =
+      Array.isArray(user?.roles) && user.roles.includes("ADMIN");
+
     const query = plainToClass(SupportRequestNoteFindManyArgs, request.query);
+    const scopedQuery: SupportRequestNoteFindManyArgs = isStaff
+      ? query
+      : {
+          ...query,
+          where: { ...(query.where ?? {}), isInternal: false },
+        };
+
     const results = await this.service.findNotes(params.id, {
-      ...query,
+      ...scopedQuery,
       select: {
         authorRole: true,
 

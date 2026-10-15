@@ -34,6 +34,7 @@ import { cn } from '@/lib/utils'
 import { getUser, useDataQuery } from '@/lib/tanstack/dataQuery'
 import { useQueryClient } from '@tanstack/react-query'
 import { useSocketEvent } from '@/hooks/useSocket'
+import { socketJoinStaffOps, socketLeaveStaffOps } from '@/lib/socket'
 import { Navbar } from '@/components/shared/layout/testNavbar'
 import { navItems } from '@/lib/items/navItems'
 import { Brand } from '@/lib/items/brand'
@@ -113,6 +114,28 @@ export default function AdminSupportListPage() {
         q.queryKey[1].includes('/supportRequests/'),
     })
   })
+
+  // ── Live ops queue (ALL tickets) ──
+  // support:inbox only ever reaches a ticket's OWNER — an admin would never
+  // receive it. The backend pings the admin-only staff:ops room (contentless
+  // support:staff-inbox) when a NEW ticket is created or a CUSTOMER replies,
+  // so the ops list re-sorts live. The message text still only shows after
+  // opening the ticket — exactly the conversation-privacy contract.
+  useSocketEvent('support:staff-inbox', () => {
+    queryClient.invalidateQueries({
+      predicate: (q) =>
+        Array.isArray(q.queryKey) &&
+        typeof q.queryKey[1] === 'string' &&
+        q.queryKey[1].includes('/supportRequests/'),
+    })
+  })
+
+  // Join the staff ops room for the lifetime of this page; leave on unmount
+  // so non-admin pages never keep the room alive.
+  useEffect(() => {
+    socketJoinStaffOps()
+    return () => socketLeaveStaffOps()
+  }, [])
 
   // Filter state
   const [statusFilter, setStatusFilter] = useState<SupportRequestStatus | 'ALL'>('ALL')

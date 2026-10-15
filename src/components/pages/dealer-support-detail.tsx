@@ -142,11 +142,10 @@ export default function DealerSupportDetail({ supportRequestId }: DealerSupportD
   const isPrivateCustomer = user?.roles?.includes('PRIVATE_CUSTOMER') ?? false
 
   // Fetch support request detail
-  // NOTE: the endpoint is the plain resource route /api/supportRequests/:id —
-  // the SAME one the admin and driver detail pages use. This page uniquely
-  // called /api/supportRequests/:id/detail, which the backend does not
-  // serve, so every dealer deep-link (incl. notification → View Support
-  // Request) landed on "Failed to load".
+  // Uses the user-scoped /detail endpoint (owner-or-admin, internal notes
+  // stripped for non-staff server-side). The earlier /detail call 404ed only
+  // because the route didn't exist yet — it does now, and the plain resource
+  // route is owner-checked too, so both work for the ticket owner.
   const {
     data: supportData,
     isLoading,
@@ -158,7 +157,7 @@ export default function DealerSupportDetail({ supportRequestId }: DealerSupportD
     error,
     refetch,
   } = useDataQuery<SupportRequestDetail>({
-    apiEndPoint: `${import.meta.env.VITE_API_URL}/api/supportRequests/${id}`,
+    apiEndPoint: `${import.meta.env.VITE_API_URL}/api/supportRequests/${id}/detail`,
     noFilter: true,
     enabled: !!id,
   })
@@ -414,10 +413,10 @@ export default function DealerSupportDetail({ supportRequestId }: DealerSupportD
               <RefreshCw className="h-3.5 w-3.5" />
               Updated {formatDateTime(supportData.updatedAt)}
             </span>
-            {supportData.assignedToUser && (
+            {supportData.assignedTo?.fullName && (
               <span className="inline-flex items-center gap-1.5">
                 <User className="h-3.5 w-3.5" />
-                Assigned to {supportData.assignedToUser.fullName}
+                Assigned to {supportData.assignedTo.fullName}
               </span>
             )}
             {supportData.delivery && (
@@ -474,23 +473,28 @@ export default function DealerSupportDetail({ supportRequestId }: DealerSupportD
 
                   {publicNotes.map((note) => {
                     // Explicitly check each role — no "else" fallback
+                    const isOwnNote = !!note.authorUserId && note.authorUserId === user?.id
                     const isFromDealer = note.authorRole === 'DEALER' || note.authorRole === 'PRIVATE_CUSTOMER'
                     const isFromSupport = note.authorRole === 'ADMIN' || note.authorRole === 'OPS'
                     const isFromDriver = note.authorRole === 'DRIVER'
 
-                    // Determine label based on who wrote it
+                    // Sender identity: prefer the author's real name from the
+                    // payload (note.authorUser.fullName — the backend's enriched
+                    // select); the old `note.authorName` field never existed, so
+                    // names never rendered. Own messages stay "You".
                     let label = 'Unknown'
-                    if (isFromDealer) label = 'You'
-                    else if (isFromSupport) label = 'Support Team'
-                    else if (isFromDriver) label = 'Driver'
-                    else label = note.authorName || note.authorRole || 'Unknown'
+                    if (isOwnNote) label = 'You'
+                    else if (isFromSupport) label = note.authorUser?.fullName || 'Support Team'
+                    else if (isFromDriver) label = note.authorUser?.fullName || 'Driver'
+                    else if (isFromDealer) label = note.authorUser?.fullName || 'Customer'
+                    else label = note.authorUser?.fullName || note.authorRole || 'Unknown'
 
                     return (
                       <div
                         key={note.id}
                         className={cn(
                           "flex",
-                          isFromDealer ? "justify-end" : "justify-start"
+                          (isOwnNote || (isFromDealer && !note.authorUserId)) ? "justify-end" : "justify-start"
                         )}
                       >
                         <div

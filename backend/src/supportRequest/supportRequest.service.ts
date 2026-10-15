@@ -62,6 +62,29 @@ export class SupportRequestService extends SupportRequestServiceBase {
     throw new NotFoundException("SupportRequest not found");
   }
 
+  /**
+   * Public guard for the generic REST routes (GET /supportRequests/:id and
+   * /:id/notes). Loads the ticket and applies the same owner-or-admin rule
+   * as the /detail endpoint — identical NotFound for missing vs forbidden so
+   * ticket ids cannot be probed by other dealers/drivers.
+   */
+  async assertCanAccessRequestById(
+    supportRequestId: string,
+    actorUserId?: string | null,
+    actorRoles?: string[] | null
+  ): Promise<void> {
+    const item = await this.prisma.supportRequest.findUnique({
+      where: { id: supportRequestId },
+      select: { userId: true },
+    });
+
+    if (!item) {
+      throw new NotFoundException("SupportRequest not found");
+    }
+
+    this.assertCanAccessRequest(item, actorUserId, actorRoles);
+  }
+
   private trimOptionalString(value: unknown): string | null | undefined {
     if (value === undefined) return undefined;
     if (value === null) return null;
@@ -77,7 +100,14 @@ export class SupportRequestService extends SupportRequestServiceBase {
     return this.prisma.supportRequest.count(args);
   }
 
-  async supportRequests(args: Prisma.SupportRequestFindManyArgs): Promise<any[]> {
+  async supportRequests(
+    args: Prisma.SupportRequestFindManyArgs,
+    actorRoles?: string[] | null
+  ): Promise<any[]> {
+    // The plain list endpoint returns EVERY user's tickets — it is the ops
+    // queue's raw shape and must never be readable by dealers/drivers.
+    // (The dealer/driver apps use the user-scoped GET /supportRequests/my.)
+    this.assertAdmin(actorRoles);
     return this.domain.findMany(args);
   }
 

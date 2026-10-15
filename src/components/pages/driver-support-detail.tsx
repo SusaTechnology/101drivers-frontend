@@ -111,7 +111,7 @@ export default function DriverSupportDetailPage({ supportRequestId }: { supportR
     error,
     refetch,
   } = useDataQuery<SupportRequestDetail>({
-    apiEndPoint: `${import.meta.env.VITE_API_URL}/api/supportRequests/${requestId}`,
+    apiEndPoint: `${import.meta.env.VITE_API_URL}/api/supportRequests/${requestId}/detail`,
     noFilter: true,
     enabled: !!requestId,
   })
@@ -366,7 +366,7 @@ export default function DriverSupportDetailPage({ supportRequestId }: { supportR
                               Internal Note
                             </span>
                             <span className="text-[10px] text-amber-500 ml-2">
-                              {note.authorName || note.authorRole} • {formatTime(note.createdAt)}
+                              {note.authorUser?.fullName || note.authorRole} • {formatTime(note.createdAt)}
                             </span>
                             <p className="text-xs text-amber-700 dark:text-amber-300 mt-1 whitespace-pre-wrap">
                               {note.message}
@@ -376,22 +376,24 @@ export default function DriverSupportDetailPage({ supportRequestId }: { supportR
                       )
                     }
 
+                    const isOwnNote = !!note.authorUserId && note.authorUserId === user?.id
                     const isFromDriver = note.authorRole === 'DRIVER'
                     const isFromSupport = note.authorRole === 'ADMIN' || note.authorRole === 'OPS'
 
-                    // Explicit label — no ambiguity
+                    // Sender identity from the payload's authorUser (the old
+                    // `authorName` field never existed — names never showed).
                     let label = 'Unknown'
-                    if (isFromDriver) label = 'You'
-                    else if (isFromSupport) label = 'Support Team'
-                    else if (note.authorRole === 'DEALER' || note.authorRole === 'PRIVATE_CUSTOMER') label = 'Customer'
-                    else label = note.authorName || note.authorRole || 'Unknown'
+                    if (isOwnNote) label = 'You'
+                    else if (isFromSupport) label = note.authorUser?.fullName || 'Support Team'
+                    else if (note.authorRole === 'DEALER' || note.authorRole === 'PRIVATE_CUSTOMER') label = note.authorUser?.fullName || 'Customer'
+                    else label = note.authorUser?.fullName || note.authorRole || 'Unknown'
 
                     return (
                       <div
                         key={note.id}
                         className={cn(
                           "flex",
-                          isFromDriver ? "justify-end" : "justify-start"
+                          (isOwnNote || (isFromDriver && !note.authorUserId)) ? "justify-end" : "justify-start"
                         )}
                       >
                         <div

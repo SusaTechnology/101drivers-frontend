@@ -383,3 +383,40 @@ export function socketLeaveSupport(supportRequestId: string): void {
     socket.emit('leave:support', { supportRequestId });
   }
 }
+
+/**
+ * Join the ops staff room (ADMIN only — the backend re-verifies the role
+ * from the socket JWT on every join). Staff here receive contentless
+ * `support:staff-inbox` pings when a new ticket is created or a customer
+ * replies, so the admin support list live-refreshes. The ping NEVER carries
+ * message text — staff read the message only after opening the ticket.
+ */
+export function socketJoinStaffOps(): void {
+  if (!socket) return;
+  trackRoom('staff:ops', 'join:staff-ops');
+  if (socket.connected) {
+    socket.emit('join:staff-ops', (ack: any) => {
+      if (socket?.connected && !ack?.joined) {
+        console.warn('[Socket] join:staff-ops rejected — admin role required');
+      }
+    });
+  } else {
+    socket.once('connect', () => {
+      socket!.emit('join:staff-ops', (ack: any) => {
+        if (socket?.connected && !ack?.joined) {
+          console.warn('[Socket] join:staff-ops rejected — admin role required');
+        }
+      });
+    });
+  }
+}
+
+/**
+ * Leave the ops staff room.
+ */
+export function socketLeaveStaffOps(): void {
+  untrackRoom('staff:ops');
+  if (socket?.connected) {
+    socket.emit('leave:staff-ops');
+  }
+}

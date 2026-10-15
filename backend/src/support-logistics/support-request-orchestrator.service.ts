@@ -84,8 +84,11 @@ export class SupportRequestOrchestratorService {
       });
 
       // 🔔 Notify ops/admin (simple version → email required externally)
+      // toUserId = the creator so the bell routes correctly; the ops team is
+      // reached via the staff-ops room ping below (live queue refresh).
       await this.notificationEventEngine.queueAndSend({
         actorUserId: input.actorUserId ?? null,
+        toUserId: input.actorUserId ?? null,
         deliveryId: input.deliveryId ?? null,
         channel: EnumNotificationEventChannel.EMAIL,
         type: EnumNotificationEventType.SUPPORT_REQUEST_CREATED,
@@ -98,6 +101,15 @@ export class SupportRequestOrchestratorService {
           category: input.category,
           priority: input.priority,
         },
+      });
+
+      // ── Real-time ops ping ──
+      // New tickets must surface in the ADMIN support list live (the list
+      // invalidates on support:staff-inbox) — message content stays behind
+      // the ticket until an admin opens it.
+      this.trackingGateway.emitStaffOpsPing({
+        supportRequestId: created.id,
+        status: EnumSupportStatus.OPEN,
       });
 
       return created;
@@ -158,6 +170,10 @@ export class SupportRequestOrchestratorService {
         if (user?.email) {
           await this.notificationEventEngine.queueAndSend({
             actorUserId: input.actorUserId ?? null,
+            // Route the bell to the TICKET OWNER — the queueAndSend fallback
+            // would use actorUserId (the replier, i.e. the admin), so the
+            // owner never saw a bell for replies to their own ticket.
+            toUserId: request.userId,
             deliveryId: request.deliveryId ?? null,
             channel: EnumNotificationEventChannel.EMAIL,
             type: EnumNotificationEventType.SUPPORT_REQUEST_REPLIED,
@@ -194,6 +210,17 @@ export class SupportRequestOrchestratorService {
         });
       }
 
+      // ── Real-time ops ping ──
+      // A CUSTOMER reply must surface in the ADMIN support list live — but
+      // only the ticket's row updates; the message is visible after opening.
+      // Admin's own replies and internal notes never ping (staff typed them).
+      if (!input.isInternal && input.authorRole !== EnumSupportActorRole.ADMIN) {
+        this.trackingGateway.emitStaffOpsPing({
+          supportRequestId: request.id,
+          status: EnumSupportStatus.IN_PROGRESS,
+        });
+      }
+
       return note;
     });
   }
@@ -227,6 +254,10 @@ export class SupportRequestOrchestratorService {
       if (user?.email) {
         await this.notificationEventEngine.queueAndSend({
           actorUserId: input.actorUserId ?? null,
+          // The ASSIGNEE is the recipient of this notification — without an
+          // explicit toUserId the fallback routed the bell to the assigning
+          // admin instead.
+          toUserId: input.assignedToUserId,
           deliveryId: request.deliveryId ?? null,
           channel: EnumNotificationEventChannel.EMAIL,
           type: EnumNotificationEventType.SUPPORT_REQUEST_ASSIGNED,
@@ -276,6 +307,10 @@ export class SupportRequestOrchestratorService {
         if (user?.email) {
           await this.notificationEventEngine.queueAndSend({
             actorUserId: input.actorUserId ?? null,
+            // Bell belongs to the ticket owner, not the admin who changed
+            // the status (the queueAndSend fallback would route to the
+            // acting admin).
+            toUserId: request.userId,
             deliveryId: request.deliveryId ?? null,
             channel: EnumNotificationEventChannel.EMAIL,
             type: EnumNotificationEventType.SUPPORT_REQUEST_RESOLVED,
