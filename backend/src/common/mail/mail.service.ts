@@ -150,6 +150,16 @@ export class MailService {
         ? "Copy and paste this code into the signup form."
         : "Copy and paste this code into the signup form.";
 
+    // Links are ONLY included on the password-reset email. The verification
+    // pages (/driver-verify-email, /auth/individual-verify-email,
+    // /auth/dealer-signup) are continuation screens of the in-app signup
+    // flow: they need the pending-signup payload kept in the browser's
+    // sessionStorage, so a link opened from an email — i.e. any other device
+    // or browser — cannot complete the flow and bounces with "No pending
+    // registration found". The reset page is fully standalone (email + code
+    // typed on the page), so its link is safe to keep.
+    const includeLink = audience === "PASSWORD_RESET";
+
     const text = [
       `Hi ${displayName},`,
       "",
@@ -158,8 +168,7 @@ export class MailService {
       `Verification code: ${params.token}`,
       "",
       helperText,
-      "",
-      `Continue here: ${destinationUrl}`,
+      ...(includeLink ? ["", `Continue here: ${destinationUrl}`] : []),
       "",
       "This code expires in 15 minutes.",
       "",
@@ -198,7 +207,9 @@ export class MailService {
           ${this.escapeHtml(helperText)}
         </p>
 
-        <p>
+        ${
+          includeLink
+            ? `<p>
           <a
             href="${this.escapeHtml(destinationUrl)}"
             style="display:inline-block;padding:12px 18px;background:#111;color:#fff;text-decoration:none;border-radius:6px;"
@@ -208,7 +219,9 @@ export class MailService {
         </p>
 
         <p>Or open this page directly:</p>
-        <p>${this.escapeHtml(destinationUrl)}</p>
+        <p>${this.escapeHtml(destinationUrl)}</p>`
+            : ""
+        }
 
         <p>This code expires in 15 minutes.</p>
         <p>If you did not request this, you can ignore this email.</p>
