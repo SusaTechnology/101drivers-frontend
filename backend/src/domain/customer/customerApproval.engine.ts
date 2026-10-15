@@ -223,20 +223,62 @@ export class CustomerApprovalEngine {
 
       const subject =
         customer.customerType === "BUSINESS"
-          ? "Your dealer account has been approved"
+          ? "Your business account has been approved"
           : "Your customer account has been approved";
 
       const approvalLine =
         customer.customerType === "BUSINESS"
-          ? customer.businessName
-            ? `Your dealer account for ${customer.businessName} has been approved.`
-            : "Your dealer account has been approved."
+          ? "Your business account has been approved."
           : "Your customer account has been approved.";
 
       const loginLine =
         customer.customerType === "BUSINESS"
           ? "You can now log in and start creating delivery requests."
           : "You can now log in and continue using your account.";
+
+      // BUSINESS approvals carry the COO-requested copy: prepaid by default
+      // with a postpaid negotiation path (business dealers are the only
+      // accounts that can be switched to postpaid), a mention of the
+      // customizable referral code, and the Maz Siam signature block. When
+      // the admin approved the account AS postpaid, the prepaid sentence is
+      // swapped for the postpaid-enabled line so the email stays truthful.
+      // Non-business approvals keep the original generic copy — the referral
+      // program and postpaid negotiation are dealer-only.
+      const businessPostpaidLine =
+        input.postpaidEnabled === true
+          ? "Postpaid billing has been enabled for your account."
+          : "All deliveries are prepaid. If you'd like to negotiate a postpaid plan, just contact us.";
+
+      const bodyLines =
+        customer.customerType === "BUSINESS"
+          ? [
+              `Hi ${displayName},`,
+              "",
+              approvalLine,
+              "",
+              loginLine + " " + businessPostpaidLine,
+              input.note ? `Note: ${input.note}` : "",
+              "",
+              "You also have your own referral code, which you can customize.",
+              "",
+              "Welcome aboard.",
+              "",
+              "Best, Maz Siam",
+              "COO, 101 Drivers Inc.",
+              "Cell 3107293250",
+              "Whatsup 4243132168",
+              "maz@101drivers.com",
+            ]
+          : [
+              `Hi ${displayName},`,
+              "",
+              approvalLine,
+              input.postpaidEnabled === true
+                ? "Postpaid billing has been enabled for your account."
+                : "",
+              loginLine,
+              input.note ? `Note: ${input.note}` : "",
+            ];
 
       await this.notificationEventEngine.queueAndSend({
         actorUserId: input.actorUserId ?? null,
@@ -245,18 +287,7 @@ export class CustomerApprovalEngine {
         type: EnumNotificationEventType.DEALER_APPROVED,
         templateCode: "dealer-approved",
         subject,
-        body: [
-          `Hi ${displayName},`,
-          "",
-          approvalLine,
-          input.postpaidEnabled === true
-            ? "Postpaid billing has been enabled for your account."
-            : "",
-          loginLine,
-          input.note ? `Note: ${input.note}` : "",
-        ]
-          .filter(Boolean)
-          .join("\n"),
+        body: bodyLines.filter(Boolean).join("\n"),
         toEmail,
         payload: {
           customerId: input.customerId,
