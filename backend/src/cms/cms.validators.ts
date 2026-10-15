@@ -9,6 +9,13 @@
  *
  * Rules of thumb:
  *  - everything is trimmed; empty optional strings become undefined
+ *  - TOP-LEVEL optional fields (kicker, author, readingMinutes, image,
+ *    imageAlt) are CLEARABLE: absent (undefined) = keep the stored value,
+ *    explicit null (or "") = clear it. This is what makes "remove the cover
+ *    image" actually persist — without the distinction the update would
+ *    silently re-attach the old value on every publish.
+ *  - Block-level optionals (callout label, table note) are always sent as a
+ *    whole body, so they keep the simpler empty → undefined normalization.
  *  - lengths are capped so a fat-fingered paste cannot bloat the row
  *  - `requireBody` is true when the item is being saved as PUBLISHED
  *    (drafts may be empty so editors can save partial work)
@@ -75,11 +82,13 @@ export interface BlogInput {
   title: string;
   date: string;
   excerpt: string;
-  kicker?: string;
-  readingMinutes?: number;
-  author?: string;
-  image?: string;
-  imageAlt?: string;
+  // Clearable optionals: undefined = not provided (keep stored value),
+  // null = explicitly cleared by the editor. See the header comment.
+  kicker?: string | null;
+  readingMinutes?: number | null;
+  author?: string | null;
+  image?: string | null;
+  imageAlt?: string | null;
   body: BlogBlockIn[];
   status: "DRAFT" | "PUBLISHED";
 }
@@ -90,8 +99,9 @@ export interface NewsInput {
   date: string;
   tag: string;
   excerpt: string;
-  image?: string;
-  imageAlt?: string;
+  // Clearable optionals — same contract as BlogInput.
+  image?: string | null;
+  imageAlt?: string | null;
   body: string[];
   status: "DRAFT" | "PUBLISHED";
 }
@@ -157,6 +167,24 @@ function cleanStringArray(c: Collector, value: unknown, field: string, maxItems:
 function cleanOptionalString(c: Collector, value: unknown, field: string, max: number): string | undefined {
   if (value === undefined || value === null) return undefined;
   return cleanString(c, value, field, max, false);
+}
+
+// ── Clearable top-level optionals ──
+// The admin editor always sends the full document, so "not provided" and
+// "cleared" must stay distinguishable: undefined keeps whatever is stored,
+// null (or an empty string) wipes the field. This is the contract that lets
+// "Remove cover image" survive validation and reach the DB as NULL.
+function cleanClearableString(c: Collector, value: unknown, field: string, max: number): string | null | undefined {
+  if (value === undefined) return undefined; // absent → keep stored value
+  if (value === null) return null;           // explicit clear
+  const s = cleanString(c, value, field, max, false);
+  return s ?? null;                          // empty/blank string → cleared
+}
+
+function cleanClearableReadingMinutes(c: Collector, value: unknown): number | null | undefined {
+  if (value === undefined) return undefined; // absent → keep stored value
+  if (value === null || value === "") return null; // explicit clear
+  return cleanReadingMinutes(c, value);
 }
 
 export function slugify(input: string): string {
@@ -393,11 +421,11 @@ export function validateBlogInput(
     title: title!,
     date,
     excerpt: excerpt!,
-    kicker: cleanOptionalString(c, raw.kicker, "Kicker", MAX.kicker),
-    readingMinutes: cleanReadingMinutes(c, raw.readingMinutes),
-    author: cleanOptionalString(c, raw.author, "Author", MAX.author),
-    image: cleanOptionalString(c, raw.image, "Cover image", MAX.image),
-    imageAlt: cleanOptionalString(c, raw.imageAlt, "Cover image alt text", MAX.alt),
+    kicker: cleanClearableString(c, raw.kicker, "Kicker", MAX.kicker),
+    readingMinutes: cleanClearableReadingMinutes(c, raw.readingMinutes),
+    author: cleanClearableString(c, raw.author, "Author", MAX.author),
+    image: cleanClearableString(c, raw.image, "Cover image", MAX.image),
+    imageAlt: cleanClearableString(c, raw.imageAlt, "Cover image alt text", MAX.alt),
     body,
     status,
   };
@@ -423,8 +451,8 @@ export function validateNewsInput(
     date,
     tag: tag!,
     excerpt: excerpt!,
-    image: cleanOptionalString(c, raw.image, "Cover image", MAX.image),
-    imageAlt: cleanOptionalString(c, raw.imageAlt, "Cover image alt text", MAX.alt),
+    image: cleanClearableString(c, raw.image, "Cover image", MAX.image),
+    imageAlt: cleanClearableString(c, raw.imageAlt, "Cover image alt text", MAX.alt),
     body,
     status,
   };

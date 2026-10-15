@@ -617,6 +617,18 @@ export class CmsService implements common.OnModuleInit {
     const row = await this.prisma.cmsMediaAsset.findUnique({ where: { id } });
     if (!row) throw new common.NotFoundException("Image not found.");
     await this.prisma.cmsMediaAsset.delete({ where: { id } });
+
+    // Detach the asset from any content that still references it — otherwise
+    // published pages would keep pointing at a dead URL (the file route is
+    // served with `Cache-Control: immutable`, so browsers would also hold on
+    // to the stale copy). Cover images are stored as the exact URL, so an
+    // equality match is precise; alt text is editor-curated and left alone.
+    const url = `/api/cms/media/file/${row.filename}`;
+    const [blogDetached, newsDetached] = await Promise.all([
+      this.prisma.cmsBlogPost.updateMany({ where: { image: url }, data: { image: null } }),
+      this.prisma.cmsNewsPost.updateMany({ where: { image: url }, data: { image: null } }),
+    ]);
+
     try {
       await fs.promises.unlink(path.join(this.uploadDir(), row.filename));
     } catch (err) {
@@ -630,6 +642,11 @@ export class CmsService implements common.OnModuleInit {
       title: row.originalName,
       status: null,
     });
+    if (blogDetached.count || newsDetached.count) {
+      this.logger.log(
+        `CMS media ${row.filename} detached from ${blogDetached.count} blog post(s) and ${newsDetached.count} news item(s)`,
+      );
+    }
   }
 
   /** Absolute path of an uploaded file after strict filename validation. */

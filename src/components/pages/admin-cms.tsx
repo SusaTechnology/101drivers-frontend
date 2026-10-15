@@ -189,11 +189,14 @@ function payloadOf(draft: Draft, statusOverride?: Status): any {
     return {
       ...base,
       date: draft.date,
-      kicker: draft.kicker.trim() || undefined,
-      readingMinutes: draft.readingMinutes ? Number(draft.readingMinutes) : undefined,
-      author: draft.author.trim() || undefined,
-      image: draft.image || undefined,
-      imageAlt: draft.imageAlt.trim() || undefined,
+      // Clearable optionals MUST send explicit null when emptied — undefined
+      // would be dropped by JSON.stringify and the backend would keep the
+      // stored value (the "deleted image still shows on the public page" bug).
+      kicker: draft.kicker.trim() || null,
+      readingMinutes: draft.readingMinutes ? Number(draft.readingMinutes) : null,
+      author: draft.author.trim() || null,
+      image: draft.image || null,
+      imageAlt: draft.imageAlt.trim() || null,
       body: draft.body,
     };
   }
@@ -202,8 +205,8 @@ function payloadOf(draft: Draft, statusOverride?: Status): any {
       ...base,
       date: draft.date,
       tag: draft.tag.trim(),
-      image: draft.image || undefined,
-      imageAlt: draft.imageAlt.trim() || undefined,
+      image: draft.image || null,
+      imageAlt: draft.imageAlt.trim() || null,
       body: splitParagraphs(draft.bodyText),
     };
   }
