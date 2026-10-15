@@ -562,7 +562,11 @@ export class SupportRequestController extends SupportRequestControllerBase {
       ? query
       : {
           ...query,
-          where: { ...(query.where ?? {}), isInternal: false },
+          // NOTE: the generated WhereInput types isInternal as the BooleanFilter
+          // class ({ equals, not }), NOT Prisma's `BooleanFilter | boolean`
+          // union — a plain `false` fails tsc. The object form is identical
+          // to `false` for the Prisma runtime.
+          where: { ...(query.where ?? {}), isInternal: { equals: false } },
         };
 
     const results = await this.service.findNotes(params.id, {
