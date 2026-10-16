@@ -36,6 +36,61 @@ export class NotificationEventController extends NotificationEventControllerBase
   ) {
     super(service, rolesBuilder);
   }
+
+  /**
+   * Hardened visibility rules for the generic CRUD endpoints.
+   *
+   * A notification has exactly ONE recipient (toUserId) — the same rule the
+   * /my/inbox endpoint enforces. Previously the generated list endpoint
+   * accepted a client-controlled Prisma `where`, so ANY authenticated user
+   * could read another user's notifications (e.g. `?where={"toUserId":
+   * "<victimId>"}`), and the generic GET/PATCH/DELETE-by-id endpoints never
+   * verified ownership at all. Admins keep full access; everyone else is
+   * scoped to their own rows at the HANDLER level (defense in depth on top
+   * of the tightened grants.json permissions).
+   */
+  private isCallerAdmin(user: any): boolean {
+    const roles: string[] = Array.isArray(user?.roles) ? user.roles : [];
+    return roles.includes("ADMIN") || user?.isSuperAdmin === true;
+  }
+
+  private assertCanAccessNotificationRow(
+    row: { toUserId: string | null } | null,
+    user: any
+  ): void {
+    if (!row) {
+      throw new errors.NotFoundException("NotificationEvent not found");
+    }
+    if (this.isCallerAdmin(user)) {
+      return;
+    }
+    if (row.toUserId !== user?.id) {
+      // 404, not 403 — never confirm the existence of someone else's row.
+      throw new errors.NotFoundException("NotificationEvent not found");
+    }
+  }
+
+  private ownershipWhereFor(user: any): Record<string, unknown> | null {
+    if (this.isCallerAdmin(user)) {
+      return null; // admins see everything
+    }
+    return { toUserId: user?.id };
+  }
+
+  /** Pre-check ownership for the by-id endpoints (GET/PATCH/DELETE /:id). */
+  private async assertOwnershipForWhere(
+    params: NotificationEventWhereUniqueInput,
+    user: any
+  ): Promise<void> {
+    if (this.isCallerAdmin(user)) {
+      return;
+    }
+    const row = await this.service.notificationEvent({
+      where: params,
+      select: { toUserId: true },
+    });
+    this.assertCanAccessNotificationRow(row, user);
+  }
    @common.Get("my/inbox")
   @swagger.ApiOkResponse({ type: NotificationEventListResponseDto })
   async myNotificationEvents(
@@ -43,7 +98,6 @@ export class NotificationEventController extends NotificationEventControllerBase
     @common.Req() req: Request
   ): Promise<NotificationEventListResponseDto> {
     const user = req.user as any;
-    console.log ("user ", user)
     return this.service.getMyNotificationEvents({
       actorUserId: user?.id,
       unreadOnly: query.unreadOnly === true,
@@ -230,9 +284,18 @@ export class NotificationEventController extends NotificationEventControllerBase
   async notificationEvents(
     @common.Req() request: Request
   ): Promise<NotificationEvent[]> {
+    const user = (request as any).user as any;
     const args = plainToClass(NotificationEventFindManyArgs, request.query);
+    // Force the caller's own rows into the where clause (non-admins). The
+    // grant layer already rejects non-admin `read:any`, this keeps the row
+    // filter correct even if grants are relaxed later.
+    const ownership = this.ownershipWhereFor(user);
+    const where = ownership
+      ? { ...(args.where as object), ...ownership }
+      : args.where;
     return this.service.notificationEvents({
       ...args,
+      where: where as typeof args.where,
       select: {
         actor: {
           select: {
@@ -291,8 +354,11 @@ export class NotificationEventController extends NotificationEventControllerBase
     type: errors.ForbiddenException,
   })
   async notificationEvent(
-    @common.Param() params: NotificationEventWhereUniqueInput
+    @common.Param() params: NotificationEventWhereUniqueInput,
+    @common.Req() request?: Request
   ): Promise<NotificationEvent | null> {
+    const user = (request as any).user as any;
+    await this.assertOwnershipForWhere(params, user);
     const result = await this.service.notificationEvent({
       where: params,
       select: {
@@ -360,8 +426,11 @@ export class NotificationEventController extends NotificationEventControllerBase
   })
   async updateNotificationEvent(
     @common.Param() params: NotificationEventWhereUniqueInput,
-    @common.Body() data: NotificationEventUpdateInput
+    @common.Body() data: NotificationEventUpdateInput,
+    @common.Req() request?: Request
   ): Promise<NotificationEvent | null> {
+    const user = (request as any).user as any;
+    await this.assertOwnershipForWhere(params, user);
     try {
       return await this.service.updateNotificationEvent({
         where: params,
@@ -457,8 +526,11 @@ export class NotificationEventController extends NotificationEventControllerBase
     type: errors.ForbiddenException,
   })
   async deleteNotificationEvent(
-    @common.Param() params: NotificationEventWhereUniqueInput
+    @common.Param() params: NotificationEventWhereUniqueInput,
+    @common.Req() request?: Request
   ): Promise<NotificationEvent | null> {
+    const user = (request as any).user as any;
+    await this.assertOwnershipForWhere(params, user);
     try {
       return await this.service.deleteNotificationEvent({
         where: params,

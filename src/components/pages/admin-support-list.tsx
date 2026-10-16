@@ -396,7 +396,23 @@ export default function AdminSupportListPage() {
                         {/* Subject & Meta */}
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2">
-                            <p className="font-bold text-slate-900 dark:text-white truncate">
+                            {/* Unread red dot — non-admin activity newer than
+                                the staff read receipt (adminReadAt). Cleared
+                                when an admin opens the ticket. */}
+                            {request.unreadForAdmin && (
+                              <span
+                                className="h-2.5 w-2.5 shrink-0 rounded-full bg-red-500"
+                                title="New messages not seen by our team yet"
+                              />
+                            )}
+                            <p
+                              className={cn(
+                                'truncate',
+                                request.unreadForAdmin
+                                  ? 'font-extrabold text-slate-900 dark:text-white'
+                                  : 'font-bold text-slate-900 dark:text-white'
+                              )}
+                            >
                               {request.subject}
                             </p>
                             {request.priority === 'URGENT' && (
@@ -419,6 +435,16 @@ export default function AdminSupportListPage() {
 
                       {/* Badges */}
                       <div className="flex items-center gap-2 shrink-0">
+                        {/* "N new" chip — number of messages the team has
+                            not seen yet on this ticket. */}
+                        {request.unreadForAdmin &&
+                          (request.unreadMessages ?? 0) > 0 && (
+                            <Badge className="bg-red-500 text-white text-[10px] font-bold px-1.5 py-0 gap-1">
+                              {request.unreadMessages === 1
+                                ? '1 new'
+                                : `${request.unreadMessages} new`}
+                            </Badge>
+                          )}
                         <Badge variant="outline" className="text-xs">
                           {request.actorRole}
                         </Badge>

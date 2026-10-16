@@ -42,6 +42,8 @@ export interface NavItem {
   label: string;
   href: string;
   icon?: ReactNode;
+  /** Optional live counter rendered after the label (e.g. Support unread). */
+  badge?: ReactNode;
 }
 
 export interface ActionItem {
@@ -193,6 +195,14 @@ export function Navbar({
                       <span className="mr-2 inline-block">{item.icon}</span>
                     )}
                     {item.label}
+                    {/* Live counter (e.g. Support unread badge). Rendered
+                        inside the link so the measured-collapse observer
+                        re-fits the bar when the badge appears/grows. */}
+                    {item.badge && (
+                      <span className="ml-2 inline-block align-middle">
+                        {item.badge}
+                      </span>
+                    )}
                   </Link>
                 ))}
               </nav>

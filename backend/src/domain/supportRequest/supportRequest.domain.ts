@@ -73,6 +73,7 @@ export class SupportRequestDomain extends BaseDomain<
     assignedToUserId: true,
     resolvedAt: true,
     closedAt: true,
+    adminReadAt: true,
 
     user: {
       select: SUPPORT_USER_IDENTITY_SELECT,

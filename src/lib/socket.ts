@@ -390,9 +390,22 @@ export function socketLeaveSupport(supportRequestId: string): void {
  * `support:staff-inbox` pings when a new ticket is created or a customer
  * replies, so the admin support list live-refreshes. The ping NEVER carries
  * message text — staff read the message only after opening the ticket.
+ *
+ * REFERENCE-COUNTED: the navbar Support badge keeps this room joined for
+ * the whole admin session AND the support list page joins/unmounts on
+ * navigation. Without counting, the list page's leave-on-unmount would
+ * drop the room under the navbar's feet; the room is only left when the
+ * LAST consumer leaves.
  */
+let staffOpsRefCount = 0;
+
 export function socketJoinStaffOps(): void {
   if (!socket) return;
+  staffOpsRefCount += 1;
+  if (staffOpsRefCount > 1) {
+    // Already tracked + joined for this socket — just bump the count.
+    return;
+  }
   trackRoom('staff:ops', 'join:staff-ops');
   if (socket.connected) {
     socket.emit('join:staff-ops', (ack: any) => {
@@ -412,9 +425,16 @@ export function socketJoinStaffOps(): void {
 }
 
 /**
- * Leave the ops staff room.
+ * Leave the ops staff room. Only the LAST leaver actually emits the leave —
+ * see socketJoinStaffOps for why (navbar badge + list page share the room).
  */
 export function socketLeaveStaffOps(): void {
+  if (staffOpsRefCount > 0) {
+    staffOpsRefCount -= 1;
+  }
+  if (staffOpsRefCount > 0) {
+    return;
+  }
   untrackRoom('staff:ops');
   if (socket?.connected) {
     socket.emit('leave:staff-ops');

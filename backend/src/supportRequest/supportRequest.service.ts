@@ -283,7 +283,117 @@ export class SupportRequestService extends SupportRequestServiceBase {
       this.prisma.supportRequest.count({ where }),
     ]);
 
-    return { items, count };
+    // ── Staff unread decoration (navbar badge + list red dots) ──
+    // A ticket is unread for staff while the latest non-ADMIN note (the
+    // original request message is itself a note) is newer than adminReadAt.
+    const decorated = items.map((item) => this.decorateAdminUnread(item));
+
+    return { items: decorated, count };
+  }
+
+  /**
+   * Shared unread computation for the admin surfaces.
+   *
+   * A support request carries ONE recipient-side read receipt:
+   * `adminReadAt` (null = no admin ever opened it). Unread activity =
+   * the newest note authored by a non-ADMIN (customer/driver/dealer reply
+   * or the original message) is newer than `adminReadAt`.
+   *
+   * Returns { unreadForAdmin, unreadMessages } — the red dot / "N new"
+   * chip on the support list rows.
+   */
+  private decorateAdminUnread(item: any): any {
+    const notes: Array<{ createdAt: Date | string; authorRole: string }> =
+      Array.isArray(item?.notes) ? item.notes : [];
+
+    const nonAdminNotes = notes.filter(
+      (n) => n?.authorRole !== EnumSupportActorRole.ADMIN
+    );
+    const lastNonAdminAt = nonAdminNotes.length
+      ? new Date(
+          nonAdminNotes.reduce(
+            (latest, n) => {
+              const t = new Date(n.createdAt).getTime();
+              return t > latest.getTime() ? new Date(t) : latest;
+            },
+            new Date(0)
+          )
+        )
+      : null;
+
+    const adminReadAt = item?.adminReadAt ? new Date(item.adminReadAt) : null;
+    const unreadForAdmin =
+      lastNonAdminAt !== null &&
+      (adminReadAt === null || lastNonAdminAt > adminReadAt);
+
+    return {
+      ...item,
+      unreadForAdmin,
+      unreadMessages: unreadForAdmin
+        ? nonAdminNotes.filter(
+            (n) =>
+              !adminReadAt ||
+              new Date(n.createdAt) > adminReadAt
+          ).length
+        : 0,
+    };
+  }
+
+  /**
+   * Count of tickets with unread staff activity — drives the admin navbar
+   * "Support" badge. Scans the active queue (OPEN + IN_PROGRESS; any reply
+   * auto-flips a RESOLVED ticket back to IN_PROGRESS, so this is complete)
+   * and applies the same unread rule as the list decoration above.
+   * Server-side counter, not client accumulation — badges agree across
+   * devices after a refresh.
+   */
+  async getAdminUnreadSupportCount(
+    actorRoles?: string[] | null
+  ): Promise<{ unreadCount: number }> {
+    this.assertAdmin(actorRoles);
+
+    const activeRows = await this.prisma.supportRequest.findMany({
+      where: {
+        status: { in: [EnumSupportStatus.OPEN, EnumSupportStatus.IN_PROGRESS] },
+      },
+      select: {
+        id: true,
+        adminReadAt: true,
+        notes: {
+          where: { authorRole: { not: EnumSupportActorRole.ADMIN } },
+          orderBy: { createdAt: "desc" },
+          take: 1,
+          select: { createdAt: true },
+        },
+      },
+    });
+
+    const unreadCount = activeRows.filter((row) => {
+      const lastNonAdminAt = row.notes[0]?.createdAt
+        ? new Date(row.notes[0].createdAt)
+        : null;
+      if (!lastNonAdminAt) return false;
+      const adminReadAt = row.adminReadAt ? new Date(row.adminReadAt) : null;
+      return adminReadAt === null || lastNonAdminAt > adminReadAt;
+    }).length;
+
+    return { unreadCount };
+  }
+
+  /**
+   * Staff read receipt — called by the admin detail page when an admin
+   * opens the conversation. Admin-only; delegates to the orchestrator
+   * (which also emits the contentless staff-ops ping so OTHER admins'
+   * badges refresh live).
+   */
+  async markAdminRead(input: {
+    supportRequestId: string;
+    actorRoles?: string[] | null;
+  }): Promise<{ id: string; adminReadAt: Date }> {
+    this.assertAdmin(input.actorRoles);
+    return this.orchestrator.markAdminRead({
+      supportRequestId: input.supportRequestId,
+    });
   }
 
   async getSupportRequestDetail(input: {

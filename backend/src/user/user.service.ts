@@ -641,6 +641,56 @@ async getAdminUsersSummary(): Promise<any> {
 }
 
 // ============================================================
+// V2 — Status stats endpoint (dedicated, NOT the users list)
+// ============================================================
+// Feeds the admin Users page status cards (Drivers / Business customers /
+// Private customers rows). Deliberately a SEPARATE endpoint from
+// /users/admin/v2 — the list endpoint paginates and filters; these cards
+// always need GLOBAL counts per status so they stay stable while the
+// table pages through filtered rows (same pattern as
+// GET /deliveryRequests/admin/stats).
+//
+// Counting granularity = the Customer / Driver profile tables themselves,
+// which is exactly what the v2 status filter matches on
+// (role=DRIVER + status=X → Driver.status=X; role=…_CUSTOMER + status=X →
+// Customer.approvalStatus=X filtered by customerType). Clicking a card
+// applies that same role+status filter, so card counts and table rows
+// agree 1:1.
+async getAdminUserStatusStats(): Promise<{
+  drivers: Record<string, number>;
+  businessCustomers: Record<string, number>;
+  privateCustomers: Record<string, number>;
+}> {
+  const [driverGroups, customerGroups] = await Promise.all([
+    this.prisma.driver.groupBy({
+      by: ["status"],
+      _count: { _all: true },
+    }),
+    this.prisma.customer.groupBy({
+      by: ["customerType", "approvalStatus"],
+      _count: { _all: true },
+    }),
+  ]);
+
+  const drivers: Record<string, number> = {};
+  for (const group of driverGroups) {
+    drivers[group.status] = group._count._all;
+  }
+
+  const businessCustomers: Record<string, number> = {};
+  const privateCustomers: Record<string, number> = {};
+  for (const group of customerGroups) {
+    const bucket =
+      group.customerType === EnumCustomerCustomerType.BUSINESS
+        ? businessCustomers
+        : privateCustomers;
+    bucket[group.approvalStatus] = group._count._all;
+  }
+
+  return { drivers, businessCustomers, privateCustomers };
+}
+
+// ============================================================
 // V2 — Unified admin users endpoint
 // ============================================================
 // Replaces the separate /admin + /admin/summary endpoints with a

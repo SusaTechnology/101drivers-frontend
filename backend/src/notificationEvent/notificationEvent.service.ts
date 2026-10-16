@@ -227,15 +227,14 @@ export class NotificationEventService extends NotificationEventServiceBase {
   }): Promise<{ updatedCount: number }> {
     const now = new Date();
 
-    // Mark all visible-to-me unread notifications as read (matches the
-    // getMyNotificationEvents visibility rules — actor OR customer.user OR driver.user).
+    // Mark all MY unread notifications as read — the exact visibility rule
+    // used by getMyNotificationEvents (toUserId = me, no OR fallbacks).
+    // The previous OR-clause (actor OR customer.user OR driver.user) could
+    // flip isRead on OTHER users' notifications the caller merely triggered
+    // as the acting user, clearing someone else's unread badge.
     const result = await this.prisma.notificationEvent.updateMany({
       where: {
-        OR: [
-          { actorUserId: input.actorUserId },
-          { customer: { userId: input.actorUserId } },
-          { driver: { userId: input.actorUserId } },
-        ],
+        toUserId: input.actorUserId,
         isRead: false,
         archivedAt: null,
       },

@@ -1,6 +1,7 @@
 // Admin Support Detail Page - View and manage support request
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { Link, useNavigate, useLocation } from '@tanstack/react-router'
+import { useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -158,6 +159,41 @@ export default function AdminSupportDetailPage({ supportRequestId }: { supportRe
   // owner/admin membership on every join. Re-join whenever the conversation
   // changes; leave the previous room on unmount/id change.
   const isStaff = !!user?.roles?.includes('ADMIN')
+
+  // ── Staff read receipt ──
+  // Opening the conversation marks the ticket read (adminReadAt = now) so it
+  // drops out of the navbar Support badge and its red dot on the list page.
+  // The backend emits a contentless staff-ops ping, so OTHER admins' badges
+  // and open list pages refresh live. Fired once per ticket per mount —
+  // the endpoint is idempotent, this just avoids pointless traffic on
+  // every refetch.
+  const queryClient = useQueryClient()
+  const markedReadRef = useRef<Set<string>>(new Set())
+  const markAdminReadMutation = useCreate<undefined, { id: string; adminReadAt: string }>(
+    `${import.meta.env.VITE_API_URL}/api/supportRequests/${requestId}/mark-admin-read`,
+    {
+      // Silent housekeeping call — no "Created successfully" toast while an
+      // admin is just opening a ticket.
+      successMessage: '',
+      onSuccess: () => {
+        queryClient.invalidateQueries({
+          predicate: (q) =>
+            Array.isArray(q.queryKey) &&
+            (q.queryKey[0] === 'admin-support-unread-count' ||
+              (typeof q.queryKey[1] === 'string' &&
+                q.queryKey[1].includes('/supportRequests/'))),
+        })
+      },
+    }
+  )
+
+  useEffect(() => {
+    if (!requestId || !isStaff || isLoading || isPlaceholderData) return
+    if (markedReadRef.current.has(requestId)) return
+    markedReadRef.current.add(requestId)
+    markAdminReadMutation.mutate(undefined as any)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [requestId, isStaff, isLoading, isPlaceholderData])
 
   useEffect(() => {
     if (!requestId) return

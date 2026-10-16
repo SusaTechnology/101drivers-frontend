@@ -4572,55 +4572,7 @@
     "attributes": "*"
   },
   {
-    "role": "BUSINESS_CUSTOMER",
-    "resource": "NotificationEvent",
-    "action": "create:any",
-    "attributes": "*"
-  },
-  {
-    "role": "DRIVER",
-    "resource": "NotificationEvent",
-    "action": "create:any",
-    "attributes": "*"
-  },
-  {
-    "role": "PRIVATE_CUSTOMER",
-    "resource": "NotificationEvent",
-    "action": "create:any",
-    "attributes": "*"
-  },
-  {
-    "role": "user",
-    "resource": "NotificationEvent",
-    "action": "create:any",
-    "attributes": "*"
-  },
-  {
     "role": "ADMIN",
-    "resource": "NotificationEvent",
-    "action": "update:any",
-    "attributes": "*"
-  },
-  {
-    "role": "BUSINESS_CUSTOMER",
-    "resource": "NotificationEvent",
-    "action": "update:any",
-    "attributes": "*"
-  },
-  {
-    "role": "DRIVER",
-    "resource": "NotificationEvent",
-    "action": "update:any",
-    "attributes": "*"
-  },
-  {
-    "role": "PRIVATE_CUSTOMER",
-    "resource": "NotificationEvent",
-    "action": "update:any",
-    "attributes": "*"
-  },
-  {
-    "role": "user",
     "resource": "NotificationEvent",
     "action": "update:any",
     "attributes": "*"
@@ -4632,55 +4584,7 @@
     "attributes": "*"
   },
   {
-    "role": "BUSINESS_CUSTOMER",
-    "resource": "NotificationEvent",
-    "action": "delete:any",
-    "attributes": "*"
-  },
-  {
-    "role": "DRIVER",
-    "resource": "NotificationEvent",
-    "action": "delete:any",
-    "attributes": "*"
-  },
-  {
-    "role": "PRIVATE_CUSTOMER",
-    "resource": "NotificationEvent",
-    "action": "delete:any",
-    "attributes": "*"
-  },
-  {
-    "role": "user",
-    "resource": "NotificationEvent",
-    "action": "delete:any",
-    "attributes": "*"
-  },
-  {
     "role": "ADMIN",
-    "resource": "NotificationEvent",
-    "action": "read:any",
-    "attributes": "*"
-  },
-  {
-    "role": "BUSINESS_CUSTOMER",
-    "resource": "NotificationEvent",
-    "action": "read:any",
-    "attributes": "*"
-  },
-  {
-    "role": "DRIVER",
-    "resource": "NotificationEvent",
-    "action": "read:any",
-    "attributes": "*"
-  },
-  {
-    "role": "PRIVATE_CUSTOMER",
-    "resource": "NotificationEvent",
-    "action": "read:any",
-    "attributes": "*"
-  },
-  {
-    "role": "user",
     "resource": "NotificationEvent",
     "action": "read:any",
     "attributes": "*"

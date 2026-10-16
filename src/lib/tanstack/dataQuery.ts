@@ -959,5 +959,25 @@ export async function serverLogout(): Promise<void> {
 export function performSignOut(): void {
   void serverLogout();
   stopSessionKeepAlive();
+  // Wipe the TanStack Query cache BEFORE clearing auth. Query keys carry no
+  // user identity, so without this the next account that signs in on the
+  // same tab was served the previous account's cached data (most visibly the
+  // notification bell: user B briefly saw user A's inbox until the refetch
+  // landed). provider.tsx registers the mounted client via
+  // registerSignOutCacheClear() — a lazy hook to avoid a module cycle.
+  signOutCacheClear?.();
   clearAuth();
+}
+
+// ── Sign-out cache hook (wired by provider.tsx, avoids import cycle) ──
+let signOutCacheClear: (() => void) | null = null;
+
+/**
+ * provider.tsx calls this once at module init with a callback that clears
+ * the mounted QueryClient. Kept as an injected callback (instead of a direct
+ * import) because provider.tsx already imports from this module — a direct
+ * import of the client here would create a circular initialization.
+ */
+export function registerSignOutCacheClear(fn: () => void): void {
+  signOutCacheClear = fn;
 }

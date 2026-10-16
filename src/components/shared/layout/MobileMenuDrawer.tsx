@@ -87,13 +87,16 @@ export function MobileMenuDrawer({
                 to={item.href}
                 onClick={onClose}
                 className={cn(
-                  'block px-4 py-3 rounded-2xl text-sm font-semibold transition-colors',
+                  'flex items-center justify-between gap-2 px-4 py-3 rounded-2xl text-sm font-semibold transition-colors',
                   active
                     ? 'bg-primary/15 text-primary border border-primary/25'
                     : 'text-slate-600 dark:text-slate-400 hover:text-primary hover:bg-slate-50 dark:hover:bg-slate-800'
                 )}
               >
                 {item.label}
+                {/* Live counter (e.g. Support unread badge) — same badge
+                    node the horizontal bar renders. */}
+                {item.badge}
               </Link>
             );
           })}

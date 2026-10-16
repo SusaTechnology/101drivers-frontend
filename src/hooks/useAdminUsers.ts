@@ -139,6 +139,32 @@ export function useAdminUsersV2(params: AdminUsersV2Params = {}) {
   });
 }
 
+// ==================== V2 — STATUS STATS (dedicated endpoint) ====================
+
+/**
+ * Global per-status counts for the Users page status cards.
+ *
+ * Hits the DEDICATED GET /api/users/admin/status-stats endpoint — never the
+ * users list endpoint — so the cards always show global counts while the
+ * table pages through filtered rows (same pattern as the deliveries page's
+ * admin/stats hook). Card counts and table rows agree 1:1 because clicking
+ * a card applies the same role+status filter the count was grouped by.
+ */
+export interface AdminUserStatusStats {
+  drivers: Record<string, number>;
+  businessCustomers: Record<string, number>;
+  privateCustomers: Record<string, number>;
+}
+
+export function useAdminUserStatusStats() {
+  return useDataQuery<AdminUserStatusStats>({
+    apiEndPoint: `${API_BASE_URL}/api/users/admin/status-stats`,
+    noFilter: true,
+    staleTime: 60 * 1000,
+    queryKey: ['admin-users-status-stats'],
+  });
+}
+
 // ==================== ADMIN ZIP REGIONS (generated data) ====================
 
 /** One dropdown entry for the admin ZIP region filter. */

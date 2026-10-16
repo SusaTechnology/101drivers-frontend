@@ -48,6 +48,7 @@ import { Brand } from '@/lib/items/brand';
 import { useAdminActions } from '@/hooks/useAdminActions';
 import {
   useAdminUsersV2,
+  useAdminUserStatusStats,
   useZipRegions,
   useApproveCustomer,
   useRejectCustomer,
@@ -212,6 +213,52 @@ function statusOptionsForRole(role: string): { value: string; label: string }[] 
   if (role === 'DRIVER') return DRIVER_STATUS_OPTIONS;
   if (role === 'PRIVATE_CUSTOMER' || role === 'BUSINESS_CUSTOMER') return CUSTOMER_STATUS_OPTIONS;
   return V2_STATUS_OPTIONS;
+}
+
+// ==================== STATUS STAT CARDS (dedicated stats endpoint) ====================
+// Small per-status count cards above the table, fed by the DEDICATED
+// GET /users/admin/status-stats endpoint (global counts — NOT the paginated
+// users list). Clicking a card applies the matching Role + Status filter to
+// the table; clicking the active card clears the filter. Colors mirror the
+// row badges (getDriverStatusColor / getCustomerApprovalStatusColor).
+type StatCardConfig = {
+  value: string;
+  label: string;
+  color: string;
+  bgColor: string;
+  borderColor: string;
+};
+
+const DRIVER_STAT_CARDS: StatCardConfig[] = [
+  { value: 'WAITLISTED', label: 'Waitlisted', color: 'text-slate-600 dark:text-slate-300', bgColor: 'bg-slate-50 dark:bg-slate-800/50', borderColor: 'border-slate-200 dark:border-slate-700' },
+  { value: 'INVITED', label: 'Invited', color: 'text-sky-600 dark:text-sky-400', bgColor: 'bg-sky-50 dark:bg-sky-900/20', borderColor: 'border-sky-200 dark:border-sky-800' },
+  { value: 'PENDING_APPROVAL', label: 'Pending Approval', color: 'text-amber-600 dark:text-amber-400', bgColor: 'bg-amber-50 dark:bg-amber-900/20', borderColor: 'border-amber-200 dark:border-amber-800' },
+  { value: 'APPROVED', label: 'Approved', color: 'text-emerald-600 dark:text-emerald-400', bgColor: 'bg-emerald-50 dark:bg-emerald-900/20', borderColor: 'border-emerald-200 dark:border-emerald-800' },
+  { value: 'ON_HOLD', label: 'On Hold', color: 'text-amber-600 dark:text-amber-400', bgColor: 'bg-amber-50 dark:bg-amber-900/20', borderColor: 'border-amber-200 dark:border-amber-800' },
+  { value: 'REJECTED', label: 'Rejected', color: 'text-rose-600 dark:text-rose-400', bgColor: 'bg-rose-50 dark:bg-rose-900/20', borderColor: 'border-rose-200 dark:border-rose-800' },
+  { value: 'SUSPENDED', label: 'Suspended', color: 'text-rose-600 dark:text-rose-400', bgColor: 'bg-rose-50 dark:bg-rose-900/20', borderColor: 'border-rose-200 dark:border-rose-800' },
+];
+
+const CUSTOMER_STAT_CARDS: StatCardConfig[] = [
+  { value: 'PENDING', label: 'Pending Approval', color: 'text-amber-600 dark:text-amber-400', bgColor: 'bg-amber-50 dark:bg-amber-900/20', borderColor: 'border-amber-200 dark:border-amber-800' },
+  { value: 'APPROVED', label: 'Approved', color: 'text-emerald-600 dark:text-emerald-400', bgColor: 'bg-emerald-50 dark:bg-emerald-900/20', borderColor: 'border-emerald-200 dark:border-emerald-800' },
+  { value: 'REJECTED', label: 'Rejected', color: 'text-slate-600 dark:text-slate-300', bgColor: 'bg-slate-50 dark:bg-slate-800/50', borderColor: 'border-slate-200 dark:border-slate-700' },
+  { value: 'SUSPENDED', label: 'Suspended', color: 'text-rose-600 dark:text-rose-400', bgColor: 'bg-rose-50 dark:bg-rose-900/20', borderColor: 'border-rose-200 dark:border-rose-800' },
+];
+
+/** One small status card row header (e.g. "Drivers", "Private customers"). */
+function StatRowLabel({ icon, title, total }: { icon: React.ReactNode; title: string; total: number }) {
+  return (
+    <div className="flex w-24 sm:w-32 shrink-0 items-center gap-2">
+      <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-300">
+        {icon}
+      </div>
+      <div className="min-w-0">
+        <div className="text-[10px] font-bold uppercase tracking-widest text-slate-400 leading-tight">{title}</div>
+        <div className="text-sm font-black text-slate-700 dark:text-slate-200 leading-tight">{total} total</div>
+      </div>
+    </div>
+  );
 }
 
 // ==================== DEEP-LINK FILTERS (dashboard urgent tiles) ====================
@@ -751,6 +798,33 @@ export default function AdminUsersPage() {
   const summaryLoading = usersLoading;
   const refetchSummary = refetchUsers;
 
+  // ── Status stat cards (dedicated global-stats endpoint) ──
+  // Rows of small per-status count cards above the table: Drivers first,
+  // then Business customers (dealers), then Private customers. Clicking a
+  // card applies Role + Status to the table below; clicking it again
+  // clears. Counts come from GET /users/admin/status-stats — never from
+  // the paginated users list — so they stay stable across pages/filters.
+  const { data: statusStats, isLoading: statusStatsLoading } = useAdminUserStatusStats();
+
+  const handleStatusCardClick = useCallback(
+    (role: 'DRIVER' | 'BUSINESS_CUSTOMER' | 'PRIVATE_CUSTOMER', status: string) => {
+      const isActive = roleFilter === role && statusFilter === status;
+      if (isActive) {
+        setRoleFilter('all');
+        setStatusFilter('all');
+      } else {
+        setRoleFilter(role);
+        setStatusFilter(status);
+        setAdminStatusFilter('all');
+      }
+      setPage(1);
+    },
+    [roleFilter, statusFilter, setRoleFilter, setStatusFilter, setAdminStatusFilter, setPage]
+  );
+
+  const sumStats = (map?: Record<string, number>) =>
+    map ? Object.values(map).reduce((a, b) => a + (b ?? 0), 0) : 0;
+
   // Derived values from the V2 response
   const users = v2Data?.rows ?? [];
   // Super-admin gate, source 2 of 2 (see loginSnapshotSuperAdmin): the
@@ -1170,56 +1244,130 @@ export default function AdminUsersPage() {
           </div>
         </section>
 
-        {/* Summary Cards */}
-        {summaryLoading ? (
-          <SummarySkeleton />
-        ) : summary && (
-          <section className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
-            <Card className="rounded-xl border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50 p-3">
-              <div className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Total Users</div>
-              <div className="text-xl font-black mt-1">{summary.totalUsers}</div>
-            </Card>
-            <Card className="rounded-xl border-slate-200 dark:border-slate-800 bg-emerald-50 dark:bg-emerald-900/20 p-3">
-              <div className="text-[10px] font-bold uppercase tracking-widest text-emerald-500">Active</div>
-              <div className="text-xl font-black mt-1 text-emerald-600">{summary.activeUsers}</div>
-            </Card>
-            <Card className="rounded-xl border-slate-200 dark:border-slate-800 bg-rose-50 dark:bg-rose-900/20 p-3">
-              <div className="text-[10px] font-bold uppercase tracking-widest text-rose-500">Inactive</div>
-              <div className="text-xl font-black mt-1 text-rose-600">{summary.inactiveUsers}</div>
-            </Card>
-            {/* V2: Clickable "Pending Approvals" card — sets status=PENDING filter */}
-            <Card
-              className="rounded-xl border-slate-200 dark:border-slate-800 bg-amber-50 dark:bg-amber-900/20 p-3 cursor-pointer hover:ring-2 hover:ring-amber-300 dark:hover:ring-amber-700 transition"
-              onClick={() => {
-                setStatusFilter('PENDING');
-                setRoleFilter('all');
-                setPage(1);
-              }}
-            >
-              <div className="text-[10px] font-bold uppercase tracking-widest text-amber-500">Pending Approvals</div>
-              <div className="text-xl font-black mt-1 text-amber-600">
-                {summary.pendingApprovals.customers + summary.pendingApprovals.drivers}
+        {/* Status Stat Cards — one row per audience, global counts from the
+            dedicated stats endpoint. Click a card to filter the table to
+            that role+status; click again to clear. */}
+        <section className="mb-6 space-y-2">
+          {/* Row 1 — Drivers */}
+          <Card className="rounded-2xl border-slate-200 dark:border-slate-800 p-3">
+            <div className="flex items-center gap-3 overflow-x-auto">
+              <StatRowLabel icon={<Truck className="h-4 w-4" />} title="Drivers" total={sumStats(statusStats?.drivers)} />
+              <div className="flex flex-1 items-stretch gap-2 min-w-0">
+                {statusStatsLoading &&
+                  DRIVER_STAT_CARDS.map((c) => (
+                    <div key={c.value} className="min-w-[76px] flex-1 rounded-xl border border-slate-200 dark:border-slate-800 p-2">
+                      <Skeleton className="h-5 w-10 mb-1" />
+                      <Skeleton className="h-2.5 w-14" />
+                    </div>
+                  ))}
+                {!statusStatsLoading &&
+                  DRIVER_STAT_CARDS.map((config) => {
+                    const active = roleFilter === 'DRIVER' && statusFilter === config.value;
+                    return (
+                      <button
+                        key={config.value}
+                        onClick={() => handleStatusCardClick('DRIVER', config.value)}
+                        title={active ? 'Click to clear filter' : `Show ${config.label} drivers`}
+                        className={cn(
+                          'min-w-[76px] flex-1 flex flex-col items-center justify-center px-2 py-2 rounded-xl border transition-all cursor-pointer',
+                          active
+                            ? `${config.bgColor} ${config.borderColor} ring-2 ring-primary/30`
+                            : 'bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-900'
+                        )}
+                      >
+                        <div className={cn('text-lg font-black leading-none', config.color)}>
+                          {statusStats?.drivers?.[config.value] ?? 0}
+                        </div>
+                        <div className="text-[9px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mt-1 text-center leading-tight">
+                          {config.label}
+                        </div>
+                      </button>
+                    );
+                  })}
               </div>
-              <div className="text-[10px] text-amber-600 mt-0.5">
-                {summary.pendingApprovals.customers} customers, {summary.pendingApprovals.drivers} drivers
+            </div>
+          </Card>
+
+          {/* Rows 2+3 — Business customers (dealers) and Private customers.
+              Same statuses, different audiences; kept as two labeled rows so
+              each stays small enough to fit, per the stats redesign. */}
+          <Card className="rounded-2xl border-slate-200 dark:border-slate-800 p-3">
+            <div className="flex items-center gap-3 overflow-x-auto">
+              <StatRowLabel icon={<Store className="h-4 w-4" />} title="Business Customers" total={sumStats(statusStats?.businessCustomers)} />
+              <div className="flex flex-1 items-stretch gap-2 min-w-0">
+                {statusStatsLoading &&
+                  CUSTOMER_STAT_CARDS.map((c) => (
+                    <div key={c.value} className="min-w-[76px] flex-1 rounded-xl border border-slate-200 dark:border-slate-800 p-2">
+                      <Skeleton className="h-5 w-10 mb-1" />
+                      <Skeleton className="h-2.5 w-14" />
+                    </div>
+                  ))}
+                {!statusStatsLoading &&
+                  CUSTOMER_STAT_CARDS.map((config) => {
+                    const active = roleFilter === 'BUSINESS_CUSTOMER' && statusFilter === config.value;
+                    return (
+                      <button
+                        key={config.value}
+                        onClick={() => handleStatusCardClick('BUSINESS_CUSTOMER', config.value)}
+                        title={active ? 'Click to clear filter' : `Show ${config.label} business customers`}
+                        className={cn(
+                          'min-w-[76px] flex-1 flex flex-col items-center justify-center px-2 py-2 rounded-xl border transition-all cursor-pointer',
+                          active
+                            ? `${config.bgColor} ${config.borderColor} ring-2 ring-primary/30`
+                            : 'bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-900'
+                        )}
+                      >
+                        <div className={cn('text-lg font-black leading-none', config.color)}>
+                          {statusStats?.businessCustomers?.[config.value] ?? 0}
+                        </div>
+                        <div className="text-[9px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mt-1 text-center leading-tight">
+                          {config.label}
+                        </div>
+                      </button>
+                    );
+                  })}
               </div>
-              <div className="text-[9px] text-amber-500 mt-1 opacity-70">Click to filter →</div>
-            </Card>
-            <Card className="rounded-xl border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50 p-3">
-              <div className="text-[10px] font-bold uppercase tracking-widest text-slate-400">By Role</div>
-              <div className="text-xs mt-1 space-y-0.5">
-                <div className="flex justify-between">
-                  <span className="text-slate-500">Drivers:</span>
-                  <span className="font-bold">{summary.byRole.drivers}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-500">Customers:</span>
-                  <span className="font-bold">{summary.byRole.privateCustomers + summary.byRole.businessCustomers}</span>
-                </div>
+            </div>
+          </Card>
+          <Card className="rounded-2xl border-slate-200 dark:border-slate-800 p-3">
+            <div className="flex items-center gap-3 overflow-x-auto">
+              <StatRowLabel icon={<User className="h-4 w-4" />} title="Private Customers" total={sumStats(statusStats?.privateCustomers)} />
+              <div className="flex flex-1 items-stretch gap-2 min-w-0">
+                {statusStatsLoading &&
+                  CUSTOMER_STAT_CARDS.map((c) => (
+                    <div key={c.value} className="min-w-[76px] flex-1 rounded-xl border border-slate-200 dark:border-slate-800 p-2">
+                      <Skeleton className="h-5 w-10 mb-1" />
+                      <Skeleton className="h-2.5 w-14" />
+                    </div>
+                  ))}
+                {!statusStatsLoading &&
+                  CUSTOMER_STAT_CARDS.map((config) => {
+                    const active = roleFilter === 'PRIVATE_CUSTOMER' && statusFilter === config.value;
+                    return (
+                      <button
+                        key={config.value}
+                        onClick={() => handleStatusCardClick('PRIVATE_CUSTOMER', config.value)}
+                        title={active ? 'Click to clear filter' : `Show ${config.label} private customers`}
+                        className={cn(
+                          'min-w-[76px] flex-1 flex flex-col items-center justify-center px-2 py-2 rounded-xl border transition-all cursor-pointer',
+                          active
+                            ? `${config.bgColor} ${config.borderColor} ring-2 ring-primary/30`
+                            : 'bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-900'
+                        )}
+                      >
+                        <div className={cn('text-lg font-black leading-none', config.color)}>
+                          {statusStats?.privateCustomers?.[config.value] ?? 0}
+                        </div>
+                        <div className="text-[9px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mt-1 text-center leading-tight">
+                          {config.label}
+                        </div>
+                      </button>
+                    );
+                  })}
               </div>
-            </Card>
-          </section>
-        )}
+            </div>
+          </Card>
+        </section>
 
         {/* V2 Filters — search/role/status + driver-only ZIP region & ZIP,
             with the ZIP From/To range sweep tucked under "More". */}

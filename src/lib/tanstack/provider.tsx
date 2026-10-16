@@ -2,7 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { ThemeProvider } from '@/lib/theme'
 import { Toaster } from 'sonner'
 import type { ReactNode } from 'react'
-import { getLastKnownRoles } from './dataQuery'
+import { getLastKnownRoles, registerSignOutCacheClear } from './dataQuery'
 import { UploadFeedbackOverlay } from '@/lib/uploadFeedback'
 import { installResumeSync } from './resume-sync'
 
@@ -56,6 +56,13 @@ export const queryClient = new QueryClient({
 // refetchOnWindowFocus stays false on purpose — quick tab switches must
 // stay free of refetch storms; only real "came back later" events fire.
 installResumeSync(queryClient)
+
+// Sign-out cache wipe: performSignOut() (dataQuery.ts) invokes this so the
+// whole query cache is cleared when any account signs out. Without it the
+// next sign-in on the same tab could briefly render the previous account's
+// cached data (notification inbox, dashboards) because query keys carry no
+// user identity.
+registerSignOutCacheClear(() => queryClient.clear())
 
 // Global handler: when any query/mutation fails with "Session expired",
 // redirect to the correct role-specific login instead of showing a broken retry UI.

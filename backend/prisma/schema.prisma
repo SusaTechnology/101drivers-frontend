@@ -1373,12 +1373,20 @@ model SupportRequest {
   resolvedAt DateTime?
   closedAt   DateTime?
 
+  // Staff read tracking (admin navbar badge + list unread dots).
+  // Null = no admin has EVER opened the ticket. Set by the
+  // POST /supportRequests/:id/mark-admin-read endpoint when an admin
+  // opens the conversation. A ticket shows as "unread" for staff while
+  // the latest non-ADMIN note is newer than adminReadAt.
+  adminReadAt DateTime?
+
   notes SupportRequestNote[]
 
   @@index([deliveryId, status])
   @@index([userId, createdAt])
   @@index([assignedToUserId, status])
   @@index([category, status, createdAt])
+  @@index([status, adminReadAt])
 }
 
 model SupportRequestNote {

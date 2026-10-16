@@ -426,6 +426,26 @@ async adminUsersV2(
   });
 }
 
+// ── V2 — Status stats for the Users page cards (dedicated endpoint) ──
+// GLOBAL per-status counts (Drivers, Business customers, Private customers)
+// — intentionally SEPARATE from /admin/v2 so the cards don't share the
+// list endpoint's pagination/filter state. Declared BEFORE ":id" routes so
+// "admin/status-stats" can never be captured by a userId param.
+@common.Get("admin/status-stats")
+@swagger.ApiOkResponse({ type: Object })
+@nestAccessControl.UseRoles({
+  resource: "User",
+  action: "read",
+  possession: "any",
+})
+async adminUserStatusStats(): Promise<{
+  drivers: Record<string, number>;
+  businessCustomers: Record<string, number>;
+  privateCustomers: Record<string, number>;
+}> {
+  return this.service.getAdminUserStatusStats();
+}
+
 @common.Get(":id/admin-detail")
 @swagger.ApiOkResponse({ type: Object })
 @nestAccessControl.UseRoles({

@@ -666,6 +666,7 @@ export class NotificationEventEngine {
             contactName: true,
             user: {
               select: {
+                id: true,
                 email: true,
                 fullName: true,
               },
@@ -722,6 +723,12 @@ export class NotificationEventEngine {
       customerId: delivery.customerId,
       deliveryId: delivery.id,
       driverId: input.driverId,
+      // The email is addressed to the CUSTOMER ("A driver booked YOUR
+      // delivery") — the bell must land in the customer's inbox too.
+      // Previously the "booked" keyword made the template-code heuristic
+      // route the bell to the DRIVER, so the driver saw the dealer's
+      // notification and the customer saw nothing.
+      toUserId: delivery.customer?.user?.id ?? null,
       channel: EnumNotificationEventChannel.EMAIL,
       type: EnumNotificationEventType.DELIVERY_BOOKED,
       templateCode: "delivery-booked",
@@ -785,6 +792,7 @@ async notifyTripStarted(input: {
               id: true,
               user: {
                 select: {
+                  id: true,
                   email: true,
                   fullName: true,
                 },
@@ -898,6 +906,13 @@ async notifyTripStarted(input: {
       actorUserId: input.actorUserId ?? null,
       customerId: delivery.customerId,
       deliveryId: delivery.id,
+      // The email goes to the DRIVER ("You have started your delivery") —
+      // route the bell to the driver's user too. driverId was previously
+      // never passed here, so the template-code heuristic fell through to
+      // customerId and the CUSTOMER received the driver's "Trip started"
+      // notification.
+      driverId: assignedDriver?.id ?? null,
+      toUserId: assignedDriver?.user?.id ?? null,
       channel: EnumNotificationEventChannel.EMAIL,
       type: EnumNotificationEventType.TRACKING_STARTED,
       templateCode: "trip-started-driver",
@@ -3589,6 +3604,7 @@ async notifyDeliveryForceCancelled(input: {
               id: true,
               user: {
                 select: {
+                  id: true,
                   email: true,
                   fullName: true,
                 },
@@ -3755,6 +3771,7 @@ async notifyDisputeOpened(input: {
               id: true,
               user: {
                 select: {
+                  id: true,
                   email: true,
                   fullName: true,
                 },
@@ -3822,6 +3839,10 @@ async notifyDisputeOpened(input: {
       customerId: delivery.customerId,
       deliveryId: delivery.id,
       driverId: assignedDriver?.id ?? null,
+      // Explicit: the driver-worded dispute email must ring the DRIVER's
+      // bell. Without it, a missing driverId would silently fall back to
+      // the customer via the template-code heuristic.
+      toUserId: assignedDriver?.user?.id ?? null,
       channel: EnumNotificationEventChannel.EMAIL,
       type: EnumNotificationEventType.DISPUTE_OPENED,
       templateCode: "dispute-opened-driver",
@@ -3998,6 +4019,7 @@ async notifyDisputeResolved(input: {
               id: true,
               user: {
                 select: {
+                  id: true,
                   email: true,
                   fullName: true,
                 },
@@ -4076,6 +4098,9 @@ async notifyDisputeResolved(input: {
       customerId: delivery.customerId,
       deliveryId: delivery.id,
       driverId: assignedDriver?.id ?? null,
+      // Explicit: driver-worded resolution email → driver's bell (see
+      // dispute-opened-driver note).
+      toUserId: assignedDriver?.user?.id ?? null,
       channel: EnumNotificationEventChannel.EMAIL,
       type: EnumNotificationEventType.DISPUTE_UPDATED,
       templateCode: "dispute-resolved-driver",

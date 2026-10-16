@@ -327,6 +327,38 @@ export class SupportRequestOrchestratorService {
     });
   }
 
+  /**
+   * Staff read receipt: an admin opened the conversation. Sets
+   * SupportRequest.adminReadAt (null = never opened) so the ticket stops
+   * counting as unread for the navbar badge and the support list dots.
+   * Idempotent and side-effect-free beyond the timestamp — resolving,
+   * closing and replying keep working exactly as before.
+   *
+   * A contentless staff-ops ping is emitted so OTHER admins' badges and
+   * open list pages refresh too (own clients also refetch locally).
+   */
+  async markAdminRead(input: {
+    supportRequestId: string;
+  }): Promise<{ id: string; adminReadAt: Date }> {
+    const now = new Date();
+
+    const request = await this.prisma.supportRequest.update({
+      where: { id: input.supportRequestId },
+      data: { adminReadAt: now },
+      select: { id: true, adminReadAt: true },
+    });
+
+    // Contentless ping — same privacy contract as create/reply pings.
+    this.trackingGateway.emitStaffOpsPing({
+      supportRequestId: input.supportRequestId,
+      status: EnumSupportStatus.IN_PROGRESS,
+    });
+
+    // Prisma types the selected column as Date | null; we just SET it, so
+    // coerce for the callers (FE + controller return type).
+    return { id: request.id, adminReadAt: request.adminReadAt ?? now };
+  }
+
   // ==============================
   // ACCESS CONTROL
   // ==============================

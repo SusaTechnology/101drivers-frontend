@@ -122,6 +122,42 @@ export class SupportRequestController extends SupportRequestControllerBase {
     });
   }
 
+  /**
+   * Staff unread count for the admin navbar "Support" badge.
+   * Returns how many active (OPEN / IN_PROGRESS) tickets have non-admin
+   * activity newer than the staff read receipt (adminReadAt). The navbar
+   * joins the staff:ops socket room and refetches on support:staff-inbox
+   * pings — a new ticket or customer reply bumps the badge live.
+   */
+  @common.Get("admin/unread-count")
+  @swagger.ApiOkResponse({ type: Object })
+  async adminUnreadSupportCount(@common.Req() req: Request): Promise<{
+    unreadCount: number;
+  }> {
+    const user = req.user as any;
+    return this.service.getAdminUnreadSupportCount(user?.roles ?? []);
+  }
+
+  /**
+   * Staff read receipt: an admin opened the conversation. Marks the ticket
+   * read (adminReadAt = now) so it drops out of the badge count and its red
+   * dot on the support list clears. Other admins' badges refresh via the
+   * contentless support:staff-inbox ping the orchestrator emits.
+   */
+  @common.Post(":id/mark-admin-read")
+  @swagger.ApiOkResponse({ type: Object })
+  async markSupportRequestAdminRead(
+    @common.Param("id") id: string,
+    @common.Req() req: Request
+  ): Promise<{ id: string; adminReadAt: Date }> {
+    const user = req.user as any;
+
+    return this.service.markAdminRead({
+      supportRequestId: id,
+      actorRoles: user?.roles ?? [],
+    });
+  }
+
   @common.Get(":id/detail")
   @swagger.ApiOkResponse({ type: SupportRequest })
   @swagger.ApiNotFoundResponse({ type: errors.NotFoundException })

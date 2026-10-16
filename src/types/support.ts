@@ -88,6 +88,10 @@ export interface SupportRequestListItem {
   deliveryId?: string;
   createdAt: string;
   updatedAt: string;
+  /** Admin queue only: true while the latest non-admin note is newer than the staff read receipt (adminReadAt). */
+  unreadForAdmin?: boolean;
+  /** Admin queue only: how many non-admin messages arrived after the staff read receipt. */
+  unreadMessages?: number;
 }
 
 export interface ListSupportRequestsResponse {
