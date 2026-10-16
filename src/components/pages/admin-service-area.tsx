@@ -161,8 +161,9 @@ export default function AdminServiceAreaPage() {
     method: 'PUT',
     getBody: (variables) => JSON.stringify(variables),
     onSuccess: (data) => {
+      const s = data?.summary;
       toast.success('Service area saved', {
-        description: `${data?.summary?.flippedToIn ?? 0} driver badge(s) turned green, ${data?.summary?.flippedToOut ?? 0} turned gray. Every flip is audited.`,
+        description: `${s?.inArea ?? 0} driver(s) in pickup area, ${s?.outOfArea ?? 0} gray, ${s?.unresolved ?? 0} flagged after this save (${s?.flippedToIn ?? 0} newly green, ${s?.flippedToOut ?? 0} newly gray vs the previous zone). Every flip is audited.`,
       });
       setShowConfirm(false);
       setEditMode(false);
@@ -473,7 +474,11 @@ export default function AdminServiceAreaPage() {
         </Card>
       </main>
 
-      {/* Confirm dialog — flip counts before saving */}
+      {/* Confirm dialog — OUTCOME first, deltas second. "Turn green/gray"
+          counts are CHANGES vs the last SAVED shape: if the saved zone
+          already covers a driver, redrawing inside it shows 0 flips even
+          though the preview worked — so the dialog leads with the absolute
+          where-will-everyone-land numbers (summary.inArea/outOfArea). */}
       <Dialog open={showConfirm} onOpenChange={(open) => { if (!open) setShowConfirm(false); }}>
         <DialogContent className="rounded-3xl max-w-md">
           <DialogHeader>
@@ -482,22 +487,35 @@ export default function AdminServiceAreaPage() {
               Apply the new zone?
             </DialogTitle>
             <DialogDescription>
-              Saving re-runs the ZIP check for every driver. Here is what changes:
+              Saving re-runs the ZIP check for every driver. Here is where every driver lands after the save:
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-2 py-2 text-sm">
             <div className="flex items-center justify-between rounded-xl border border-emerald-200 dark:border-emerald-900/40 bg-emerald-50 dark:bg-emerald-950/30 px-3 py-2">
-              <span className="font-bold text-emerald-700 dark:text-emerald-300">Turn green (in pickup area)</span>
-              <span className="font-black text-emerald-700 dark:text-emerald-300">{summary?.flippedToIn ?? 0}</span>
+              <div>
+                <div className="font-bold text-emerald-700 dark:text-emerald-300">Will be green (in pickup area)</div>
+                {(summary?.flippedToIn ?? 0) > 0 && (
+                  <div className="text-[11px] font-bold text-emerald-600/80 dark:text-emerald-400/80">+{summary?.flippedToIn} newly green vs the saved zone</div>
+                )}
+              </div>
+              <span className="font-black text-lg text-emerald-700 dark:text-emerald-300">{summary?.inArea ?? 0}</span>
             </div>
             <div className="flex items-center justify-between rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 px-3 py-2">
-              <span className="font-bold text-slate-600 dark:text-slate-300">Turn gray (out of area)</span>
-              <span className="font-black text-slate-600 dark:text-slate-300">{summary?.flippedToOut ?? 0}</span>
+              <div>
+                <div className="font-bold text-slate-600 dark:text-slate-300">Will be gray (out of area)</div>
+                {(summary?.flippedToOut ?? 0) > 0 && (
+                  <div className="text-[11px] font-bold text-slate-500">+{summary?.flippedToOut} newly gray vs the saved zone</div>
+                )}
+              </div>
+              <span className="font-black text-lg text-slate-600 dark:text-slate-300">{summary?.outOfArea ?? 0}</span>
             </div>
             <div className="flex items-center justify-between rounded-xl border border-amber-200 dark:border-amber-900/40 bg-amber-50 dark:bg-amber-950/30 px-3 py-2">
               <span className="font-bold text-amber-700 dark:text-amber-300">Unresolved / flagged</span>
-              <span className="font-black text-amber-700 dark:text-amber-300">{summary?.unresolved ?? 0}</span>
+              <span className="font-black text-lg text-amber-700 dark:text-amber-300">{summary?.unresolved ?? 0}</span>
             </div>
+            <p className="text-[11px] text-slate-400">
+              Out of {summary?.totalDrivers ?? 0} drivers. The "+ newly" counts are changes against the zone that is saved RIGHT NOW — shrinking the saved zone first is what makes a later, larger shape show newly-green drivers.
+            </p>
             {(summary?.flippedZipsIn?.length ?? 0) + (summary?.flippedZipsOut?.length ?? 0) > 0 && (
               <p className="text-[11px] text-slate-400 pt-1">
                 Sample flipping ZIPs: {[...(summary?.flippedZipsIn ?? []), ...(summary?.flippedZipsOut ?? [])].slice(0, 8).join(', ')}
