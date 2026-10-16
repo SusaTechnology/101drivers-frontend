@@ -1042,19 +1042,23 @@ export default function AdminUsersPage() {
     [roleFilter, statusFilter, setRoleFilter, setStatusFilter, setAdminStatusFilter, setPage]
   );
 
-  // Admin-row cards drive the SEPARATE admin lifecycle dropdown state
-  // (ADMIN_ prefix — see ADMIN_STATUS_OPTIONS). Same click-twice-to-clear
-  // contract as the role rows.
+  // Admin-row cards drive the SEPARATE admin lifecycle dropdown state.
+  // adminStatusFilter stores the RAW value (e.g. PENDING_INVITE) — exactly
+  // what the Status dropdown and sessionStorage restore validate against;
+  // the ADMIN_ prefix is added once, in the query builder, where the value
+  // is sent. Storing a prefixed value here would double-prefix the request
+  // (ADMIN_ADMIN_*) — an unknown status the backend silently ignores, so
+  // the table would show ALL admins instead of the filtered lifecycle.
+  // Same click-twice-to-clear contract as the role rows.
   const handleAdminCardClick = useCallback(
     (status: string) => {
-      const adminValue = `ADMIN_${status}`;
-      const isActive = roleFilter === 'ADMIN' && adminStatusFilter === adminValue;
+      const isActive = roleFilter === 'ADMIN' && adminStatusFilter === status;
       if (isActive) {
         setRoleFilter('all');
         setAdminStatusFilter('all');
       } else {
         setRoleFilter('ADMIN');
-        setAdminStatusFilter(adminValue);
+        setAdminStatusFilter(status);
         setStatusFilter('all');
       }
       setPage(1);
@@ -1585,7 +1589,7 @@ export default function AdminUsersPage() {
             showBreakdown={isCurrentUserSuperAdmin}
             isRoleFiltered={roleFilter === 'ADMIN'}
             isRoleOnlyActive={roleFilter === 'ADMIN' && adminStatusFilter === 'all'}
-            isStatusActive={(c) => roleFilter === 'ADMIN' && adminStatusFilter === `ADMIN_${c.value}`}
+            isStatusActive={(c) => roleFilter === 'ADMIN' && adminStatusFilter === c.value}
             onRoleClick={() => handleRoleCardClick('ADMIN')}
             onStatusClick={(c) => handleAdminCardClick(c.value)}
           />
