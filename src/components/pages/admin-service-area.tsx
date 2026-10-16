@@ -11,6 +11,17 @@
 //     rejected), saves, re-runs point-in-polygon for ALL drivers, flips
 //     their derived badges, and audits every change
 //
+// EDITING CONTRACT (react-google-maps internals — do not "simplify"):
+//   • <Polygon> fires onLoad ONCE at mount (it mounts in view mode), so
+//     the ref is stored unconditionally and path listeners are
+//     (re-)attached in an effect keyed to path identity — every path-prop
+//     change swaps the MVCArray underneath us.
+//   • While editing, the `path` PROP stays FROZEN at the shape captured
+//     in startEdit. Feeding dragged coords back through the prop would
+//     make the library call setPath() mid-drag (listeners die, shape
+//     snaps). Google owns the geometry during the session; the live ring
+//     is read straight off polygonRef at preview/save time.
+//
 // The badge is DERIVED and INFORMATIONAL: green = ZIP inside the polygon
 // = eligible for first-level review / call follow-up. It never activates,
 // never deactivates, never rejects anyone — Driver.status stays 100%
@@ -165,55 +176,89 @@ export default function AdminServiceAreaPage() {
 
   // ── Editing state ──
   const [editMode, setEditMode] = useState(false);
+  // The path the Polygon PROP shows during an edit session — captured ONCE
+  // in startEdit and never updated while dragging. Google's own handles own
+  // the real geometry; editedCoords is only bookkeeping (vertex counter).
+  const [editStartPaths, setEditStartPaths] = useState<{ lat: number; lng: number }[]>([]);
   const [editedCoords, setEditedCoords] = useState<[number, number][]>([]);
   const [vertexCount, setVertexCount] = useState(0);
   const [showConfirm, setShowConfirm] = useState(false);
   const polygonRef = useRef(null);
+  const editModeRef = useRef(false);
+  useEffect(() => {
+    editModeRef.current = editMode;
+  }, [editMode]);
+
+  // Saved shape as the view-mode path prop. Memoized so an unrelated
+  // re-render never triggers the library's setPath() path-updater.
+  const savedPaths = React.useMemo(() => coordsToPaths(polygon?.coords ?? []), [polygon]);
 
   const syncFromPolygon = useCallback(() => {
+    if (!editModeRef.current) return; // listeners live in view mode too
     if (!polygonRef.current) return;
     const ring = pathsToCoords(polygonRef.current.getPath());
     setEditedCoords(ring);
     setVertexCount(ring.length);
   }, []);
 
+  // Store the polygon instance. The library fires onLoad ONCE (mount,
+  // view mode) — path listeners are attached by the effect below, which
+  // also survives every setPath() MVCArray swap.
   const handlePolygonLoad = useCallback(
     (poly) => {
       polygonRef.current = poly;
-      const path = poly.getPath();
-      const update = () => syncFromPolygon();
-      google.maps.event.clearListeners(path, 'insert_at');
-      google.maps.event.clearListeners(path, 'remove_at');
-      google.maps.event.clearListeners(path, 'set_at');
-      path.addListener('insert_at', update);
-      path.addListener('remove_at', update);
-      path.addListener('set_at', update);
-      syncFromPolygon();
     },
-    [syncFromPolygon],
+    [],
   );
+  useEffect(() => {
+    const poly = polygonRef.current;
+    if (!isLoaded || !poly) return;
+    const path = poly.getPath();
+    const update = () => syncFromPolygon();
+    google.maps.event.clearListeners(path, 'insert_at');
+    google.maps.event.clearListeners(path, 'remove_at');
+    google.maps.event.clearListeners(path, 'set_at');
+    path.addListener('insert_at', update);
+    path.addListener('remove_at', update);
+    path.addListener('set_at', update);
+    syncFromPolygon();
+  }, [isLoaded, editMode, savedPaths, editStartPaths, syncFromPolygon]);
+
+  // Live ring straight off the map object — the authoritative shape for
+  // preview/save (never trusts captured state, however it drifted).
+  const currentRing = useCallback((): [number, number][] => {
+    if (polygonRef.current) {
+      return pathsToCoords(polygonRef.current.getPath());
+    }
+    return editedCoords;
+  }, [editedCoords]);
 
   const startEdit = () => {
+    const startPaths = coordsToPaths(polygon?.coords ?? []);
+    setEditStartPaths(startPaths);
     setEditedCoords((polygon?.coords ?? []).map(([lat, lng]) => [lat, lng]));
     setVertexCount((polygon?.coords ?? []).length);
     setEditMode(true);
   };
 
   const cancelEdit = () => {
+    // Path prop flips back to savedPaths → the library setPath() restores
+    // the saved shape. polygonRef must SURVIVE: onLoad never re-fires.
     setEditMode(false);
+    setEditStartPaths([]);
     setEditedCoords([]);
     setVertexCount(0);
-    polygonRef.current = null;
   };
 
   // ── Preview → confirm → save ──
   const handlePreview = () => {
-    if (editedCoords.length < 3) {
+    const ring = currentRing();
+    if (ring.length < 3) {
       toast.error('A polygon needs at least 3 vertices');
       return;
     }
     previewMutation.mutate(
-      { coords: editedCoords },
+      { coords: ring },
       {
         onSuccess: (data) => {
           setShowConfirm(true);
@@ -228,16 +273,19 @@ export default function AdminServiceAreaPage() {
   };
 
   const confirmSave = () => {
-    saveMutation.mutate({ coords: editedCoords });
+    // Read the ring AGAIN at save time — same session, dialog was modal,
+    // but this guarantees save applies exactly what is on the map.
+    saveMutation.mutate({ coords: currentRing() });
   };
 
   // ── Render helpers ──
-  const displayCoords = editMode ? editedCoords : polygon?.coords ?? [];
-  const displayPaths = coordsToPaths(displayCoords);
+  // The path prop the map shows: FROZEN at edit start while editing
+  // (Google owns the geometry until save/cancel), server shape otherwise.
+  const propPaths = editMode ? editStartPaths : savedPaths;
   const center =
-    displayPaths.length > 0
-      ? displayPaths.reduce(
-          (acc, p) => ({ lat: acc.lat + p.lat / displayPaths.length, lng: acc.lng + p.lng / displayPaths.length }),
+    propPaths.length > 0
+      ? propPaths.reduce(
+          (acc, p) => ({ lat: acc.lat + p.lat / propPaths.length, lng: acc.lng + p.lng / propPaths.length }),
           { lat: 0, lng: 0 },
         )
       : DEFAULT_CENTER;
@@ -379,8 +427,8 @@ export default function AdminServiceAreaPage() {
                   }}
                 >
                   <Polygon
-                    path={displayPaths}
-                    onLoad={editMode ? handlePolygonLoad : undefined}
+                    path={propPaths}
+                    onLoad={handlePolygonLoad}
                     options={{
                       fillColor: '#84cc16',
                       fillOpacity: editMode ? 0.25 : 0.18,
