@@ -154,6 +154,12 @@ export interface AdminUserStatusStats {
   drivers: Record<string, number>;
   businessCustomers: Record<string, number>;
   privateCustomers: Record<string, number>;
+  /** Admin lifecycle counts (ACTIVE / PENDING_INVITE / INVITE_EXPIRED /
+   *  DISABLED + the SUPER_ADMIN flag count, which overlaps lifecycle). */
+  admins?: Record<string, number>;
+  /** True admin row count — the row's total (Super Admin overlaps the
+   *  lifecycle statuses, so the map cannot simply be summed). */
+  adminsTotal?: number;
 }
 
 export function useAdminUserStatusStats() {
@@ -220,7 +226,7 @@ export function useSuspendUser() {
   return useDataMutation<AdminUserRow, SuspendUserRequest>({
     apiEndPoint: `${API_BASE_URL}/api/users/:id/suspend`,
     method: 'POST',
-    invalidateQueryKey: [['admin-users'], ['admin-users-v2'], ['admin-users-summary'], ['admin-user-detail']],
+    invalidateQueryKey: [['admin-users'], ['admin-users-v2'], ['admin-users-summary'], ['admin-users-status-stats'], ['admin-user-detail']],
   });
 }
 
@@ -234,7 +240,7 @@ export function useUnsuspendUser() {
   return useDataMutation<AdminUserRow, UnsuspendUserRequest>({
     apiEndPoint: `${API_BASE_URL}/api/users/:id/unsuspend`,
     method: 'POST',
-    invalidateQueryKey: [['admin-users'], ['admin-users-v2'], ['admin-users-summary'], ['admin-user-detail']],
+    invalidateQueryKey: [['admin-users'], ['admin-users-v2'], ['admin-users-summary'], ['admin-users-status-stats'], ['admin-user-detail']],
   });
 }
 
@@ -248,7 +254,7 @@ export function useApproveCustomer() {
   return useDataMutation<AdminUserDetail, ApproveCustomerRequest>({
     apiEndPoint: `${API_BASE_URL}/api/users/:id/approve-customer`,
     method: 'POST',
-    invalidateQueryKey: [['admin-users'], ['admin-users-v2'], ['admin-users-summary'], ['admin-user-detail']],
+    invalidateQueryKey: [['admin-users'], ['admin-users-v2'], ['admin-users-summary'], ['admin-users-status-stats'], ['admin-user-detail']],
   });
 }
 
@@ -260,7 +266,7 @@ export function useRejectCustomer() {
   return useDataMutation<AdminUserDetail, RejectCustomerRequest>({
     apiEndPoint: `${API_BASE_URL}/api/users/:id/reject-customer`,
     method: 'POST',
-    invalidateQueryKey: [['admin-users'], ['admin-users-v2'], ['admin-users-summary'], ['admin-user-detail']],
+    invalidateQueryKey: [['admin-users'], ['admin-users-v2'], ['admin-users-summary'], ['admin-users-status-stats'], ['admin-user-detail']],
   });
 }
 
@@ -272,7 +278,7 @@ export function useSuspendCustomer() {
   return useDataMutation<AdminUserDetail, SuspendCustomerRequest>({
     apiEndPoint: `${API_BASE_URL}/api/users/:id/suspend-customer`,
     method: 'POST',
-    invalidateQueryKey: [['admin-users'], ['admin-users-v2'], ['admin-users-summary'], ['admin-user-detail']],
+    invalidateQueryKey: [['admin-users'], ['admin-users-v2'], ['admin-users-summary'], ['admin-users-status-stats'], ['admin-user-detail']],
   });
 }
 
@@ -284,7 +290,7 @@ export function useUnsuspendCustomer() {
   return useDataMutation<AdminUserDetail, UnsuspendCustomerRequest>({
     apiEndPoint: `${API_BASE_URL}/api/users/:id/unsuspend-customer`,
     method: 'POST',
-    invalidateQueryKey: [['admin-users'], ['admin-users-v2'], ['admin-users-summary'], ['admin-user-detail']],
+    invalidateQueryKey: [['admin-users'], ['admin-users-v2'], ['admin-users-summary'], ['admin-users-status-stats'], ['admin-user-detail']],
   });
 }
 
@@ -298,7 +304,7 @@ export function useApproveDriver() {
   return useDataMutation<AdminUserDetail, ApproveDriverRequest>({
     apiEndPoint: `${API_BASE_URL}/api/users/:id/approve-driver`,
     method: 'POST',
-    invalidateQueryKey: [['admin-users'], ['admin-users-v2'], ['admin-users-summary'], ['admin-user-detail']],
+    invalidateQueryKey: [['admin-users'], ['admin-users-v2'], ['admin-users-summary'], ['admin-users-status-stats'], ['admin-user-detail']],
   });
 }
 
@@ -310,7 +316,7 @@ export function useRejectDriver() {
   return useDataMutation<AdminUserDetail, RejectDriverRequest>({
     apiEndPoint: `${API_BASE_URL}/api/users/:id/reject-driver`,
     method: 'POST',
-    invalidateQueryKey: [['admin-users'], ['admin-users-v2'], ['admin-users-summary'], ['admin-user-detail']],
+    invalidateQueryKey: [['admin-users'], ['admin-users-v2'], ['admin-users-summary'], ['admin-users-status-stats'], ['admin-user-detail']],
   });
 }
 
@@ -322,7 +328,7 @@ export function useSuspendDriver() {
   return useDataMutation<AdminUserDetail, SuspendDriverRequest>({
     apiEndPoint: `${API_BASE_URL}/api/users/:id/suspend-driver`,
     method: 'POST',
-    invalidateQueryKey: [['admin-users'], ['admin-users-v2'], ['admin-users-summary'], ['admin-user-detail']],
+    invalidateQueryKey: [['admin-users'], ['admin-users-v2'], ['admin-users-summary'], ['admin-users-status-stats'], ['admin-user-detail']],
   });
 }
 
@@ -334,7 +340,7 @@ export function useUnsuspendDriver() {
   return useDataMutation<AdminUserDetail, UnsuspendDriverRequest>({
     apiEndPoint: `${API_BASE_URL}/api/users/:id/unsuspend-driver`,
     method: 'POST',
-    invalidateQueryKey: [['admin-users'], ['admin-users-v2'], ['admin-users-summary'], ['admin-user-detail']],
+    invalidateQueryKey: [['admin-users'], ['admin-users-v2'], ['admin-users-summary'], ['admin-users-status-stats'], ['admin-user-detail']],
   });
 }
 
@@ -348,7 +354,7 @@ export function useHoldDriver() {
   return useDataMutation<AdminUserDetail, HoldDriverRequest>({
     apiEndPoint: `${API_BASE_URL}/api/users/:id/hold-driver`,
     method: 'POST',
-    invalidateQueryKey: [['admin-users'], ['admin-users-v2'], ['admin-users-summary'], ['admin-user-detail']],
+    invalidateQueryKey: [['admin-users'], ['admin-users-v2'], ['admin-users-summary'], ['admin-users-status-stats'], ['admin-user-detail']],
   });
 }
 
@@ -362,7 +368,7 @@ export function useReleaseDriverHold() {
   return useDataMutation<AdminUserDetail, ReleaseDriverHoldRequest>({
     apiEndPoint: `${API_BASE_URL}/api/users/:id/release-driver-hold`,
     method: 'POST',
-    invalidateQueryKey: [['admin-users'], ['admin-users-v2'], ['admin-users-summary'], ['admin-user-detail']],
+    invalidateQueryKey: [['admin-users'], ['admin-users-v2'], ['admin-users-summary'], ['admin-users-status-stats'], ['admin-user-detail']],
   });
 }
 
@@ -376,7 +382,7 @@ export function useAdminUpdateUser() {
   return useDataMutation<AdminUserDetail, AdminUpdateUserRequest>({
     apiEndPoint: `${API_BASE_URL}/api/users/:id/admin-update`,
     method: 'PATCH',
-    invalidateQueryKey: [['admin-users'], ['admin-users-v2'], ['admin-users-summary'], ['admin-user-detail']],
+    invalidateQueryKey: [['admin-users'], ['admin-users-v2'], ['admin-users-summary'], ['admin-users-status-stats'], ['admin-user-detail']],
   });
 }
 
@@ -391,7 +397,7 @@ export function useInviteAdminUser() {
   return useDataMutation<AdminUserDetail, InviteAdminUserRequest>({
     apiEndPoint: `${API_BASE_URL}/api/users/admin-invite`,
     method: 'POST',
-    invalidateQueryKey: [['admin-users'], ['admin-users-v2'], ['admin-users-summary'], ['admin-user-detail']],
+    invalidateQueryKey: [['admin-users'], ['admin-users-v2'], ['admin-users-summary'], ['admin-users-status-stats'], ['admin-user-detail']],
   });
 }
 
@@ -406,7 +412,7 @@ export function useResendAdminInvite() {
   return useDataMutation<AdminUserDetail, ResendAdminInviteRequest>({
     apiEndPoint: `${API_BASE_URL}/api/users/:id/admin-resend-invite`,
     method: 'POST',
-    invalidateQueryKey: [['admin-users'], ['admin-users-v2'], ['admin-users-summary'], ['admin-user-detail']],
+    invalidateQueryKey: [['admin-users'], ['admin-users-v2'], ['admin-users-summary'], ['admin-users-status-stats'], ['admin-user-detail']],
   });
 }
 
@@ -424,7 +430,7 @@ export function useDisableAdmin() {
   return useDataMutation<AdminUserDetail, DisableAdminRequest>({
     apiEndPoint: `${API_BASE_URL}/api/users/:id/admin-disable`,
     method: 'POST',
-    invalidateQueryKey: [['admin-users'], ['admin-users-v2'], ['admin-users-summary'], ['admin-user-detail']],
+    invalidateQueryKey: [['admin-users'], ['admin-users-v2'], ['admin-users-summary'], ['admin-users-status-stats'], ['admin-user-detail']],
   });
 }
 
@@ -436,7 +442,7 @@ export function useEnableAdmin() {
   return useDataMutation<AdminUserDetail, EnableAdminRequest>({
     apiEndPoint: `${API_BASE_URL}/api/users/:id/admin-enable`,
     method: 'POST',
-    invalidateQueryKey: [['admin-users'], ['admin-users-v2'], ['admin-users-summary'], ['admin-user-detail']],
+    invalidateQueryKey: [['admin-users'], ['admin-users-v2'], ['admin-users-summary'], ['admin-users-status-stats'], ['admin-user-detail']],
   });
 }
 
@@ -449,7 +455,7 @@ export function usePromoteAdmin() {
   return useDataMutation<AdminUserDetail, PromoteAdminRequest>({
     apiEndPoint: `${API_BASE_URL}/api/users/:id/admin-promote`,
     method: 'POST',
-    invalidateQueryKey: [['admin-users'], ['admin-users-v2'], ['admin-users-summary'], ['admin-user-detail']],
+    invalidateQueryKey: [['admin-users'], ['admin-users-v2'], ['admin-users-summary'], ['admin-users-status-stats'], ['admin-user-detail']],
   });
 }
 
@@ -463,7 +469,7 @@ export function useDemoteAdmin() {
   return useDataMutation<AdminUserDetail, DemoteAdminRequest>({
     apiEndPoint: `${API_BASE_URL}/api/users/:id/admin-demote`,
     method: 'POST',
-    invalidateQueryKey: [['admin-users'], ['admin-users-v2'], ['admin-users-summary'], ['admin-user-detail']],
+    invalidateQueryKey: [['admin-users'], ['admin-users-v2'], ['admin-users-summary'], ['admin-users-status-stats'], ['admin-user-detail']],
   });
 }
 
@@ -477,7 +483,7 @@ export function useInviteDriver() {
   return useDataMutation<AdminUserDetail, InviteDriverRequest>({
     apiEndPoint: `${API_BASE_URL}/api/users/:id/invite-driver`,
     method: 'POST',
-    invalidateQueryKey: [['admin-users'], ['admin-users-v2'], ['admin-users-summary'], ['admin-user-detail']],
+    invalidateQueryKey: [['admin-users'], ['admin-users-v2'], ['admin-users-summary'], ['admin-users-status-stats'], ['admin-user-detail']],
   });
 }
 
@@ -491,7 +497,7 @@ export function useResendInviteDriver() {
   return useDataMutation<AdminUserDetail, InviteDriverRequest>({
     apiEndPoint: `${API_BASE_URL}/api/users/:id/resend-invite-driver`,
     method: 'POST',
-    invalidateQueryKey: [['admin-users'], ['admin-users-v2'], ['admin-users-summary'], ['admin-user-detail']],
+    invalidateQueryKey: [['admin-users'], ['admin-users-v2'], ['admin-users-summary'], ['admin-users-status-stats'], ['admin-user-detail']],
   });
 }
 
@@ -512,6 +518,6 @@ export function useDeleteUser() {
   return useDataMutation<{ id: string }, { pathParams: { id: string } }>({
     apiEndPoint: `${API_BASE_URL}/api/users/:id`,
     method: 'DELETE',
-    invalidateQueryKey: [['admin-users'], ['admin-users-v2'], ['admin-users-summary'], ['admin-user-detail']],
+    invalidateQueryKey: [['admin-users'], ['admin-users-v2'], ['admin-users-summary'], ['admin-users-status-stats'], ['admin-user-detail']],
   });
 }

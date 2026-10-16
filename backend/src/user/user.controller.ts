@@ -442,6 +442,8 @@ async adminUserStatusStats(): Promise<{
   drivers: Record<string, number>;
   businessCustomers: Record<string, number>;
   privateCustomers: Record<string, number>;
+  admins: Record<string, number>;
+  adminsTotal: number;
 }> {
   return this.service.getAdminUserStatusStats();
 }

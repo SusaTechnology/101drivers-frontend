@@ -1,6 +1,7 @@
 // components/pages/admin-users.tsx
 // Admin Users Management Page - Unified Users Table
-import React, { useState, useMemo, useCallback, useEffect } from 'react';
+import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate, useSearch } from '@tanstack/react-router';
 import { firstUrlParamValue } from '@/lib/dashboardRoutes';
 import { useForm } from 'react-hook-form';
@@ -46,6 +47,7 @@ import { Navbar } from '../shared/layout/testNavbar';
 import { navItems } from '@/lib/items/navItems';
 import { Brand } from '@/lib/items/brand';
 import { useAdminActions } from '@/hooks/useAdminActions';
+import { useSocketEvent } from '@/hooks/useSocket';
 import {
   useAdminUsersV2,
   useAdminUserStatusStats,
@@ -221,6 +223,11 @@ function statusOptionsForRole(role: string): { value: string; label: string }[] 
 // users list). Clicking a card applies the matching Role + Status filter to
 // the table; clicking the active card clears the filter. Colors mirror the
 // row badges (getDriverStatusColor / getCustomerApprovalStatusColor).
+//
+// LIVE: the cards refetch on the users:stats-changed socket ping (new
+// signup, invite, approval...) and every number ANIMATES to its new value
+// (ease-out count-up, reduced-motion aware) — the row visibly breathes
+// when someone registers while the page is open.
 type StatCardConfig = {
   value: string;
   label: string;
@@ -246,18 +253,186 @@ const CUSTOMER_STAT_CARDS: StatCardConfig[] = [
   { value: 'SUSPENDED', label: 'Suspended', color: 'text-rose-600 dark:text-rose-400', bgColor: 'bg-rose-50 dark:bg-rose-900/20', borderColor: 'border-rose-200 dark:border-rose-800' },
 ];
 
-/** One small status card row header (e.g. "Drivers", "Private customers"). */
-function StatRowLabel({ icon, title, total }: { icon: React.ReactNode; title: string; total: number }) {
+// Admin lifecycle cards — values map onto the dedicated admin Status
+// dropdown (ADMIN_ prefix; see ADMIN_STATUS_OPTIONS below). SUPER_ADMIN is
+// the flag filter, mirroring the dropdown 1:1.
+const ADMIN_STAT_CARDS: StatCardConfig[] = [
+  { value: 'ACTIVE', label: 'Active', color: 'text-emerald-600 dark:text-emerald-400', bgColor: 'bg-emerald-50 dark:bg-emerald-900/20', borderColor: 'border-emerald-200 dark:border-emerald-800' },
+  { value: 'PENDING_INVITE', label: 'Pending invite', color: 'text-amber-600 dark:text-amber-400', bgColor: 'bg-amber-50 dark:bg-amber-900/20', borderColor: 'border-amber-200 dark:border-amber-800' },
+  { value: 'INVITE_EXPIRED', label: 'Invite expired', color: 'text-sky-600 dark:text-sky-400', bgColor: 'bg-sky-50 dark:bg-sky-900/20', borderColor: 'border-sky-200 dark:border-sky-800' },
+  { value: 'DISABLED', label: 'Disabled', color: 'text-slate-600 dark:text-slate-300', bgColor: 'bg-slate-50 dark:bg-slate-800/50', borderColor: 'border-slate-200 dark:border-slate-700' },
+  { value: 'SUPER_ADMIN', label: 'Super Admin', color: 'text-violet-600 dark:text-violet-400', bgColor: 'bg-violet-50 dark:bg-violet-900/20', borderColor: 'border-violet-200 dark:border-violet-800' },
+];
+
+// ==================== ANIMATED NUMBER (count-up) ====================
+// requestAnimationFrame count-up used by every stat card number. Ease-out
+// cubic over 600ms; honors prefers-reduced-motion by jumping straight to
+// the value. Self-cleaning: the rAF loop cancels on unmount/value change.
+function AnimatedNumber({ value, className }: { value: number; className?: string }) {
+  const [display, setDisplay] = useState(value);
+  const prevRef = useRef(value);
+  const rafRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    const from = prevRef.current;
+    const to = value;
+    prevRef.current = value;
+    if (from === to) return;
+
+    if (
+      typeof window !== 'undefined' &&
+      window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+    ) {
+      setDisplay(to);
+      return;
+    }
+
+    const duration = 600;
+    const start = performance.now();
+    const tick = (now: number) => {
+      const t = Math.min(1, (now - start) / duration);
+      const eased = 1 - Math.pow(1 - t, 3);
+      setDisplay(Math.round(from + (to - from) * eased));
+      if (t < 1) {
+        rafRef.current = requestAnimationFrame(tick);
+      }
+    };
+    rafRef.current = requestAnimationFrame(tick);
+    return () => {
+      if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
+    };
+  }, [value]);
+
+  return <span className={cn('tabular-nums', className)}>{display}</span>;
+}
+
+/** One stat row header — role icon chip + title + animated total. */
+function StatRowLabel({
+  icon,
+  accent,
+  title,
+  total,
+  loading,
+}: {
+  icon: React.ReactNode;
+  accent: string;
+  title: string;
+  total: number;
+  loading?: boolean;
+}) {
   return (
-    <div className="flex w-24 sm:w-32 shrink-0 items-center gap-2">
-      <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-300">
+    <div className="flex w-28 sm:w-36 shrink-0 items-center gap-2.5">
+      <div
+        className={cn(
+          'flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border',
+          accent
+        )}
+      >
         {icon}
       </div>
       <div className="min-w-0">
-        <div className="text-[10px] font-bold uppercase tracking-widest text-slate-400 leading-tight">{title}</div>
-        <div className="text-sm font-black text-slate-700 dark:text-slate-200 leading-tight">{total} total</div>
+        <div className="text-[10px] font-bold uppercase tracking-widest text-slate-400 leading-tight">
+          {title}
+        </div>
+        <div className="text-sm font-black text-slate-700 dark:text-slate-200 leading-tight">
+          {loading ? (
+            '…'
+          ) : (
+            <>
+              <AnimatedNumber value={total} />
+              <span className="ml-1 font-bold text-slate-400">total</span>
+            </>
+          )}
+        </div>
       </div>
     </div>
+  );
+}
+
+/** One full stat row — header + a strip of clickable per-status cards. */
+function StatRow({
+  icon,
+  accent,
+  title,
+  total,
+  loading,
+  configs,
+  counts,
+  isCardActive,
+  onCardClick,
+}: {
+  icon: React.ReactNode;
+  accent: string;
+  title: string;
+  total: number;
+  loading: boolean;
+  configs: StatCardConfig[];
+  counts: Record<string, number> | undefined;
+  isCardActive: (config: StatCardConfig) => boolean;
+  onCardClick: (config: StatCardConfig) => void;
+}) {
+  return (
+    <Card className="rounded-2xl border-slate-200 dark:border-slate-800 p-3">
+      <div className="flex items-center gap-3 overflow-x-auto">
+        <StatRowLabel icon={icon} accent={accent} title={title} total={total} loading={loading} />
+        <div className="flex flex-1 items-stretch gap-2 min-w-0">
+          {loading &&
+            configs.map((c) => (
+              <div
+                key={c.value}
+                className="min-w-[80px] flex-1 rounded-xl border border-slate-200 dark:border-slate-800 p-2.5"
+              >
+                <Skeleton className="h-6 w-10 mb-1.5" />
+                <Skeleton className="h-2.5 w-14" />
+              </div>
+            ))}
+          {!loading &&
+            configs.map((config) => {
+              const active = isCardActive(config);
+              return (
+                <button
+                  key={config.value}
+                  onClick={() => onCardClick(config)}
+                  title={
+                    active
+                      ? 'Click to clear filter'
+                      : `Show ${config.label} ${title.toLowerCase()}`
+                  }
+                  aria-pressed={active}
+                  className={cn(
+                    'group min-w-[80px] flex-1 flex flex-col items-center justify-center px-2 py-2.5 rounded-xl border transition-all duration-200 cursor-pointer select-none',
+                    active
+                      ? `${config.bgColor} ${config.borderColor} ring-2 ring-primary/40 shadow-sm -translate-y-px`
+                      : 'bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-800 hover:-translate-y-px hover:shadow-sm hover:bg-slate-50 dark:hover:bg-slate-900'
+                  )}
+                >
+                  <div
+                    className={cn(
+                      'text-xl font-black leading-none',
+                      config.color,
+                      !active && 'group-hover:scale-105 transition-transform duration-200'
+                    )}
+                  >
+                    <AnimatedNumber value={counts?.[config.value] ?? 0} />
+                  </div>
+                  <div className="text-[9px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mt-1.5 text-center leading-tight">
+                    {config.label}
+                  </div>
+                  {/* Active underline — echoes the selected state. Fixed
+                      primary color: a dynamically derived bg-* class would
+                      never be generated by Tailwind's scanner. */}
+                  <div
+                    className={cn(
+                      'h-0.5 rounded-full mt-1.5 transition-all duration-200',
+                      active ? 'w-6 bg-primary/70' : 'w-0 bg-transparent'
+                    )}
+                  />
+                </button>
+              );
+            })}
+        </div>
+      </div>
+    </Card>
   );
 }
 
@@ -594,6 +769,8 @@ function TableSkeleton({ rows = 5 }: { rows?: number }) {
 // ==================== MAIN COMPONENT ====================
 
 export default function AdminUsersPage() {
+  const queryClient = useQueryClient();
+
   const { actionItems, signOut } = useAdminActions();
   const actorUserId = getActorUserId();
   // Super-admin gate for the elevated row actions (Disable / Enable /
@@ -800,11 +977,23 @@ export default function AdminUsersPage() {
 
   // ── Status stat cards (dedicated global-stats endpoint) ──
   // Rows of small per-status count cards above the table: Drivers first,
-  // then Business customers (dealers), then Private customers. Clicking a
-  // card applies Role + Status to the table below; clicking it again
-  // clears. Counts come from GET /users/admin/status-stats — never from
-  // the paginated users list — so they stay stable across pages/filters.
+  // then Business customers (dealers), then Private customers, then Admins.
+  // Clicking a card applies Role + Status to the table below; clicking it
+  // again clears. Counts come from GET /users/admin/status-stats — never
+  // from the paginated users list — so they stay stable across pages/filters.
   const { data: statusStats, isLoading: statusStatsLoading } = useAdminUserStatusStats();
+
+  // LIVE stats: the backend pings the admin-only staff:ops room over the
+  // socket whenever any user/role row is created or changes status (new
+  // signup, invite, approval, suspension, ...). We invalidate the stats
+  // query — the server stays the single source of truth — and the
+  // AnimatedNumber cards roll to the new values. The navbar's
+  // SupportNavBadge keeps the staff:ops room joined for the whole app
+  // (reference-counted in socket.ts), so this listener needs no room
+  // management of its own.
+  useSocketEvent('users:stats-changed', () => {
+    queryClient.invalidateQueries({ queryKey: ['admin-users-status-stats'] });
+  });
 
   const handleStatusCardClick = useCallback(
     (role: 'DRIVER' | 'BUSINESS_CUSTOMER' | 'PRIVATE_CUSTOMER', status: string) => {
@@ -820,6 +1009,26 @@ export default function AdminUsersPage() {
       setPage(1);
     },
     [roleFilter, statusFilter, setRoleFilter, setStatusFilter, setAdminStatusFilter, setPage]
+  );
+
+  // Admin-row cards drive the SEPARATE admin lifecycle dropdown state
+  // (ADMIN_ prefix — see ADMIN_STATUS_OPTIONS). Same click-twice-to-clear
+  // contract as the role rows.
+  const handleAdminCardClick = useCallback(
+    (status: string) => {
+      const adminValue = `ADMIN_${status}`;
+      const isActive = roleFilter === 'ADMIN' && adminStatusFilter === adminValue;
+      if (isActive) {
+        setRoleFilter('all');
+        setAdminStatusFilter('all');
+      } else {
+        setRoleFilter('ADMIN');
+        setAdminStatusFilter(adminValue);
+        setStatusFilter('all');
+      }
+      setPage(1);
+    },
+    [roleFilter, adminStatusFilter, setRoleFilter, setAdminStatusFilter, setStatusFilter, setPage]
   );
 
   const sumStats = (map?: Record<string, number>) =>
@@ -1246,127 +1455,53 @@ export default function AdminUsersPage() {
 
         {/* Status Stat Cards — one row per audience, global counts from the
             dedicated stats endpoint. Click a card to filter the table to
-            that role+status; click again to clear. */}
+            that role+status; click again to clear. LIVE: refetches on the
+            users:stats-changed socket ping and every number animates. */}
         <section className="mb-6 space-y-2">
-          {/* Row 1 — Drivers */}
-          <Card className="rounded-2xl border-slate-200 dark:border-slate-800 p-3">
-            <div className="flex items-center gap-3 overflow-x-auto">
-              <StatRowLabel icon={<Truck className="h-4 w-4" />} title="Drivers" total={sumStats(statusStats?.drivers)} />
-              <div className="flex flex-1 items-stretch gap-2 min-w-0">
-                {statusStatsLoading &&
-                  DRIVER_STAT_CARDS.map((c) => (
-                    <div key={c.value} className="min-w-[76px] flex-1 rounded-xl border border-slate-200 dark:border-slate-800 p-2">
-                      <Skeleton className="h-5 w-10 mb-1" />
-                      <Skeleton className="h-2.5 w-14" />
-                    </div>
-                  ))}
-                {!statusStatsLoading &&
-                  DRIVER_STAT_CARDS.map((config) => {
-                    const active = roleFilter === 'DRIVER' && statusFilter === config.value;
-                    return (
-                      <button
-                        key={config.value}
-                        onClick={() => handleStatusCardClick('DRIVER', config.value)}
-                        title={active ? 'Click to clear filter' : `Show ${config.label} drivers`}
-                        className={cn(
-                          'min-w-[76px] flex-1 flex flex-col items-center justify-center px-2 py-2 rounded-xl border transition-all cursor-pointer',
-                          active
-                            ? `${config.bgColor} ${config.borderColor} ring-2 ring-primary/30`
-                            : 'bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-900'
-                        )}
-                      >
-                        <div className={cn('text-lg font-black leading-none', config.color)}>
-                          {statusStats?.drivers?.[config.value] ?? 0}
-                        </div>
-                        <div className="text-[9px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mt-1 text-center leading-tight">
-                          {config.label}
-                        </div>
-                      </button>
-                    );
-                  })}
-              </div>
-            </div>
-          </Card>
-
-          {/* Rows 2+3 — Business customers (dealers) and Private customers.
-              Same statuses, different audiences; kept as two labeled rows so
-              each stays small enough to fit, per the stats redesign. */}
-          <Card className="rounded-2xl border-slate-200 dark:border-slate-800 p-3">
-            <div className="flex items-center gap-3 overflow-x-auto">
-              <StatRowLabel icon={<Store className="h-4 w-4" />} title="Business Customers" total={sumStats(statusStats?.businessCustomers)} />
-              <div className="flex flex-1 items-stretch gap-2 min-w-0">
-                {statusStatsLoading &&
-                  CUSTOMER_STAT_CARDS.map((c) => (
-                    <div key={c.value} className="min-w-[76px] flex-1 rounded-xl border border-slate-200 dark:border-slate-800 p-2">
-                      <Skeleton className="h-5 w-10 mb-1" />
-                      <Skeleton className="h-2.5 w-14" />
-                    </div>
-                  ))}
-                {!statusStatsLoading &&
-                  CUSTOMER_STAT_CARDS.map((config) => {
-                    const active = roleFilter === 'BUSINESS_CUSTOMER' && statusFilter === config.value;
-                    return (
-                      <button
-                        key={config.value}
-                        onClick={() => handleStatusCardClick('BUSINESS_CUSTOMER', config.value)}
-                        title={active ? 'Click to clear filter' : `Show ${config.label} business customers`}
-                        className={cn(
-                          'min-w-[76px] flex-1 flex flex-col items-center justify-center px-2 py-2 rounded-xl border transition-all cursor-pointer',
-                          active
-                            ? `${config.bgColor} ${config.borderColor} ring-2 ring-primary/30`
-                            : 'bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-900'
-                        )}
-                      >
-                        <div className={cn('text-lg font-black leading-none', config.color)}>
-                          {statusStats?.businessCustomers?.[config.value] ?? 0}
-                        </div>
-                        <div className="text-[9px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mt-1 text-center leading-tight">
-                          {config.label}
-                        </div>
-                      </button>
-                    );
-                  })}
-              </div>
-            </div>
-          </Card>
-          <Card className="rounded-2xl border-slate-200 dark:border-slate-800 p-3">
-            <div className="flex items-center gap-3 overflow-x-auto">
-              <StatRowLabel icon={<User className="h-4 w-4" />} title="Private Customers" total={sumStats(statusStats?.privateCustomers)} />
-              <div className="flex flex-1 items-stretch gap-2 min-w-0">
-                {statusStatsLoading &&
-                  CUSTOMER_STAT_CARDS.map((c) => (
-                    <div key={c.value} className="min-w-[76px] flex-1 rounded-xl border border-slate-200 dark:border-slate-800 p-2">
-                      <Skeleton className="h-5 w-10 mb-1" />
-                      <Skeleton className="h-2.5 w-14" />
-                    </div>
-                  ))}
-                {!statusStatsLoading &&
-                  CUSTOMER_STAT_CARDS.map((config) => {
-                    const active = roleFilter === 'PRIVATE_CUSTOMER' && statusFilter === config.value;
-                    return (
-                      <button
-                        key={config.value}
-                        onClick={() => handleStatusCardClick('PRIVATE_CUSTOMER', config.value)}
-                        title={active ? 'Click to clear filter' : `Show ${config.label} private customers`}
-                        className={cn(
-                          'min-w-[76px] flex-1 flex flex-col items-center justify-center px-2 py-2 rounded-xl border transition-all cursor-pointer',
-                          active
-                            ? `${config.bgColor} ${config.borderColor} ring-2 ring-primary/30`
-                            : 'bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-900'
-                        )}
-                      >
-                        <div className={cn('text-lg font-black leading-none', config.color)}>
-                          {statusStats?.privateCustomers?.[config.value] ?? 0}
-                        </div>
-                        <div className="text-[9px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mt-1 text-center leading-tight">
-                          {config.label}
-                        </div>
-                      </button>
-                    );
-                  })}
-              </div>
-            </div>
-          </Card>
+          <StatRow
+            icon={<Truck className="h-4 w-4" />}
+            accent="bg-sky-50 dark:bg-sky-900/20 border-sky-200 dark:border-sky-800 text-sky-600 dark:text-sky-400"
+            title="Drivers"
+            total={sumStats(statusStats?.drivers)}
+            loading={statusStatsLoading}
+            configs={DRIVER_STAT_CARDS}
+            counts={statusStats?.drivers}
+            isCardActive={(c) => roleFilter === 'DRIVER' && statusFilter === c.value}
+            onCardClick={(c) => handleStatusCardClick('DRIVER', c.value)}
+          />
+          <StatRow
+            icon={<Store className="h-4 w-4" />}
+            accent="bg-violet-50 dark:bg-violet-900/20 border-violet-200 dark:border-violet-800 text-violet-600 dark:text-violet-400"
+            title="Business Customers"
+            total={sumStats(statusStats?.businessCustomers)}
+            loading={statusStatsLoading}
+            configs={CUSTOMER_STAT_CARDS}
+            counts={statusStats?.businessCustomers}
+            isCardActive={(c) => roleFilter === 'BUSINESS_CUSTOMER' && statusFilter === c.value}
+            onCardClick={(c) => handleStatusCardClick('BUSINESS_CUSTOMER', c.value)}
+          />
+          <StatRow
+            icon={<User className="h-4 w-4" />}
+            accent="bg-teal-50 dark:bg-teal-900/20 border-teal-200 dark:border-teal-800 text-teal-600 dark:text-teal-400"
+            title="Private Customers"
+            total={sumStats(statusStats?.privateCustomers)}
+            loading={statusStatsLoading}
+            configs={CUSTOMER_STAT_CARDS}
+            counts={statusStats?.privateCustomers}
+            isCardActive={(c) => roleFilter === 'PRIVATE_CUSTOMER' && statusFilter === c.value}
+            onCardClick={(c) => handleStatusCardClick('PRIVATE_CUSTOMER', c.value)}
+          />
+          <StatRow
+            icon={<Shield className="h-4 w-4" />}
+            accent="bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800 text-amber-600 dark:text-amber-400"
+            title="Admins"
+            total={statusStats?.adminsTotal ?? sumStats(statusStats?.admins)}
+            loading={statusStatsLoading}
+            configs={ADMIN_STAT_CARDS}
+            counts={statusStats?.admins}
+            isCardActive={(c) => roleFilter === 'ADMIN' && adminStatusFilter === `ADMIN_${c.value}`}
+            onCardClick={(c) => handleAdminCardClick(c.value)}
+          />
         </section>
 
         {/* V2 Filters — search/role/status + driver-only ZIP region & ZIP,

@@ -117,6 +117,7 @@ export class SupportRequestController extends SupportRequestControllerBase {
       actorRole: query.actorRole ?? null,
       assignedToUserId: query.assignedToUserId ?? null,
       deliveryId: query.deliveryId ?? null,
+      search: query.search ?? null,
       take: query.take ?? 50,
       skip: query.skip ?? 0,
     });

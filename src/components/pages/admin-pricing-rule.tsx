@@ -1,11 +1,10 @@
 // @ts-nocheck
 import React, { useState, useEffect } from "react";
-import { Link, useNavigate, useParams } from "@tanstack/react-router";
+import { Link, useParams } from "@tanstack/react-router";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { cn } from "@/lib/utils";
-import { useTheme } from '@/lib/theme';
 import { toast } from "sonner";
 import {
   ArrowLeft,
@@ -33,11 +32,6 @@ import {
   Settings,
   FileText,
   Shield,
-  LogOut,
-  Sun,
-  Moon,
-  Menu,
-  X,
 //   ChevronRight,
 //   ChevronLeft,
 //   Download,
@@ -72,11 +66,13 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
+import { navItems } from "@/lib/items/navItems";
+import { Navbar } from '@/components/shared/layout/testNavbar';
+import { Brand } from '@/lib/items/brand';
+import { useAdminActions } from '@/hooks/useAdminActions';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { performSignOut } from '@/lib/tanstack/dataQuery';
 
 // Form schema for pricing rule
 const pricingRuleSchema = z.object({
@@ -143,30 +139,15 @@ const MOCK_PRICING_RULE = {
   },
 };
 
-// Navigation items
-const navItems = [
-  { href: "/admin-dashboard", label: "Dashboard" },
-  { href: "/admin-users", label: "Users" },
-  { href: "/admin-deliveries", label: "Deliveries" },
-  { href: "/admin-pricing", label: "Pricing", active: true },
-  { href: "/admin-scheduling-policy", label: "Scheduling" },
-  { href: "/admin-disputes", label: "Disputes" },
-  { href: "/admin-payments", label: "Payments" },
-  { href: "/admin-insurance-reporting", label: "Insurance" },
-];
-
 export default function AdminPricingRulePage() {
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [mounted, setMounted] = useState(false);
+  const { actionItems, signOut } = useAdminActions();
   const [sampleMiles, setSampleMiles] = useState(142);
   const [quotePreview, setQuotePreview] = useState({
     base: 276.9,
     fee: 45.0,
     total: 321.9,
   });
-  const { theme, setTheme } = useTheme();
-  const navigate = useNavigate();
-  //   const params = useParams({ from: '/admin-pricing/rule/$ruleId' })
+    //   const params = useParams({ from: '/admin-pricing/rule/$ruleId' })
 
   const form = useForm<PricingRuleFormData>({
     resolver: zodResolver(pricingRuleSchema),
@@ -202,34 +183,6 @@ export default function AdminPricingRulePage() {
     });
   }, [sampleMiles, ratePerMile, coordinationFee]);
 
-  // Theme handling
-  useEffect(() => {
-    setMounted(true);
-  }, []);
-
-  // Mobile menu handling
-  useEffect(() => {
-    if (mobileMenuOpen) {
-      document.body.style.overflow = "hidden";
-    } else {
-      document.body.style.overflow = "unset";
-    }
-    return () => {
-      document.body.style.overflow = "unset";
-    };
-  }, [mobileMenuOpen]);
-
-  const toggleTheme = () => {
-    setTheme(theme === "dark" ? "light" : "dark");
-    toast.success(`${theme === "dark" ? "Light" : "Dark"} mode activated`);
-  };
-
-  const handleSignOut = () => {
-    performSignOut()
-    toast.success("Signed out successfully");
-    navigate({ to: "/auth/admin-signin" });
-  };
-
   const handleSaveDraft = () => {
     toast.success("Draft saved", {
       description: "Your changes have been saved as draft.",
@@ -263,136 +216,18 @@ export default function AdminPricingRulePage() {
 
   return (
     <div className="min-h-screen bg-background-light dark:bg-background-dark font-sans antialiased text-slate-900 dark:text-white">
-      {/* Header */}
-      <header className="sticky top-0 z-50 w-full bg-white/85 dark:bg-background-dark/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-800">
-        <div className="max-w-[1440px] mx-auto px-6 lg:px-8 h-20 flex items-center justify-between">
-          <div className="flex items-center gap-10">
-            <Link to="/" className="flex items-center" aria-label="101 Drivers">
-              <div className="w-14 h-14 lg:w-16 lg:h-16 rounded-2xl overflow-hidden bg-black flex items-center justify-center shadow-lg shadow-black/10 border border-slate-200">
-                <img
-                  src="/assets/101drivers-logo.jpg"
-                  alt="101 Drivers"
-                  className="w-full h-full object-cover"
-                />
-              </div>
-            </Link>
-
-            <nav className="hidden md:flex items-center gap-7">
-              {navItems.map((item) => (
-                <Link
-                  key={item.href}
-                  to={item.href}
-                  className={cn(
-                    "text-sm font-semibold hover:text-primary transition-colors",
-                    item.active
-                      ? "text-slate-900 dark:text-white"
-                      : "text-slate-600 dark:text-slate-400",
-                  )}
-                >
-                  {item.label}
-                </Link>
-              ))}
-            </nav>
-          </div>
-
-          <div className="flex items-center gap-3">
-            {/* Theme toggle */}
-            <Button
-              variant="outline"
-              size="icon"
-              className="w-11 h-11 rounded-2xl"
-              onClick={toggleTheme}
-              aria-label="Toggle theme"
-            >
-              {mounted && theme === "dark" ? (
-                <Sun className="w-5 h-5" />
-              ) : (
-                <Moon className="w-5 h-5" />
-              )}
-            </Button>
-
-            <Button
-              onClick={handleSignOut}
-              className="hidden sm:inline-flex items-center gap-2 px-4 py-2 rounded-full bg-slate-900 text-white dark:bg-white dark:text-slate-950 hover:opacity-90 transition text-sm font-extrabold"
-            >
-              <LogOut className="w-4 h-4" />
-              Sign Out
-            </Button>
-
-            <Button
-              variant="outline"
-              size="icon"
-              className="md:hidden w-11 h-11 rounded-2xl"
-              onClick={() => setMobileMenuOpen(true)}
-            >
-              <Menu className="w-5 h-5" />
-            </Button>
-          </div>
-        </div>
-
-        {/* Mobile menu */}
-        {mobileMenuOpen && (
-          <>
-            <div
-              className="fixed inset-0 bg-black/40 z-40 md:hidden"
-              onClick={() => setMobileMenuOpen(false)}
-            />
-            <div className="fixed top-0 left-0 h-full w-[88%] max-w-sm bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 p-6 z-50 md:hidden overflow-y-auto">
-              <div className="flex items-center justify-between mb-6">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-2xl overflow-hidden bg-black border border-slate-200">
-                    <img
-                      src="/assets/101drivers-logo.jpg"
-                      alt="101 Drivers"
-                      className="w-full h-full object-cover"
-                    />
-                  </div>
-                  <span className="text-sm font-bold text-slate-900 dark:text-white">
-                    Admin
-                  </span>
-                </div>
-                <Button
-                  variant="outline"
-                  size="icon"
-                  className="w-10 h-10 rounded-2xl"
-                  onClick={() => setMobileMenuOpen(false)}
-                >
-                  <X className="w-4 h-4" />
-                </Button>
-              </div>
-
-              <div className="space-y-3">
-                {navItems.map((item) => (
-                  <Link
-                    key={item.href}
-                    to={item.href}
-                    className={cn(
-                      "block px-4 py-3 rounded-2xl text-sm font-semibold transition-colors",
-                      item.active
-                        ? "bg-primary/15 text-slate-900 dark:text-white border border-primary/25"
-                        : "text-slate-600 dark:text-slate-400 hover:text-primary hover:bg-slate-50 dark:hover:bg-slate-800",
-                    )}
-                    onClick={() => setMobileMenuOpen(false)}
-                  >
-                    {item.label}
-                  </Link>
-                ))}
-              </div>
-
-              <Separator className="my-6" />
-
-              <Button
-                onClick={handleSignOut}
-                className="w-full inline-flex items-center justify-center gap-2 px-5 py-3 rounded-2xl text-sm font-black bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 transition"
-              >
-                Sign Out
-                <LogOut className="w-4 h-4 text-primary" />
-              </Button>
-            </div>
-          </>
-        )}
-      </header>
-
+      {/* Shared admin navbar — same component as every other admin page.
+          Replaces this page's private copy of the nav, which had drifted:
+          a stale hard-coded item list (no Support, Content, Reports, Config,
+          Audit Logs), no Support unread badge, and its own sign-out flow.
+          The shared navbar inherits all of it and stays in sync forever. */}
+      <Navbar
+        brand={<Brand />}
+        items={navItems}
+        actions={actionItems}
+        onSignOut={signOut}
+        title="Admin"
+      />
       <main className="w-full max-w-[1440px] mx-auto px-6 lg:px-8 py-10 lg:py-12">
         {/* Top */}
         <section className="flex flex-col xl:flex-row xl:items-start xl:justify-between gap-6">

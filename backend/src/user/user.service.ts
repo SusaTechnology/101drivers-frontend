@@ -38,6 +38,7 @@ import {
 import { CustomerService } from "src/customer/customer.service";
 import { DriverService } from "src/driver/driver.service";
 import { PasswordService } from "src/auth/password.service";
+import { AppEventsService, APP_EVENT } from "../common/appEvents/appEvents.service";
 @Injectable()
 export class UserService extends UserServiceBase {
 constructor(
@@ -47,7 +48,11 @@ constructor(
   private readonly customerService: CustomerService,
   private readonly driverService: DriverService,
   private readonly passwordService: PasswordService,
-  private readonly serviceArea: ServiceAreaService
+  private readonly serviceArea: ServiceAreaService,
+  // Global leaf module — zero-dependency pub/sub (see common/appEvents).
+  // Admin mutations ping it so every admin's Users-page stat cards
+  // live-update without UserService depending on the socket gateway.
+  private readonly appEvents: AppEventsService
 ) {
   super(prisma);
 }
@@ -92,6 +97,9 @@ constructor(
       ...args,
       data: normalizedData,
     });
+
+    // Generic create path (admin tooling) — ping admin stat surfaces.
+    this.appEvents.emit(APP_EVENT.USER_STATS_CHANGED);
 
     return this.domain.findUnique({ id: created.id });
   }
@@ -660,8 +668,10 @@ async getAdminUserStatusStats(): Promise<{
   drivers: Record<string, number>;
   businessCustomers: Record<string, number>;
   privateCustomers: Record<string, number>;
+  admins: Record<string, number>;
+  adminsTotal: number;
 }> {
-  const [driverGroups, customerGroups] = await Promise.all([
+  const [driverGroups, customerGroups, adminRows, liveInviteEmails] = await Promise.all([
     this.prisma.driver.groupBy({
       by: ["status"],
       _count: { _all: true },
@@ -669,6 +679,28 @@ async getAdminUserStatusStats(): Promise<{
     this.prisma.customer.groupBy({
       by: ["customerType", "approvalStatus"],
       _count: { _all: true },
+    }),
+    // Admin lifecycle counts need per-row fields (disabledAt /
+    // emailVerifiedAt / isSuperAdmin) plus the live-invite lookup — the
+    // same adminInviteStatusFor rule the V2 list endpoint applies, so the
+    // card counts and the Role=Admin table rows agree 1:1.
+    this.prisma.user.findMany({
+      where: { roles: EnumUserRoles.ADMIN },
+      select: {
+        email: true,
+        disabledAt: true,
+        emailVerifiedAt: true,
+        isSuperAdmin: true,
+      },
+    }),
+    this.prisma.emailVerificationToken.findMany({
+      where: {
+        purpose: EnumEmailVerificationPurpose.ADMIN_INVITE,
+        verifiedAt: null,
+        expiresAt: { gt: new Date() },
+      },
+      distinct: ["email"],
+      select: { email: true },
     }),
   ]);
 
@@ -687,7 +719,32 @@ async getAdminUserStatusStats(): Promise<{
     bucket[group.approvalStatus] = group._count._all;
   }
 
-  return { drivers, businessCustomers, privateCustomers };
+  const liveEmails = new Set(
+    liveInviteEmails.map((t) => t.email.toLowerCase())
+  );
+  const admins: Record<string, number> = {};
+  for (const admin of adminRows) {
+    const status = this.adminInviteStatusFor(
+      admin,
+      liveEmails.has(admin.email.toLowerCase())
+    );
+    admins[status] = (admins[status] ?? 0) + 1;
+    // Super Admin is a FLAG, not a lifecycle stage — an active super admin
+    // counts under BOTH Active and Super Admin (mirrors the dropdown,
+    // where the flag filter ORs across lifecycle). Row total therefore
+    // uses adminsTotal, not the sum of this map.
+    if (admin.isSuperAdmin) {
+      admins["SUPER_ADMIN"] = (admins["SUPER_ADMIN"] ?? 0) + 1;
+    }
+  }
+
+  return {
+    drivers,
+    businessCustomers,
+    privateCustomers,
+    admins,
+    adminsTotal: adminRows.length,
+  };
 }
 
 // ============================================================
@@ -1866,6 +1923,9 @@ async approveCustomerFromUser(input: {
     note: input.note ?? null,
   });
 
+  // Status change — ping admin stat surfaces (live Users-page cards).
+  this.appEvents.emit(APP_EVENT.USER_STATS_CHANGED);
+
   const userDetail = await this.getAdminUserDetail(input.userId);
   // Attach the warning (if any) to the response. The frontend reads
   // `postpaidSetupWarning` from the API response and shows a toast.
@@ -1889,6 +1949,9 @@ async rejectCustomerFromUser(input: {
     reason: input.reason ?? null,
   });
 
+  // Status change — ping admin stat surfaces (live Users-page cards).
+  this.appEvents.emit(APP_EVENT.USER_STATS_CHANGED);
+
   return this.getAdminUserDetail(input.userId);
 }
 
@@ -1904,6 +1967,9 @@ async suspendCustomerFromUser(input: {
     actorUserId: input.actorUserId ?? null,
     reason: input.reason,
   });
+
+  // Status change — ping admin stat surfaces (live Users-page cards).
+  this.appEvents.emit(APP_EVENT.USER_STATS_CHANGED);
 
   return this.getAdminUserDetail(input.userId);
 }
@@ -1921,6 +1987,9 @@ async unsuspendCustomerFromUser(input: {
     note: input.note ?? null,
   });
 
+  // Status change — ping admin stat surfaces (live Users-page cards).
+  this.appEvents.emit(APP_EVENT.USER_STATS_CHANGED);
+
   return this.getAdminUserDetail(input.userId);
 }
 
@@ -1936,6 +2005,9 @@ async approveDriverFromUser(input: {
     actorUserId: input.actorUserId ?? null,
     note: input.note ?? null,
   });
+
+  // Status change — ping admin stat surfaces (live Users-page cards).
+  this.appEvents.emit(APP_EVENT.USER_STATS_CHANGED);
 
   return this.getAdminUserDetail(input.userId);
 }
@@ -1953,6 +2025,9 @@ async rejectDriverFromUser(input: {
     reason: input.reason ?? null,
   });
 
+  // Status change — ping admin stat surfaces (live Users-page cards).
+  this.appEvents.emit(APP_EVENT.USER_STATS_CHANGED);
+
   return this.getAdminUserDetail(input.userId);
 }
 
@@ -1968,6 +2043,9 @@ async holdDriverFromUser(input: {
     actorUserId: input.actorUserId ?? null,
     reason: input.reason ?? null,
   });
+
+  // Status change — ping admin stat surfaces (live Users-page cards).
+  this.appEvents.emit(APP_EVENT.USER_STATS_CHANGED);
 
   return this.getAdminUserDetail(input.userId);
 }
@@ -1985,6 +2063,9 @@ async releaseDriverHoldFromUser(input: {
     note: input.note ?? null,
   });
 
+  // Status change — ping admin stat surfaces (live Users-page cards).
+  this.appEvents.emit(APP_EVENT.USER_STATS_CHANGED);
+
   return this.getAdminUserDetail(input.userId);
 }
 
@@ -2000,6 +2081,9 @@ async suspendDriverFromUser(input: {
     actorUserId: input.actorUserId ?? null,
     reason: input.reason,
   });
+
+  // Status change — ping admin stat surfaces (live Users-page cards).
+  this.appEvents.emit(APP_EVENT.USER_STATS_CHANGED);
 
   return this.getAdminUserDetail(input.userId);
 }
@@ -2017,6 +2101,9 @@ async unsuspendDriverFromUser(input: {
     note: input.note ?? null,
   });
 
+  // Status change — ping admin stat surfaces (live Users-page cards).
+  this.appEvents.emit(APP_EVENT.USER_STATS_CHANGED);
+
   return this.getAdminUserDetail(input.userId);
 }
 
@@ -2033,6 +2120,9 @@ async inviteDriverFromUser(input: {
     note: input.note ?? null,
   });
 
+  // Status change — ping admin stat surfaces (live Users-page cards).
+  this.appEvents.emit(APP_EVENT.USER_STATS_CHANGED);
+
   return this.getAdminUserDetail(input.userId);
 }
 
@@ -2048,6 +2138,9 @@ async resendInviteDriverFromUser(input: {
     actorUserId: input.actorUserId ?? null,
     note: input.note ?? null,
   });
+
+  // Status change — ping admin stat surfaces (live Users-page cards).
+  this.appEvents.emit(APP_EVENT.USER_STATS_CHANGED);
 
   return this.getAdminUserDetail(input.userId);
 }
@@ -2155,6 +2248,9 @@ async adminCreateUser(input: {
     data: normalizedData,
     select: { id: true },
   });
+
+  // Admin invite creates a pending admin row — ping admin stat surfaces.
+  this.appEvents.emit(APP_EVENT.USER_STATS_CHANGED);
 
   if (input.actorUserId) {
     await this.prisma.adminAuditLog.create({

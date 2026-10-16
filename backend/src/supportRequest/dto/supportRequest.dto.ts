@@ -7,6 +7,7 @@ import {
   IsNotEmpty,
   IsOptional,
   IsString,
+  Max,
 } from "class-validator";
 import {
   EnumSupportActorRole,
@@ -118,9 +119,11 @@ export class MySupportRequestListQueryDto {
   @swagger.ApiProperty({
     required: false,
     default: 50,
+    maximum: 100,
   })
   @IsOptional()
   @Type(() => Number)
+  @Max(100)
   take?: number;
 
   @swagger.ApiProperty({
@@ -180,6 +183,16 @@ export class AdminSupportRequestListQueryDto {
   @IsOptional()
   @IsString()
   deliveryId?: string;
+
+  @swagger.ApiProperty({
+    required: false,
+    nullable: true,
+    description:
+      "Free-text search: subject, message, requester username/email, delivery id",
+  })
+  @IsOptional()
+  @IsString()
+  search?: string;
 
   @swagger.ApiProperty({
     required: false,

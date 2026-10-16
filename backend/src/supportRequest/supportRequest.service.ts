@@ -256,6 +256,7 @@ export class SupportRequestService extends SupportRequestServiceBase {
     actorRole?: any | null;
     assignedToUserId?: string | null;
     deliveryId?: string | null;
+    search?: string | null;
     take?: number;
     skip?: number;
   }): Promise<{ items: any[]; count: number }> {
@@ -273,20 +274,97 @@ export class SupportRequestService extends SupportRequestServiceBase {
       ...(input.deliveryId ? { deliveryId: input.deliveryId } : {}),
     };
 
-    const [items, count] = await Promise.all([
-      this.domain.findMany({
-        where,
-        orderBy: { updatedAt: "desc" },
-        take: input.take ?? 50,
-        skip: input.skip ?? 0,
-      }),
-      this.prisma.supportRequest.count({ where }),
-    ]);
+    // Free-text search (admin "Search requests..."): subject, message body,
+    // requester identity and delivery reference. Case-insensitive on all
+    // branches so "acme", "ACME" and "Acme" behave identically.
+    const q = (input.search ?? "").trim().slice(0, 100);
+    if (q) {
+      const contains = { contains: q, mode: "insensitive" as const };
+      where.OR = [
+        { subject: contains },
+        { message: contains },
+        {
+          user: {
+            OR: [
+              { username: contains },
+              { email: contains },
+              { fullName: contains },
+            ],
+          },
+        },
+        { deliveryId: contains },
+      ];
+    }
+
+    // ── Ordering contract: UNREAD FIRST, then most-recent-activity ──
+    // The ops queue must put tickets the team has not seen on top, no
+    // matter how old they are. "Unread" is exactly the decorateAdminUnread
+    // rule below (latest non-admin note newer than adminReadAt), which the
+    // row-level red dot also uses — sort and dots can never disagree.
+    //
+    // That rule compares a column against a RELATED row's timestamp, which
+    // Prisma's orderBy cannot express, so the global order is computed in
+    // two steps over a minimal projection (id/read-flag/updatedAt only —
+    // no conversation payloads), then the current page window is fetched
+    // with the full domain include and re-ordered to match. Ticket volumes
+    // are ops-scale (hundreds), so this is honest and cheap; if the queue
+    // ever grows five digits, the projection degrades gracefully (it is a
+    // covering scan of one small select) and the next step would be a
+    // materialized unread flag.
+    const take = Math.min(Math.max(1, input.take ?? 50), 100);
+    const skip = Math.max(0, input.skip ?? 0);
+
+    const projections = await this.prisma.supportRequest.findMany({
+      where,
+      select: {
+        id: true,
+        updatedAt: true,
+        adminReadAt: true,
+        notes: {
+          where: { authorRole: { not: EnumSupportActorRole.ADMIN } },
+          orderBy: { createdAt: "desc" },
+          take: 1,
+          select: { createdAt: true },
+        },
+      },
+      orderBy: [{ updatedAt: "desc" }, { id: "desc" }],
+    });
+
+    const unreadFlag = (p: {
+      adminReadAt: Date | string | null;
+      notes: Array<{ createdAt: Date | string }>;
+    }): boolean => {
+      const last = p.notes?.[0]?.createdAt
+        ? new Date(p.notes[0].createdAt)
+        : null;
+      if (!last) return false;
+      const readAt = p.adminReadAt ? new Date(p.adminReadAt) : null;
+      return !readAt || last > readAt;
+    };
+
+    // filter() preserves the updatedAt-desc order inside each group.
+    const orderedIds = [
+      ...projections.filter((p) => unreadFlag(p)).map((p) => p.id),
+      ...projections.filter((p) => !unreadFlag(p)).map((p) => p.id),
+    ];
+    const count = orderedIds.length;
+    const pageIds = orderedIds.slice(skip, skip + take);
+
+    const items =
+      pageIds.length > 0
+        ? await this.domain.findMany({
+            where: { ...where, id: { in: pageIds } },
+          })
+        : [];
+
+    // Restore the projected global order (IN-lists do not preserve order).
+    const byId = new Map<string, any>(items.map((i) => [i.id, i]));
+    const ordered = pageIds
+      .map((id) => byId.get(id))
+      .filter((i): i is any => Boolean(i));
 
     // ── Staff unread decoration (navbar badge + list red dots) ──
-    // A ticket is unread for staff while the latest non-ADMIN note (the
-    // original request message is itself a note) is newer than adminReadAt.
-    const decorated = items.map((item) => this.decorateAdminUnread(item));
+    const decorated = ordered.map((item) => this.decorateAdminUnread(item));
 
     return { items: decorated, count };
   }

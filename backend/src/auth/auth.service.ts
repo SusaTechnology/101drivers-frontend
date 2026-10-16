@@ -24,6 +24,7 @@ import { ForgotPasswordDto } from "./dto/ForgotPassword.dto";
 import { ResetPasswordDto } from "./dto/ResetPassword.dto";
 import { NotificationEventEngine } from "../domain/notificationEvent/notificationEvent.engine";
 import { MailService } from "src/common/mail/mail.service";
+import { AppEventsService, APP_EVENT } from "../common/appEvents/appEvents.service";
 import { ReferralService } from "../referral/referral.service";
 import {
   EnumCustomerCustomerType,
@@ -97,6 +98,10 @@ export class AuthService {
     @Inject(forwardRef(() => ReferralService))
     private readonly referralService: ReferralService,
     private readonly serviceArea: ServiceAreaService,
+    // Global leaf module — zero-dependency pub/sub (see common/appEvents).
+    // Signup flows ping it so admin surfaces (Users-page stat cards) can
+    // live-update without AuthModule depending on the socket gateway.
+    private readonly appEvents: AppEventsService,
   ) {}
 
   private normalizeIdentifier(identifier: string): string {
@@ -664,6 +669,9 @@ export class AuthService {
       );
     }
 
+    // Ping admin surfaces (Users-page stat cards) — new waitlisted driver.
+    this.appEvents.emit(APP_EVENT.USER_STATS_CHANGED);
+
     return this.issueToken(
       userId,
       username,
@@ -967,6 +975,9 @@ export class AuthService {
         }
       }
 
+      // Ping admin surfaces (Users-page stat cards) — new private customer.
+      this.appEvents.emit(APP_EVENT.USER_STATS_CHANGED);
+
       return this.issueToken(
         userId,
         username,
@@ -1060,6 +1071,10 @@ export class AuthService {
         );
       }
     }
+
+    // Ping admin surfaces (Users-page stat cards) — new private customer
+    // (legacy full-payload path).
+    this.appEvents.emit(APP_EVENT.USER_STATS_CHANGED);
 
     return this.issueToken(
       userId,
@@ -1277,6 +1292,9 @@ export class AuthService {
         );
       }
     }
+
+    // Ping admin surfaces (Users-page stat cards) — new business customer.
+    this.appEvents.emit(APP_EVENT.USER_STATS_CHANGED);
 
     return this.issueToken(
       userId,

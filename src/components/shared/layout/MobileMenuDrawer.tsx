@@ -93,10 +93,17 @@ export function MobileMenuDrawer({
                     : 'text-slate-600 dark:text-slate-400 hover:text-primary hover:bg-slate-50 dark:hover:bg-slate-800'
                 )}
               >
-                {item.label}
-                {/* Live counter (e.g. Support unread badge) — same badge
-                    node the horizontal bar renders. */}
-                {item.badge}
+                {/* Same badge treatment as the horizontal bar: the counter
+                    sits at the label's TOP-RIGHT corner, nearly touching the
+                    text — not a separate word floating at the row edge. */}
+                <span className="relative inline-block">
+                  {item.label}
+                  {item.badge && (
+                    <span className="absolute -top-2.5 -right-2.5">
+                      {item.badge}
+                    </span>
+                  )}
+                </span>
               </Link>
             );
           })}

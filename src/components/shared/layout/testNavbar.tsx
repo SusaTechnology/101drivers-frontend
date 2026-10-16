@@ -194,15 +194,22 @@ export function Navbar({
                     {item.icon && (
                       <span className="mr-2 inline-block">{item.icon}</span>
                     )}
-                    {item.label}
-                    {/* Live counter (e.g. Support unread badge). Rendered
-                        inside the link so the measured-collapse observer
-                        re-fits the bar when the badge appears/grows. */}
-                    {item.badge && (
-                      <span className="ml-2 inline-block align-middle">
-                        {item.badge}
-                      </span>
-                    )}
+                    {/* The label is a positioned anchor: the live counter
+                        (e.g. Support unread) floats at its TOP-RIGHT corner,
+                        nearly touching the last letter — the app-icon badge
+                        position, NOT a second word inline after the label.
+                        The link's own px-3 padding is the badge's overflow
+                        room, so text never shifts when the badge appears.
+                        It still lives inside the measured link, so the
+                        collapse observer re-fits the bar when it pops. */}
+                    <span className="relative inline-block">
+                      {item.label}
+                      {item.badge && (
+                        <span className="absolute -top-2.5 -right-2">
+                          {item.badge}
+                        </span>
+                      )}
+                    </span>
                   </Link>
                 ))}
               </nav>

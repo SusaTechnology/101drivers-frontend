@@ -221,6 +221,15 @@ a, button, [role="button"], input, select, textarea, label, summary {
 html {
   overflow-x: hidden;
   overflow-x: clip;
+  /* Reserve the vertical scrollbar gutter permanently. Without this, any
+     page whose content height crosses the viewport threshold (e.g. an
+     admin picking a filter that shrinks the result list) makes the
+     scrollbar appear/disappear and the WHOLE page visibly jumps sideways
+     by the gutter width. `stable` keeps the gutter reserved on every
+     page — the standard fix used by content-dense apps. Browsers with
+     overlay scrollbars (macOS/iOS/Android) reserve nothing and are
+     unaffected; older browsers ignore the property (graceful no-op). */
+  scrollbar-gutter: stable;
   /* iOS text-inflation guard: Safari sometimes renders text slightly larger
      than the CSS asks for (its old "-webkit-text-size-adjust" auto-inflation,
      most visible in landscape). Pinning it to 100% makes iPhone render text

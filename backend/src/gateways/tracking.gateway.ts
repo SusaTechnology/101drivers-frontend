@@ -3,6 +3,8 @@ import {
   WebSocketServer,
   OnGatewayConnection,
   OnGatewayDisconnect,
+  OnModuleInit,
+  OnModuleDestroy,
   SubscribeMessage,
   ConnectedSocket,
   MessageBody,
@@ -12,6 +14,7 @@ import { UseGuards, Logger, Optional, Inject, forwardRef } from "@nestjs/common"
 import { WsJwtGuard } from "../auth/guards/ws-jwt.guard";
 import { DeliveryLifecycleService } from "../delivery-logistics/delivery-lifecycle.service";
 import { PrismaService } from "../prisma/prisma.service";
+import { AppEventsService, APP_EVENT } from "../common/appEvents/appEvents.service";
 
 /** Socket augmented by WsJwtGuard with decoded JWT payload */
 type AuthenticatedSocket = Socket & {
@@ -61,18 +64,40 @@ const STAFF_OPS_ROOM = "staff:ops";
   namespace: "/tracking",
 })
 export class TrackingGateway
-  implements OnGatewayConnection, OnGatewayDisconnect
+  implements OnGatewayConnection, OnGatewayDisconnect, OnModuleInit, OnModuleDestroy
 {
   private readonly logger = new Logger(TrackingGateway.name);
 
   @WebSocketServer()
   server!: Server;
 
+  private unsubscribeAppEvents?: () => void;
+
   constructor(
     @Optional() @Inject(forwardRef(() => DeliveryLifecycleService))
     private readonly lifecycleService?: DeliveryLifecycleService,
     private readonly prisma?: PrismaService,
+    // Global leaf module (common/appEvents) — safe to inject here and in
+    // Auth/User services alike; it can never close a dependency cycle.
+    private readonly appEvents?: AppEventsService,
   ) {}
+
+  onModuleInit() {
+    // Relay cross-cutting domain pings onto the staff-ops socket room.
+    // The bus is contentless by design — receivers refetch server truth.
+    if (this.appEvents) {
+      this.unsubscribeAppEvents = this.appEvents.on((event) => {
+        if (event === APP_EVENT.USER_STATS_CHANGED) {
+          this.emitUserStatsChanged();
+        }
+      });
+    }
+  }
+
+  onModuleDestroy() {
+    this.unsubscribeAppEvents?.();
+    this.unsubscribeAppEvents = undefined;
+  }
 
   afterInit() {
     this.logger.log("Tracking WebSocket gateway initialized");
@@ -597,6 +622,25 @@ export class TrackingGateway
     this.server.to(STAFF_OPS_ROOM).emit("support:staff-inbox", {
       supportRequestId: data.supportRequestId,
       status: data.status ?? null,
+    });
+  }
+
+  /**
+   * Contentless ping to every ADMIN socket when user/role data mutates
+   * (signup, invite, approval, suspension, ...). The admin Users-page stat
+   * cards listen for this and refetch GET /users/admin/status-stats so the
+   * numbers move live — including the count-up animation on new signups.
+   * Emitted through AppEventsService (see common/appEvents) precisely
+   * because AuthService/UserService cannot depend on this gateway without
+   * closing a module cycle.
+   */
+  emitUserStatsChanged() {
+    if (!this.server) {
+      // Server not ready yet (event during boot) — nothing to ping.
+      return;
+    }
+    this.server.to(STAFF_OPS_ROOM).emit("users:stats-changed", {
+      at: new Date().toISOString(),
     });
   }
 }

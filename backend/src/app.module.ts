@@ -39,6 +39,7 @@ import { AppSettingModule } from "./appSetting/appSetting.module";
 import { DealerLeadModule } from "./dealerLead/dealerLead.module";
 import { InvestorLeadModule } from "./investorLead/investorLead.module";
 import { GatewayModule } from "./gateways/gateway.module";
+import { AppEventsModule } from "./common/appEvents/appEvents.module";
 import { HealthModule } from "./health/health.module";
 import { PrismaModule } from "./prisma/prisma.module";
 import { SecretsManagerModule } from "./providers/secrets/secretsManager.module";
@@ -75,6 +76,10 @@ import { GeoModule } from "./geo/geo.module";
   controllers: [StripeWebhookController, InsurancePortalController, ContentController, CmsController],
   imports: [
     ACLModule,
+    // Global leaf pub/sub bus (see common/appEvents) — registered once so
+    // AuthService/UserService/TrackingGateway can all inject it without
+    // any of them importing each other.
+    AppEventsModule,
     GeoModule,
     AuthModule,
     UserModule,
