@@ -234,6 +234,69 @@ const formatDate = (iso: string | null): string => {
 
 const formatMoney = (n: number): string => `$${Number(n).toFixed(2)}`;
 
+// ── SafeNumberInput ─────────────────────────────────────────────────────────
+// Why this page does NOT use <Input type="number">: native number fields
+// MUTATE their value without the admin noticing. A mouse-wheel / trackpad
+// scroll over a focused field steps the value by `step` (these fields used
+// step=0.01), so a typed 300 could silently become 299.99 — and get SAVED.
+// The tiny spinner arrows do the same on a mis-click. That is exactly the
+// "I typed 300 and it became 299.99" report.
+//
+// SafeNumberInput renders a text input that:
+//   - NEVER changes the typed value on its own (no spinner, no wheel step —
+//     type="text" removes the browser behaviors entirely)
+//   - accepts only digits and one decimal point while typing / pasting
+//   - normalizes on blur: money → 2 decimals, integer → whole number, so the
+//     value the admin sees is exactly the value that gets saved
+type SafeNumberMode = "money" | "integer";
+
+const sanitizeNumberTyping = (raw: string): string => {
+  let v = raw.replace(/[^0-9.]/g, "");
+  const firstDot = v.indexOf(".");
+  if (firstDot !== -1) {
+    // Keep the first dot only: "1.2.3" → "1.23", paste-safe.
+    v = v.slice(0, firstDot + 1) + v.slice(firstDot + 1).replace(/\./g, "");
+  }
+  return v;
+};
+
+const SafeNumberInput = ({
+  value,
+  onValueChange,
+  mode = "money",
+  placeholder,
+  className,
+}: {
+  value: string;
+  onValueChange: (v: string) => void;
+  mode?: SafeNumberMode;
+  placeholder?: string;
+  className?: string;
+}) => {
+  return (
+    <Input
+      type="text"
+      inputMode={mode === "money" ? "decimal" : "numeric"}
+      value={value}
+      onChange={(e) => onValueChange(sanitizeNumberTyping(e.target.value))}
+      onBlur={() => {
+        const raw = value.trim();
+        if (!raw) return;
+        const n = Number(raw);
+        if (!Number.isFinite(n)) return;
+        const clean =
+          mode === "money"
+            ? (Math.round(n * 100) / 100).toFixed(2)
+            : String(Math.floor(n));
+        if (clean !== value) onValueChange(clean);
+      }}
+      placeholder={placeholder}
+      className={className}
+      autoComplete="off"
+    />
+  );
+};
+
 export default function AdminReferralProgramPage() {
   const { theme, setTheme } = useTheme();
   const { actionItems, signOut } = useAdminActions();
@@ -975,11 +1038,10 @@ export default function AdminReferralProgramPage() {
                   <Label className="text-xs font-bold text-slate-600 dark:text-slate-400">
                     Required deliveries (N)
                   </Label>
-                  <Input
-                    type="number"
-                    min="1"
+                  <SafeNumberInput
+                    mode="integer"
                     value={formRequiredDeliveries}
-                    onChange={(e) => setFormRequiredDeliveries(e.target.value)}
+                    onValueChange={setFormRequiredDeliveries}
                     placeholder="30"
                     className="h-12 rounded-2xl max-w-xs"
                   />
@@ -1041,11 +1103,10 @@ export default function AdminReferralProgramPage() {
                 <Label className="text-xs font-black uppercase tracking-widest text-slate-500">
                   Referrer reward per tier ($)
                 </Label>
-                <Input
-                  type="number"
-                  min="0"
+                <SafeNumberInput
+                  mode="money"
                   value={formReferrerAmount}
-                  onChange={(e) => setFormReferrerAmount(e.target.value)}
+                  onValueChange={setFormReferrerAmount}
                   placeholder="150"
                   className="h-12 rounded-2xl"
                 />
@@ -1057,11 +1118,10 @@ export default function AdminReferralProgramPage() {
                 <Label className="text-xs font-black uppercase tracking-widest text-slate-500">
                   Referrals per tier
                 </Label>
-                <Input
-                  type="number"
-                  min="1"
+                <SafeNumberInput
+                  mode="integer"
                   value={formThreshold}
-                  onChange={(e) => setFormThreshold(e.target.value)}
+                  onValueChange={setFormThreshold}
                   placeholder="20"
                   className="h-12 rounded-2xl"
                 />
@@ -1100,11 +1160,10 @@ export default function AdminReferralProgramPage() {
                   <Label className="text-xs font-bold text-slate-600 dark:text-slate-400">
                     Referred reward amount ($)
                   </Label>
-                  <Input
-                    type="number"
-                    min="0"
+                  <SafeNumberInput
+                    mode="money"
                     value={formReferredAmount}
-                    onChange={(e) => setFormReferredAmount(e.target.value)}
+                    onValueChange={setFormReferredAmount}
                     placeholder="150"
                     className="h-12 rounded-2xl max-w-xs"
                   />
@@ -1161,12 +1220,10 @@ export default function AdminReferralProgramPage() {
                       <Label className="text-xs font-bold text-slate-600 dark:text-slate-400">
                         Referrer per delivery ($)
                       </Label>
-                      <Input
-                        type="number"
-                        min="0"
-                        step="0.01"
+                      <SafeNumberInput
+                        mode="money"
                         value={formPerDeliveryReferrerDollars}
-                        onChange={(e) => setFormPerDeliveryReferrerDollars(e.target.value)}
+                        onValueChange={setFormPerDeliveryReferrerDollars}
                         placeholder="5.00"
                         className="h-12 rounded-2xl"
                       />
@@ -1178,12 +1235,10 @@ export default function AdminReferralProgramPage() {
                       <Label className="text-xs font-bold text-slate-600 dark:text-slate-400">
                         Referred bonus ($)
                       </Label>
-                      <Input
-                        type="number"
-                        min="0"
-                        step="0.01"
+                      <SafeNumberInput
+                        mode="money"
                         value={formPerDeliveryReferredBonusDollars}
-                        onChange={(e) => setFormPerDeliveryReferredBonusDollars(e.target.value)}
+                        onValueChange={setFormPerDeliveryReferredBonusDollars}
                         placeholder="50.00"
                         className="h-12 rounded-2xl"
                       />
@@ -1195,11 +1250,10 @@ export default function AdminReferralProgramPage() {
                       <Label className="text-xs font-bold text-slate-600 dark:text-slate-400">
                         Bonus trigger count
                       </Label>
-                      <Input
-                        type="number"
-                        min="1"
+                      <SafeNumberInput
+                        mode="integer"
                         value={formPerDeliveryBonusTriggerCount}
-                        onChange={(e) => setFormPerDeliveryBonusTriggerCount(e.target.value)}
+                        onValueChange={setFormPerDeliveryBonusTriggerCount}
                         placeholder="5"
                         className="h-12 rounded-2xl"
                       />
@@ -1214,11 +1268,10 @@ export default function AdminReferralProgramPage() {
                     <Label className="text-xs font-bold text-slate-600 dark:text-slate-400">
                       Driver referral window (days from signup)
                     </Label>
-                    <Input
-                      type="number"
-                      min="1"
+                    <SafeNumberInput
+                      mode="integer"
                       value={formReferralWindowDays}
-                      onChange={(e) => setFormReferralWindowDays(e.target.value)}
+                      onValueChange={setFormReferralWindowDays}
                       placeholder="30"
                       className="h-12 rounded-2xl max-w-xs"
                     />
@@ -1234,12 +1287,10 @@ export default function AdminReferralProgramPage() {
                     <Label className="text-xs font-bold text-slate-600 dark:text-slate-400">
                       Business referral reward ($) — one-time
                     </Label>
-                    <Input
-                      type="number"
-                      min="0"
-                      step="0.01"
+                    <SafeNumberInput
+                      mode="money"
                       value={formBusinessReferralDollars}
-                      onChange={(e) => setFormBusinessReferralDollars(e.target.value)}
+                      onValueChange={setFormBusinessReferralDollars}
                       placeholder="10.00"
                       className="h-12 rounded-2xl"
                     />
@@ -1252,12 +1303,10 @@ export default function AdminReferralProgramPage() {
                     <Label className="text-xs font-bold text-slate-600 dark:text-slate-400">
                       Business referral rolling cap ($ / 30 days)
                     </Label>
-                    <Input
-                      type="number"
-                      min="0"
-                      step="0.01"
+                    <SafeNumberInput
+                      mode="money"
                       value={formBusinessCapDollars}
-                      onChange={(e) => setFormBusinessCapDollars(e.target.value)}
+                      onValueChange={setFormBusinessCapDollars}
                       placeholder="300.00"
                       className="h-12 rounded-2xl"
                     />
@@ -1270,12 +1319,10 @@ export default function AdminReferralProgramPage() {
                     <Label className="text-xs font-bold text-slate-600 dark:text-slate-400">
                       Residential referral reward ($) — one-time
                     </Label>
-                    <Input
-                      type="number"
-                      min="0"
-                      step="0.01"
+                    <SafeNumberInput
+                      mode="money"
                       value={formResidentialReferralDollars}
-                      onChange={(e) => setFormResidentialReferralDollars(e.target.value)}
+                      onValueChange={setFormResidentialReferralDollars}
                       placeholder="5.00"
                       className="h-12 rounded-2xl"
                     />
