@@ -265,6 +265,23 @@ html {
   }
 }
 
+/* ERP sidebar push — the persistent admin sidebar (app-sidebar.tsx) is
+   position:fixed, so it cannot move the page by itself. It publishes its
+   current width as --app-sidebar-push on <html> (useLayoutEffect, set
+   before paint), and this rule converts that into body padding on desktop
+   only: the sticky navbar, the centered page containers and every in-flow
+   element slide right in lockstep with the sidebar's own width transition
+   — the classic ERP "push" that never overlaps content. Below lg the
+   variable is ignored (mobile keeps the drawer), and position:fixed
+   elements (the sidebar itself, Radix poppers/dialogs) are unaffected by
+   body padding by spec, so overlays keep anchoring correctly. */
+@media (min-width: 1024px) {
+  body {
+    padding-left: var(--app-sidebar-push, 0px);
+    transition: padding-left 200ms ease;
+  }
+}
+
 /* iOS focus auto-zoom guard ("the app comes a little zoomed" — iPhone).
    Mobile Safari auto-zooms the whole page whenever a form control with a
    computed font-size BELOW 16px receives focus, and it stays zoomed after

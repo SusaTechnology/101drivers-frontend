@@ -37,6 +37,7 @@ import { cn } from '@/lib/utils';
 import { Menu, ChevronLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { MobileMenuDrawer } from './MobileMenuDrawer';
+import { AppSidebar } from './app-sidebar';
 
 export interface NavItem {
   label: string;
@@ -134,6 +135,13 @@ export function Navbar({
 
   return (
     <>
+      {/* ERP-style persistent sidebar — desktop (lg+) only. It shows the
+          SAME navItems the measured bar does, never hides on navigation,
+          and pushes the page via the --app-sidebar-push CSS variable
+          (styles.css turns it into body padding). Below lg it renders
+          nothing and the classic measured-bar + drawer behavior applies. */}
+      <AppSidebar items={items} />
+
       <header
         className={cn(
           'sticky top-0 z-50 border-b border-slate-200 dark:border-slate-800 bg-white/85 dark:bg-background-dark/80 backdrop-blur-md',
@@ -142,14 +150,17 @@ export function Navbar({
         style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}
       >
         <div className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 h-16 lg:h-20 flex items-center justify-between gap-3 sm:gap-4">
-          {/* Left section: hamburger + brand + measured nav slot */}
+          {/* Left section: hamburger + brand + measured nav slot.
+              Hamburger + slot are MOBILE/TABLET-ONLY (lg:hidden): on desktop
+              the AppSidebar owns navigation, so the top bar keeps just the
+              brand + actions — the ERP shell layout. */}
           <div className="flex items-center gap-2 sm:gap-3 flex-1 min-w-0">
             {/* Hamburger — rendered only while the nav does not fit */}
             <Button
               variant="outline"
               size="icon"
               className={cn(
-                'w-11 h-11 rounded-2xl shrink-0',
+                'w-11 h-11 rounded-2xl shrink-0 lg:hidden',
                 collapsed ? 'inline-flex' : 'hidden'
               )}
               onClick={() => setMenuOpen(true)}
@@ -171,7 +182,7 @@ export function Navbar({
                 horizontal scroll. */}
             <div
               ref={navSlotRef}
-              className="relative flex-1 min-w-0 self-stretch overflow-hidden"
+              className="relative flex-1 min-w-0 self-stretch overflow-hidden lg:hidden"
             >
               <nav
                 ref={navRef}

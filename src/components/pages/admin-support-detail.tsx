@@ -36,8 +36,6 @@ import {
   CheckCircle,
   User,
   Clock,
-  FileText,
-  MessageSquare,
   Shield,
   RefreshCw,
   Building2,
@@ -289,6 +287,42 @@ export default function AdminSupportDetailPage({ supportRequestId }: { supportRe
     replyMutation.mutate({ message: replyMessage.trim() })
   }
 
+  // ── Chat-app shell helpers ──
+  // The conversation lives in its own scrolling screen (the column itself
+  // never scrolls on desktop), so new history must scroll THAT screen to
+  // the bottom — WhatsApp behavior. Container scrollTop (not
+  // scrollIntoView) so a mobile page-level scroller never jumps.
+  const chatScrollRef = useRef<HTMLDivElement>(null)
+  const composerRef = useRef<HTMLTextAreaElement>(null)
+  const notesCount = request?.notes?.length ?? 0
+  useEffect(() => {
+    const el = chatScrollRef.current
+    if (el) el.scrollTop = el.scrollHeight
+  }, [notesCount, requestId])
+
+  // Chat convention: Enter sends, Shift+Enter adds a line, IME composition
+  // (the pause while typing CJK/emoji suggestions) never triggers a send.
+  const handleComposerKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
+      e.preventDefault()
+      if (!replyMutation.isPending && replyMessage.trim()) handleReply()
+    }
+  }
+
+  // Auto-grow the composer with its content (capped), and shrink it back
+  // once a sent message clears the field.
+  const autoGrowComposer = () => {
+    const el = composerRef.current
+    if (!el) return
+    el.style.height = 'auto'
+    el.style.height = `${Math.min(el.scrollHeight, 132)}px`
+  }
+  useEffect(() => {
+    if (replyMessage === '' && composerRef.current) {
+      composerRef.current.style.height = ''
+    }
+  }, [replyMessage])
+
   // Handle internal note
   const handleAddInternalNote = () => {
     if (!internalNote.trim()) {
@@ -331,7 +365,7 @@ export default function AdminSupportDetailPage({ supportRequestId }: { supportRe
   }
 
   return (
-    <div className="min-h-screen bg-background-light dark:bg-background-dark font-sans antialiased text-slate-900 dark:text-white">
+    <div className="min-h-dvh lg:h-dvh lg:overflow-hidden flex flex-col bg-background-light dark:bg-background-dark font-sans antialiased text-slate-900 dark:text-white">
       {/* Header */}
       <Navbar
         brand={<Brand />}
@@ -341,7 +375,11 @@ export default function AdminSupportDetailPage({ supportRequestId }: { supportRe
         title="Support Request"
       />
 
-      <main className="w-full max-w-[1400px] mx-auto px-4 lg:px-5 py-4 lg:py-5">
+      {/* Chat-workspace shell: on desktop the page NEVER scrolls — the two
+          columns below own their own scrolling (chat screen inside the main
+          column, the whole aside on the right). On mobile it degrades to a
+          normal scrolling page. */}
+      <main className="w-full max-w-[1400px] mx-auto px-4 lg:px-5 py-3 lg:py-4 flex-1 lg:min-h-0 flex flex-col">
         {isLoading || isPlaceholderData ? (
           <div className="space-y-4">
             <Skeleton className="h-10 w-48" />
@@ -362,98 +400,95 @@ export default function AdminSupportDetailPage({ supportRequestId }: { supportRe
             </CardContent>
           </Card>
         ) : (
-          <>
-            {/* Back button and actions */}
-            <section className="mb-4">
-              <div className="flex items-center justify-between gap-3">
+          <div className="flex-1 lg:min-h-0 grid grid-cols-1 lg:grid-cols-3 gap-4">
+            {/* Main column — chat app. The column never scrolls: a compact
+                chat-app header strip on top, the conversation screen takes
+                the rest (the only scroller), the composer pinned at the
+                bottom inside the surface. */}
+            <section className="lg:col-span-2 lg:min-h-0 flex flex-col">
+              {/* Chat-app header — "a little smaller than the navbar" strip
+                  with the same content the old header cards had: identity,
+                  subject, status + priority pills, refresh. */}
+              <div className="shrink-0 h-14 flex items-center gap-2.5 pl-1.5 pr-2 rounded-2xl border bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-sm">
                 <Link
                   to="/admin-support-list"
-                  className="inline-flex items-center gap-2 text-sm font-semibold text-slate-600 dark:text-slate-400 hover:text-primary transition"
+                  aria-label="Back to support list"
+                  title="Back to support list"
+                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-slate-500 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white transition"
                 >
                   <ArrowLeft className="w-4 h-4" />
-                  Back to Support List
                 </Link>
+                <SupportAvatar
+                  identity={request.user}
+                  className="h-9 w-9 shrink-0"
+                  onOpenPhoto={openAttachmentPreview}
+                />
+                <div className="min-w-0 flex-1">
+                  <h1 className="truncate text-sm font-bold leading-tight text-slate-900 dark:text-white">
+                    {request.subject}
+                  </h1>
+                  <div className="flex items-center gap-1.5 truncate text-[10px] font-semibold text-slate-400">
+                    <span className="truncate">{categoryLabels[request.category]}</span>
+                    <span aria-hidden>•</span>
+                    <span className="truncate">From {request.actorRole}</span>
+                    <span aria-hidden>•</span>
+                    <span className="whitespace-nowrap">{formatDate(request.createdAt)}</span>
+                  </div>
+                </div>
+                <Badge className={cn("shrink-0 px-2 py-0 text-[9px] font-bold", statusColors[request.status])}>
+                  {request.status.replace('_', ' ')}
+                </Badge>
+                <Badge variant="outline" className={cn("shrink-0 px-2 py-0 text-[9px] font-bold", priorityColors[request.priority])}>
+                  {request.priority}
+                </Badge>
                 <Button
-                  variant="outline"
-                  size="sm"
+                  variant="ghost"
+                  size="icon"
                   onClick={() => refetch()}
                   disabled={isFetching}
-                  className="gap-2"
+                  aria-label="Refresh"
+                  title="Refresh"
+                  className="h-8 w-8 shrink-0 rounded-xl"
                 >
                   <RefreshCw className={cn("w-4 h-4", isFetching && "animate-spin")} />
-                  Refresh
                 </Button>
               </div>
-            </section>
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-              {/* Main Content */}
-              <div className="lg:col-span-2 space-y-4">
-                {/* Request Header */}
-                <Card className="border-slate-200 dark:border-slate-800">
-                  <CardContent className="p-6">
-                    <div className="flex items-start gap-4">
-                      <div className="w-14 h-14 rounded-xl bg-primary/15 flex items-center justify-center shrink-0 text-primary">
-                        {categoryIcons[request.category]}
-                      </div>
-                      <div className="flex-1">
-                        <div className="flex flex-wrap items-center gap-2 mb-2">
-                          <Badge className={cn("font-bold", statusColors[request.status])}>
-                            {request.status.replace('_', ' ')}
-                          </Badge>
-                          <Badge variant="outline" className={priorityColors[request.priority]}>
-                            {request.priority}
-                          </Badge>
-                        </div>
-                        <h1 className="text-xl font-black text-slate-900 dark:text-white">
-                          {request.subject}
-                        </h1>
-                        <div className="flex flex-wrap items-center gap-2 mt-2 text-sm text-slate-500">
-                          <span>{categoryLabels[request.category]}</span>
-                          <span>•</span>
-                          <span>From {request.actorRole}</span>
-                          <span>•</span>
-                          <span>{formatDate(request.createdAt)} at {formatTime(request.createdAt)}</span>
-                        </div>
-                      </div>
+              {/* The conversation screen — takes everything between the
+                  header strip and the composer (~90% of the column) and is
+                  the ONLY scroller in this column. */}
+              <div
+                ref={chatScrollRef}
+                className="flex-1 min-h-[45vh] lg:min-h-0 mt-3 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-950/40 overflow-y-auto p-3 sm:p-4 space-y-3"
+              >
+                {/* Original request = the thread's first bubble (the
+                    standalone "Original Request" card is gone — its content
+                    lives here, chat-style). */}
+                <div className="flex items-end gap-2 justify-start">
+                  <SupportAvatar
+                    identity={request.user}
+                    className="h-8 w-8"
+                    onOpenPhoto={openAttachmentPreview}
+                  />
+                  <div className="max-w-[75%] rounded-2xl px-4 py-3 shadow-sm bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-white rounded-bl-md border border-slate-200 dark:border-slate-700">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="text-[10px] font-black uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                        {request.user?.fullName || request.actorRole}
+                      </span>
+                      <span className="text-[10px] text-slate-400 dark:text-slate-500">
+                        {formatDate(request.createdAt)} at {formatTime(request.createdAt)}
+                      </span>
                     </div>
-                  </CardContent>
-                </Card>
-
-                {/* Original Message */}
-                <Card className="border-slate-200 dark:border-slate-800">
-                  <CardHeader className="pb-3">
-                    <div className="flex items-center gap-2">
-                      <div className="w-8 h-8 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-600 dark:text-slate-400">
-                        {actorRoleIcons[request.actorRole] || <User className="h-4 w-4" />}
-                      </div>
-                      <div>
-                        <CardTitle className="text-sm font-bold">Original Request</CardTitle>
-                        <CardDescription className="text-xs">
-                          {request.actorRole} • {formatDate(request.createdAt)} at {formatTime(request.createdAt)}
-                        </CardDescription>
-                      </div>
-                    </div>
-                  </CardHeader>
-                  <CardContent>
                     <SupportMessageBody
                       message={request.message}
                       proseClassName="text-slate-700 dark:text-slate-300"
                       onOpenImage={openAttachmentPreview}
                     />
-                  </CardContent>
-                </Card>
+                  </div>
+                </div>
 
-                {/* Conversation — WhatsApp-style chat */}
                 {request.notes && request.notes.length > 0 && (
-                  <Card className="border-slate-200 dark:border-slate-800">
-                    <CardHeader>
-                      <CardTitle className="text-base font-bold flex items-center gap-2">
-                        <MessageSquare className="w-4 h-4" />
-                        Conversation ({request.notes.filter(n => !n.isInternal).length})
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-3">
+                  <>
                       {request.notes.map((note) => {
                         if (note.isInternal) {
                           // Internal notes — shown as a centered system message
@@ -558,44 +593,51 @@ export default function AdminSupportDetailPage({ supportRequestId }: { supportRe
                           </div>
                         )
                       })}
-                    </CardContent>
-                  </Card>
-                )}
-
-                {/* Reply Section */}
-                {request.status !== 'CLOSED' && (
-                  <Card className="border-slate-200 dark:border-slate-800">
-                    <CardHeader>
-                      <CardTitle className="text-base font-bold">Reply to Request</CardTitle>
-                      <CardDescription>
-                        Send a response to the user who submitted this request.
-                      </CardDescription>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
-                      <Textarea
-                        value={replyMessage}
-                        onChange={(e) => setReplyMessage(e.target.value)}
-                        placeholder="Type your response here..."
-                        rows={4}
-                        className="rounded-xl"
-                      />
-                      <div className="flex justify-end">
-                        <Button
-                          onClick={handleReply}
-                          disabled={replyMutation.isPending || !replyMessage.trim()}
-                          className="rounded-xl bg-primary text-slate-950 hover:shadow-lg font-bold gap-2"
-                        >
-                          {replyMutation.isPending ? 'Sending...' : 'Send Reply'}
-                          <Send className="w-4 h-4" />
-                        </Button>
-                      </div>
-                    </CardContent>
-                  </Card>
+                  </>
                 )}
               </div>
 
-              {/* Sidebar */}
-              <div className="space-y-4">
+              {/* Composer — pinned INSIDE the chat surface at the bottom,
+                  WhatsApp-style. No "Reply to Request" chrome: just the
+                  input (placeholder only) and the send button. Enter sends,
+                  Shift+Enter adds a line. */}
+              {request.status !== 'CLOSED' ? (
+                <div className="shrink-0 mt-2 rounded-2xl border bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-sm p-2 flex items-end gap-2">
+                  <Textarea
+                    ref={composerRef}
+                    value={replyMessage}
+                    onChange={(e) => {
+                      setReplyMessage(e.target.value)
+                      autoGrowComposer()
+                    }}
+                    onKeyDown={handleComposerKeyDown}
+                    placeholder="Type your message..."
+                    rows={1}
+                    aria-label="Message"
+                    className="flex-1 min-h-[40px] max-h-32 resize-none rounded-xl border-0 shadow-none focus-visible:ring-0 dark:bg-transparent"
+                  />
+                  <Button
+                    onClick={handleReply}
+                    disabled={replyMutation.isPending || !replyMessage.trim()}
+                    size="icon"
+                    aria-label="Send message"
+                    title="Send"
+                    className="h-9 w-9 shrink-0 rounded-xl bg-primary text-slate-950 hover:shadow-lg"
+                  >
+                    <Send className="w-4 h-4" />
+                  </Button>
+                </div>
+              ) : (
+                <div className="shrink-0 mt-2 rounded-2xl border bg-slate-50 dark:bg-slate-900/60 border-slate-200 dark:border-slate-800 px-4 py-3 text-center text-xs font-semibold text-slate-400">
+                  This request is closed — change the status to reopen the conversation.
+                </div>
+              )}
+            </section>
+
+            {/* Right column — Related Delivery, Change Status, Internal Note,
+                Requested By, Assignment, Timestamps. Scrolls on its own; the
+                page never does (desktop). */}
+            <aside className="space-y-4 lg:min-h-0 lg:overflow-y-auto lg:pr-1">
                 {/* Related Delivery */}
                 {request.delivery && (
                   <Card className="border-slate-200 dark:border-slate-800">
@@ -726,9 +768,8 @@ export default function AdminSupportDetailPage({ supportRequestId }: { supportRe
                     </div>
                   </CardContent>
                 </Card>
-              </div>
-            </div>
-          </>
+            </aside>
+          </div>
         )}
       </main>
 
@@ -739,29 +780,6 @@ export default function AdminSupportDetailPage({ supportRequestId }: { supportRe
         src={photoDialogSrc}
         title="Attachment"
       />
-
-      {/* Footer */}
-      <footer className="bg-white dark:bg-slate-950 border-t border-slate-200 dark:border-slate-800 pt-8 pb-8">
-        <div className="max-w-[1600px] mx-auto px-4 lg:px-6">
-          <div className="flex flex-col md:flex-row justify-between items-center gap-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl overflow-hidden bg-black border border-slate-200">
-                <img
-                  src="/assets/101drivers-logo.jpg"
-                  alt="101 Drivers logo"
-                  className="w-full h-full object-cover"
-                />
-              </div>
-              <p className="text-sm font-bold text-slate-600 dark:text-slate-300">
-                Admin Console • California-only operations
-              </p>
-            </div>
-            <p className="text-xs text-slate-500 font-medium">
-              © 2026 101 Drivers Inc. All rights reserved.
-            </p>
-          </div>
-        </div>
-      </footer>
     </div>
   )
 }
