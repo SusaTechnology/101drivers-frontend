@@ -1,51 +1,68 @@
 import { useEffect, useState } from 'react'
-import { AlertTriangle, RefreshCw, RotateCcw, WifiOff } from 'lucide-react'
+import {
+  AlertTriangle,
+  RefreshCw,
+  RotateCcw,
+  WifiOff,
+  Wrench,
+} from 'lucide-react'
+import { captureCaughtError } from '@/lib/errorCapture'
 
 /**
  * Global crash screen for the router.
  *
  * WHY THIS EXISTS
  * Every page is rendered inside TanStack Router's CatchBoundary. When a
- * component throws (or a lazy route chunk fails to import — the classic
- * "missing file after deploy" case), the router swaps the ENTIRE page for
- * its built-in default screen. This component replaces that default with
- * a branded, actionable screen.
+ * component throws (or a lazy route chunk resolves into a corrupted state —
+ * the classic stale-PWA case), the router swaps the ENTIRE page for its
+ * built-in default screen. This component replaces that default with a
+ * branded, actionable screen.
  *
  * WHAT USERS ACTUALLY SEE (the important part — owner requirement: users
  * must NEVER catch a flashing "Something went wrong" during login or page
- * changes, and must never see the app "freak them out"):
+ * changes, must never see the app "freak them out", and recovery must
+ * never depend on the user figuring out buttons):
  *
  *   1. QUIET FIRST, ALWAYS. For the first QUIET_MS the crash renders the
  *      exact RoutePending spinner — the same ring the app shows on every
  *      normal page load. Transient errors (a route loader that lost the
  *      network race, a query retried by React Query, a chunk that lands a
  *      beat late) recover and unmount INSIDE this window, so the user
- *      never sees any error at all — this is what killed the reported
- *      "it flashes and goes away too fast" dialogs.
+ *      never sees any error at all.
  *
- *   2. ONE SILENT AUTO-RETRY. Non-stale errors get a single reset() after
- *      AUTO_RESET_MS (guarded by a module-level 30s spacing so a truly
- *      broken page cannot loop). If the retry succeeds, the user saw only
- *      a normal-looking spinner. Most login/page-change failures are
- *      exactly this class.
+ *   2. ONE SILENT AUTO-RETRY for ordinary (non-stale) errors, guarded by a
+ *      module-level 30s spacing so a truly broken page cannot loop. If the
+ *      retry succeeds, the user saw only a normal-looking spinner.
  *
- *   3. ONLY a failure that survived the silent retry paints the full card
- *      — after QUIET_MS, so it can never flash.
+ *   3. STALE-BUILD CRASHES NEVER PAINT THE CARD UNTIL REPAIR IS EXHAUSTED.
+ *      They escalate EXACTLY like the index.html boot shell (which has run
+ *      this pattern since the Oct-13 PWA hardening): first a guarded soft
+ *      reload; if the crash comes back, a silent DEEP REPAIR — unregister
+ *      every service worker, delete every cache bucket, reload (localStorage
+ *      is never touched, so users stay signed in); only if the crash STILL
+ *      returns does the calm card appear — and its primary button then
+ *      performs the same deep repair manually, so it can never dead-end.
+ *      During reload/repair steps the screen is the quiet shell ("Updating
+ *      the app…" / "Repairing the app…") — never an error dialog.
  *
- *   4. Stale-chunk errors (deploy replaced hashed files under an open
- *      tab, or the first chunk fetch after waking from idle lost the race
- *      against the reconnecting network) NEVER paint the card at all —
- *      they show a quiet "Updating the app…" shell while the automatic
- *      one-shot reload runs. If the reload is guard-blocked (a reload
- *      already happened within the last 30s — possible sign of a
- *      genuinely broken deploy), the full card still appears so the user
- *      can act manually.
+ *      The boot shell only ever healed BOOT-level failures; route-level
+ *      crashes (React.lazy payload corruption like Safari's "undefined is
+ *      not an object (evaluating 'E._result.default')" when tapping
+ *      Create Delivery) stopped at the soft-reload step, and a soft reload
+ *      re-serves the same poisoned shell on long-lived devices — that is
+ *      the "reload fixes nothing" loop. Escalation closes it.
  *
- *   The underlying error message is kept in a collapsible block so
- *   support can still see the real cause.
+ *   4. Offline, no reload or repair can fetch anything new, and wiping
+ *      caches offline would leave the PWA with nothing to paint. So while
+ *      offline the card appears immediately with connection-first copy
+ *      (same policy as the boot-shell watchdogs).
+ *
+ *   The underlying error message stays in a collapsible block so support
+ *   can still see the real cause.
  */
 
-/** Error signatures that mean "the JS bundle on the server changed under us". */
+/** Error signatures that mean "the JS bundle on the server changed under us"
+ * or "a lazily-imported route chunk resolved into a corrupted payload". */
 const STALE_CHUNK_PATTERNS = [
   'failed to fetch dynamically imported module',
   'importing a module script failed',
@@ -55,15 +72,19 @@ const STALE_CHUNK_PATTERNS = [
   'vite:preloaderror',
   'chunkloaderror',
   'loading chunk',
-  // React.lazy resolution failures. When a session resumes (PWA reopened
-  // after days) and a lazy route chunk resolves WITHOUT a module namespace
-  // — stale build after a deploy, or the wake-from-idle network race —
-  // React's minified internals throw on `X._result.default`:
+  // React.lazy payload corruption. When a session resumes (installed PWA
+  // reopened after days) a lazy route chunk can resolve into a broken
+  // payload — stale build after a deploy, mixed chunk generations, or a
+  // failed module fetch that some iOS WebKit versions fulfil with an empty
+  // record instead of rejecting. React's minified internals then throw on
+  // the payload's `_result.default` read:
   //   Safari: "undefined is not an object (evaluating 'E._result.default')"
   //   Chrome: "Cannot read properties of undefined (reading 'default')"
-  // One reload fixes these, so treat them exactly like stale chunks and
-  // take the quiet auto-reload path instead of the scary card.
-  '_result.default',
+  // Owners reading the Safari dialog on a phone routinely transcribe it
+  // WITHOUT the leading underscore ("E.result.default"), so the pattern
+  // below deliberately matches both spellings. A fresh document (reload
+  // or repair) rebuilds the payload — treat exactly like stale chunks.
+  'result.default',
   "reading 'default'",
 ]
 
@@ -79,12 +100,180 @@ function isStaleChunkError(error: unknown): boolean {
 const RELOAD_GUARD_KEY = 'route-error:auto-reload-at'
 const RELOAD_GUARD_MS = 30_000
 
-/** How long a crash stays as the quiet RoutePending spinner before the
- * card is allowed to paint. Transient errors unmount inside this window
- * and are never seen. */
+// ── Escalating stale-build recovery ───────────────────────────────────
+//
+// Recovery attempts are remembered (per session) in a sessionStorage
+// ledger with a rolling window. The plan for each new stale crash:
+//
+//   no prior attempts           → soft reload (the standard fix)
+//   reload already tried        → deep repair (unregister SW + clear caches)
+//   repair already tried        → 'blocked' — show the actionable card
+//
+// The boot shell's watchdogs use the same reload-guard key, so a reload
+// that just happened at boot level counts against the soft step here too.
+
+const RECOVERY_LEDGER_KEY = 'route-error:stale-recoveries'
+const RECOVERY_WINDOW_MS = 120_000
+
+interface RecoveryEntry {
+  t: number
+  kind: 'reload' | 'repair'
+}
+
+function readRecoveryLedger(): RecoveryEntry[] {
+  try {
+    const raw = sessionStorage.getItem(RECOVERY_LEDGER_KEY)
+    if (!raw) return []
+    const parsed: unknown = JSON.parse(raw)
+    if (!Array.isArray(parsed)) return []
+    const now = Date.now()
+    return parsed.filter(
+      (e): e is RecoveryEntry =>
+        !!e &&
+        typeof e === 'object' &&
+        typeof (e as RecoveryEntry).t === 'number' &&
+        ((e as RecoveryEntry).kind === 'reload' ||
+          (e as RecoveryEntry).kind === 'repair') &&
+        now - (e as RecoveryEntry).t < RECOVERY_WINDOW_MS,
+    )
+  } catch {
+    return []
+  }
+}
+
+function recordRecovery(kind: RecoveryEntry['kind']): void {
+  try {
+    const entries = [...readRecoveryLedger(), { t: Date.now(), kind }]
+    sessionStorage.setItem(RECOVERY_LEDGER_KEY, JSON.stringify(entries.slice(-6)))
+  } catch {
+    // Storage unavailable (private mode): the plan simply cannot remember.
+    // The 30s reload guard still bounds the soft path, and the card still
+    // appears for a persistent crash once reloadOnceForStaleBuild's own
+    // guard blocks.
+  }
+}
+
+/** The incident is over — the app booted and stayed up. Clears the ledger
+ * so the NEXT incident (days later) starts gently at the soft-reload step.
+ * Called from main.tsx after a stability window following a clean boot. */
+export function clearStaleRecoveryLedger(): void {
+  try {
+    sessionStorage.removeItem(RECOVERY_LEDGER_KEY)
+  } catch {
+    // ignore — nothing to clear
+  }
+}
+
+/**
+ * Hard-reload the tab at most once per RELOAD_GUARD_MS window. The guard
+ * key is SHARED with the index.html boot-shell watchdogs, so a reload
+ * that just happened at boot level also blocks this one — one loop bound
+ * across every layer. Used by the soft recovery step.
+ */
+export function reloadOnceForStaleBuild(): boolean {
+  try {
+    const last = Number(sessionStorage.getItem(RELOAD_GUARD_KEY) ?? 0)
+    if (Date.now() - last < RELOAD_GUARD_MS) {
+      return false
+    }
+    sessionStorage.setItem(RELOAD_GUARD_KEY, String(Date.now()))
+  } catch {
+    // sessionStorage unavailable (private mode / storage disabled) —
+    // still reload; the guard just can't protect against a loop here.
+  }
+  window.location.reload()
+  return true
+}
+
+/**
+ * The route-level twin of the boot shell's Watchdog-2 "nuclear fix":
+ * unregister every service worker, delete every cache bucket, then reload.
+ * localStorage is NEVER touched — auth tokens live there (dataQuery.ts)
+ * and users must stay signed in through a repair.
+ */
+export async function repairAndReload(): Promise<void> {
+  try {
+    if (typeof navigator !== 'undefined' && navigator.serviceWorker) {
+      const regs = await navigator.serviceWorker.getRegistrations()
+      await Promise.all(
+        regs.map((r) => r.unregister().catch(() => undefined)),
+      )
+    }
+  } catch {
+    // ignore — best-effort
+  }
+  try {
+    const keys = await caches.keys()
+    await Promise.all(keys.map((k) => caches.delete(k).catch(() => undefined)))
+  } catch {
+    // ignore — best-effort
+  }
+  window.location.reload()
+}
+
+export type StaleRecoveryPlan = 'reload' | 'repair' | 'blocked'
+
+/** True once a recovery has been started in THIS document — dedupes the
+ * concurrent callers (vite:preloadError listener + this screen's effect)
+ * so a single crash can never fire two recoveries. */
+let recoveryStarted = false
+
+/**
+ * Run the escalating recovery for a stale-chunk crash. Safe to call from
+ * both the router error screen and the vite:preloadError listener.
+ *
+ * Returns the plan taken. 'reload' and 'repair' navigate away shortly —
+ * the caller keeps showing the quiet shell. 'blocked' means "do not
+ * recover automatically" (offline, or repair already exhausted) — the
+ * caller paints the actionable card.
+ */
+export function runStaleRecovery(
+  onStep?: (step: 'reload' | 'repair') => void,
+): StaleRecoveryPlan {
+  // A recovery is already underway in this document — never double-fire.
+  if (recoveryStarted) return 'reload'
+
+  // Offline: reloading fetches the same cached shell and clearing caches
+  // would leave the PWA nothing to paint until the network returns. Same
+  // policy as the boot-shell watchdogs: surface the offline card instead.
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+    return 'blocked'
+  }
+
+  const recent = readRecoveryLedger()
+
+  // A deep repair already ran inside the window and the crash came back
+  // anyway. Stop escalating — show the card whose primary button performs
+  // the repair manually. This is the hard bound: reload → repair → card.
+  if (recent.some((e) => e.kind === 'repair')) {
+    return 'blocked'
+  }
+
+  recoveryStarted = true
+
+  // First incident inside the window: the standard one-shot soft reload.
+  if (recent.length === 0) {
+    recordRecovery('reload')
+    onStep?.('reload')
+    if (reloadOnceForStaleBuild()) return 'reload'
+    // Guard-blocked: something reloaded within the last 30s (boot-shell
+    // watchdog, a previous layer's recovery) and the crash is STILL here.
+    // A soft reload is demonstrably not fixing this device — escalate.
+  }
+
+  // Second incident (or guard-blocked soft reload): silent deep repair.
+  recordRecovery('repair')
+  onStep?.('repair')
+  void repairAndReload().catch(() => window.location.reload())
+  return 'repair'
+}
+
+/** How long an ordinary crash stays as the quiet RoutePending spinner
+ * before the card is allowed to paint. Transient errors unmount inside
+ * this window and are never seen. */
 const QUIET_MS = 1_400
 
-/** When the single silent auto-retry fires. */
+/** When the single silent auto-retry (ordinary errors) fires. */
 const AUTO_RESET_MS = 900
 
 /** Minimum spacing between silent auto-retries across remounts — prevents
@@ -113,27 +302,6 @@ function QuietShell({ text = 'Loading…' }: { text?: string }) {
   )
 }
 
-/**
- * Hard-reload the tab at most once per RELOAD_GUARD_MS window.
- * Used by both the error screen (auto) and the vite:preloadError listener
- * so a transient failure recovers silently but a persistent one doesn't
- * loop forever.
- */
-export function reloadOnceForStaleBuild(): boolean {
-  try {
-    const last = Number(sessionStorage.getItem(RELOAD_GUARD_KEY) ?? 0)
-    if (Date.now() - last < RELOAD_GUARD_MS) {
-      return false
-    }
-    sessionStorage.setItem(RELOAD_GUARD_KEY, String(Date.now()))
-  } catch {
-    // sessionStorage unavailable (private mode / storage disabled) —
-    // still reload; the guard just can't protect against a loop here.
-  }
-  window.location.reload()
-  return true
-}
-
 export function RouteErrorScreen({
   error,
   reset,
@@ -144,24 +312,34 @@ export function RouteErrorScreen({
   const offline = typeof navigator !== 'undefined' && !navigator.onLine
   const staleChunk = isStaleChunkError(error)
 
-  // True when the automatic one-shot reload could NOT run because the
-  // 30s reload guard blocked it — possible sign of a genuinely broken
-  // deploy. Fall back to the full actionable card in that case.
-  const [reloadBlocked, setReloadBlocked] = useState(false)
+  // Feed the persisted client error log. window.onerror never fires for
+  // errors React (or the router boundary) caught, so without this hook a
+  // route crash would be invisible to support diagnostics.
+  useEffect(() => {
+    captureCaughtError(error)
+  }, [error])
 
-  // The crash stays a quiet spinner for QUIET_MS before the card may
-  // paint. Transient errors unmount inside the window and are never seen.
+  // 'blocked' = automatic recovery refused (offline / repair exhausted) —
+  // the card is painted instead of the quiet shell.
+  const [recoveryBlocked, setRecoveryBlocked] = useState(false)
+
+  // Which recovery step is running — drives the quiet-shell label.
+  const [recoverStep, setRecoverStep] = useState<'reload' | 'repair'>('reload')
+
+  // User tapped "Repair & reopen" on the card (button feedback state).
+  const [repairTapped, setRepairTapped] = useState(false)
+
+  // Ordinary crash during its quiet grace window: the exact RoutePending
+  // spinner. The silent auto-retry usually resolves the crash inside this
+  // window and the page resumes — the user never learns an error happened.
+  // (Stale crashes skip this gate: their recovery shell shows below and
+  // may legitimately outlive QUIET_MS while repair runs.)
   const [quietElapsed, setQuietElapsed] = useState(false)
 
-  // Auto-recover from stale-chunk crashes (deploy happened mid-session,
-  // or the first chunk fetch after waking from idle lost the network
-  // race). The reload is the only reliable recovery — a failed module
-  // import stays failed inside the page's module map, so retrying the
-  // import in-document does not work; a fresh document does.
   useEffect(() => {
     if (staleChunk) {
-      const reloaded = reloadOnceForStaleBuild()
-      if (!reloaded) setReloadBlocked(true)
+      const plan = runStaleRecovery((step) => setRecoverStep(step))
+      if (plan === 'blocked') setRecoveryBlocked(true)
       return
     }
 
@@ -184,16 +362,18 @@ export function RouteErrorScreen({
     return () => clearTimeout(timer)
   }, [])
 
-  // Stale-chunk crash: quiet update shell while the auto-reload runs.
-  if (staleChunk && !reloadBlocked) {
-    return <QuietShell text="Updating the app…" />
+  if (!staleChunk && !quietElapsed) {
+    return <QuietShell text="Loading…" />
   }
 
-  // Any other crash during its quiet grace window: the exact RoutePending
-  // spinner. The silent auto-retry usually resolves the crash inside this
-  // window and the page resumes — the user never learns an error happened.
-  if (!quietElapsed) {
-    return <QuietShell text="Loading…" />
+  // Stale-chunk crash mid-recovery: quiet update/repair shell while the
+  // automatic soft reload or deep repair navigates to a fresh document.
+  if (staleChunk && !recoveryBlocked) {
+    return (
+      <QuietShell
+        text={recoverStep === 'repair' ? 'Repairing the app…' : 'Updating the app…'}
+      />
+    )
   }
 
   const message =
@@ -202,7 +382,7 @@ export function RouteErrorScreen({
   const description = offline
     ? 'You appear to be offline. Check your connection and try again.'
     : staleChunk
-      ? 'The app was just updated and this page was loaded from an older version. We are reloading the latest build for you…'
+      ? 'The app on your device is running an older copy that no longer matches the current version. Repairing clears the app\'s temporary files and reopens the latest version — your data and sign-in stay untouched.'
       : 'An unexpected error occurred while displaying this page. Your data is safe — retrying usually fixes it.'
 
   return (
@@ -211,33 +391,68 @@ export function RouteErrorScreen({
         <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-full bg-amber-100 dark:bg-amber-950">
           {offline ? (
             <WifiOff className="h-7 w-7 text-amber-600 dark:text-amber-400" />
+          ) : staleChunk ? (
+            <Wrench className="h-7 w-7 text-amber-600 dark:text-amber-400" />
           ) : (
             <AlertTriangle className="h-7 w-7 text-amber-600 dark:text-amber-400" />
           )}
         </div>
 
         <h1 className="text-xl font-semibold tracking-tight">
-          {offline ? 'You are offline' : 'Something went wrong'}
+          {offline
+            ? 'You are offline'
+            : staleChunk
+              ? "We couldn't load this page"
+              : 'Something went wrong'}
         </h1>
         <p className="mt-2 text-sm leading-relaxed text-slate-600 dark:text-slate-400">
           {description}
         </p>
 
         <div className="mt-6 flex items-center justify-center gap-3">
-          <button
-            onClick={reset}
-            className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-medium text-white transition hover:opacity-90 dark:bg-white dark:text-slate-900"
-          >
-            <RotateCcw className="h-4 w-4" />
-            Try again
-          </button>
-          <button
-            onClick={() => window.location.reload()}
-            className="inline-flex items-center gap-2 rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-medium text-slate-700 transition hover:bg-slate-100 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
-          >
-            <RefreshCw className="h-4 w-4" />
-            Reload page
-          </button>
+          {staleChunk && !offline ? (
+            // "Try again" (reset) is useless for a corrupted lazy payload —
+            // it re-renders the same broken component in the same document
+            // and re-throws instantly. The repair IS the fix, so it is the
+            // primary action.
+            <>
+              <button
+                onClick={() => {
+                  setRepairTapped(true)
+                  repairAndReload().catch(() => window.location.reload())
+                }}
+                disabled={repairTapped}
+                className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-medium text-white transition hover:opacity-90 disabled:opacity-60 dark:bg-white dark:text-slate-900"
+              >
+                <Wrench className="h-4 w-4" />
+                {repairTapped ? 'Repairing…' : 'Repair & reopen'}
+              </button>
+              <button
+                onClick={() => window.location.reload()}
+                className="inline-flex items-center gap-2 rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-medium text-slate-700 transition hover:bg-slate-100 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+              >
+                <RefreshCw className="h-4 w-4" />
+                Reload page
+              </button>
+            </>
+          ) : (
+            <>
+              <button
+                onClick={reset}
+                className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-medium text-white transition hover:opacity-90 dark:bg-white dark:text-slate-900"
+              >
+                <RotateCcw className="h-4 w-4" />
+                Try again
+              </button>
+              <button
+                onClick={() => window.location.reload()}
+                className="inline-flex items-center gap-2 rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-medium text-slate-700 transition hover:bg-slate-100 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+              >
+                <RefreshCw className="h-4 w-4" />
+                Reload page
+              </button>
+            </>
+          )}
         </div>
 
         {message && (

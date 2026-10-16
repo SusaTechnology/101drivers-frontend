@@ -152,6 +152,20 @@ function onWindowError(event: ErrorEvent): void {
   }
 }
 
+/**
+ * Record an error that an upper layer already caught (React error
+ * boundary / router CatchBoundary / route loader try-catch).
+ *
+ * window.onerror NEVER fires for these — React swallows them — so without
+ * this hook a route crash would be invisible to the client error log and
+ * support conversations would go back to "it didn't work". Same dedupe
+ * and persistence contract as the uncaught path (identical consecutive
+ * messages collapse into a count).
+ */
+export function captureCaughtError(reason: unknown): void {
+  record("error", reason);
+}
+
 function onUnhandledRejection(event: PromiseRejectionEvent): void {
   record("rejection", event?.reason);
 }

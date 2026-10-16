@@ -12,7 +12,8 @@ import reportWebVitals from "./reportWebVitals.ts";
 import { Providers, queryClient } from "./lib/tanstack/provider.tsx";
 import {
   RouteErrorScreen,
-  reloadOnceForStaleBuild,
+  runStaleRecovery,
+  clearStaleRecoveryLedger,
 } from "./components/shared/RouteErrorScreen.tsx";
 import { NotFoundScreen } from "./components/shared/NotFoundScreen.tsx";
 import RoutePending from "./components/shared/RoutePending.tsx";
@@ -52,13 +53,21 @@ const router = createRouter({
 
 // Vite emits this event when a lazy chunk or its CSS preload fails — the
 // typical case is a new deploy replacing hashed /assets files while a tab
-// with the old build is open. One reload picks up the new build; the guard
-// inside reloadOnceForStaleBuild() prevents infinite reload loops if the
-// site is genuinely broken.
+// with the old build is open, or a corrupted lazy payload on a long-lived
+// installed PWA. Recovery ESCALATES (see RouteErrorScreen): first failure
+// gets the standard guarded soft reload; if the crash returns, a silent
+// deep repair (unregister service worker + clear caches, sign-in kept);
+// only a third failure ever reaches the actionable error card.
 window.addEventListener("vite:preloadError", (event) => {
   event.preventDefault();
-  reloadOnceForStaleBuild();
+  runStaleRecovery();
 });
+
+// The device just booted into the app. If no stale crash re-appears within
+// this stability window, the incident is over — clear the recovery ledger
+// so the NEXT incident (days later) starts gently at the soft-reload step
+// instead of jumping straight to the deep-repair level.
+setTimeout(() => clearStaleRecoveryLedger(), 15_000);
 
 // Register the router instance for type safety
 declare module "@tanstack/react-router" {
