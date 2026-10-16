@@ -239,6 +239,32 @@ html {
   text-size-adjust: 100%;
 }
 
+/* Scroll-lock compensation cancellation (the "page swings left/right when a
+   dropdown opens" bug, round 2).
+   Radix overlays (Select, Popover, Dialog, DropdownMenu) lock body scroll via
+   react-remove-scroll, which measures the classic scrollbar width and injects
+     body[data-scroll-locked] { margin-right: <gap>px !important }
+   to visually replace the scrollbar it removes. That compensation is only
+   correct when the scrollbar gutter is NOT permanently reserved. Now that
+   <html> reserves the gutter with `scrollbar-gutter: stable`, the measured
+   gap is ~15px on every page (even with no overflow), so opening ANY Radix
+   dropdown shoved the whole page ~15px left — and the admin navbar's
+   measured collapse re-fit at the narrower width, making nav items jump
+   into the overflow menu ("items go up"), then everything snapped back on
+   close. Classic double-compensation.
+   In every browser that supports scrollbar-gutter the gutter NEVER goes
+   away, so the compensation is pure harm: cancel it. Specificity is raised
+   above the runtime-injected selector (html body[data-scroll-locked] = 0,1,2
+   vs injected body[data-scroll-locked] = 0,1,1) so this wins the cascade
+   regardless of <style> injection order. In old browsers without
+   scrollbar-gutter support the @supports block is skipped and Radix's own
+   compensation keeps working exactly as before — no regression anywhere. */
+@supports (scrollbar-gutter: stable) {
+  html body[data-scroll-locked] {
+    margin-right: 0 !important;
+  }
+}
+
 /* iOS focus auto-zoom guard ("the app comes a little zoomed" — iPhone).
    Mobile Safari auto-zooms the whole page whenever a form control with a
    computed font-size BELOW 16px receives focus, and it stays zoomed after

@@ -983,16 +983,33 @@ export default function AdminUsersPage() {
   // from the paginated users list — so they stay stable across pages/filters.
   const { data: statusStats, isLoading: statusStatsLoading } = useAdminUserStatusStats();
 
-  // LIVE stats: the backend pings the admin-only staff:ops room over the
-  // socket whenever any user/role row is created or changes status (new
-  // signup, invite, approval, suspension, ...). We invalidate the stats
-  // query — the server stays the single source of truth — and the
-  // AnimatedNumber cards roll to the new values. The navbar's
-  // SupportNavBadge keeps the staff:ops room joined for the whole app
-  // (reference-counted in socket.ts), so this listener needs no room
+  // LIVE stats + LIVE table: the backend pings the admin-only staff:ops room
+  // over the socket whenever any user/role row is created or changes status
+  // (new signup, invite, approval, suspension, hold, ...). We invalidate the
+  // stats query immediately (AnimatedNumber cards roll to the new values) and
+  // coalesce a table refresh into one refetch per 600ms window so a burst of
+  // pings (batch invite/import) costs ONE paginated query, not one per event.
+  // The server stays the single source of truth for both surfaces. The
+  // navbar's SupportNavBadge keeps the staff:ops room joined for the whole
+  // app (reference-counted in socket.ts), so this listener needs no room
   // management of its own.
+  const tableRefreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(
+    () => () => {
+      if (tableRefreshTimer.current) clearTimeout(tableRefreshTimer.current);
+    },
+    []
+  );
   useSocketEvent('users:stats-changed', () => {
     queryClient.invalidateQueries({ queryKey: ['admin-users-status-stats'] });
+    if (tableRefreshTimer.current) clearTimeout(tableRefreshTimer.current);
+    tableRefreshTimer.current = setTimeout(() => {
+      tableRefreshTimer.current = null;
+      // Prefix key: matches every ['admin-users-v2', params] variant, so the
+      // visible page (and any filter combination in React Query's cache)
+      // refetches exactly once.
+      queryClient.invalidateQueries({ queryKey: ['admin-users-v2'] });
+    }, 600);
   });
 
   const handleStatusCardClick = useCallback(
