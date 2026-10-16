@@ -351,7 +351,7 @@ function RoleStatCard({
   return (
     <Card
       className={cn(
-        'flex flex-col rounded-2xl p-4 transition-all duration-200',
+        'flex flex-col rounded-2xl p-3 transition-all duration-200',
         isRoleFiltered
           ? 'border-primary/40 shadow-md ring-2 ring-primary/30'
           : 'border-slate-200 hover:shadow-sm dark:border-slate-800'
@@ -361,7 +361,7 @@ function RoleStatCard({
       <div className="flex items-center gap-2.5">
         <div
           className={cn(
-            'flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border',
+            'flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border',
             accent
           )}
         >
@@ -391,23 +391,28 @@ function RoleStatCard({
         }
         aria-pressed={isRoleOnlyActive}
         className={cn(
-          'group mt-3 w-full cursor-pointer select-none rounded-xl px-3 py-2.5 text-left transition-colors duration-200',
+          'group mt-2 w-full cursor-pointer select-none rounded-xl px-2.5 py-1.5 text-left transition-colors duration-200',
           isRoleOnlyActive
             ? 'bg-slate-100 dark:bg-slate-800/60'
             : 'hover:bg-slate-50 dark:hover:bg-slate-900'
         )}
       >
-        <span className="block text-4xl font-black leading-none text-slate-900 dark:text-white">
+        <span className="block text-2xl font-black leading-none text-slate-900 dark:text-white">
           {loading ? '…' : <AnimatedNumber value={total} />}
         </span>
-        <span className="mt-1.5 block text-[10px] font-bold uppercase tracking-widest text-slate-400">
-          {isRoleOnlyActive ? 'Filtered · click to clear' : `All ${title.toLowerCase()}`}
-        </span>
+        {/* Caption only in the filtered state — the normal state saves the
+            line so the card (and the whole row) stays short enough for the
+            table to stay on screen. */}
+        {isRoleOnlyActive && (
+          <span className="mt-1 block text-[10px] font-bold uppercase tracking-widest text-slate-400">
+            Filtered · click to clear
+          </span>
+        )}
       </button>
 
       {/* Breakdown — per-status counts in their own colors, sized by share
           of the role total. Click = Role + Status (unchanged mechanism). */}
-      <div className="mt-3 grid grid-cols-2 gap-1.5 border-t border-slate-100 pt-3 dark:border-slate-800">
+      <div className="mt-2 grid grid-cols-2 gap-1 border-t border-slate-100 pt-2 dark:border-slate-800">
         {configs.map((config) => {
           const count = counts?.[config.value] ?? 0;
           const active = isStatusActive(config);
@@ -425,7 +430,7 @@ function RoleStatCard({
               }
               aria-pressed={active}
               className={cn(
-                'cursor-pointer select-none rounded-lg border border-transparent px-2 py-1.5 text-left transition-all duration-200',
+                'cursor-pointer select-none rounded-lg border border-transparent px-1.5 py-1 text-left transition-all duration-200',
                 active
                   ? `${config.bgColor} ${config.borderColor} ring-1 ring-primary/40`
                   : 'hover:bg-slate-50 dark:hover:bg-slate-900'
@@ -433,7 +438,7 @@ function RoleStatCard({
             >
               <div className="flex min-w-0 items-baseline gap-1.5">
                 <span
-                  className={cn('text-sm font-bold leading-none', config.color)}
+                  className={cn('text-[13px] font-bold leading-none', config.color)}
                 >
                   {loading ? '–' : <AnimatedNumber value={count} />}
                 </span>
@@ -443,7 +448,7 @@ function RoleStatCard({
               </div>
               {/* Share-of-total bar — dynamic width is inline style; the
                   color must stay a static literal class (Tailwind scanner). */}
-              <div className="mt-1.5 h-[3px] w-full overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
+              <div className="mt-1 h-[3px] w-full overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
                 <div
                   className={cn(
                     'h-full rounded-full transition-all duration-500',
@@ -1532,9 +1537,9 @@ export default function AdminUsersPage() {
             it filters to that exact status (original behavior). Global
             counts from the dedicated stats endpoint. LIVE: refetches on
             the users:stats-changed socket ping and every number animates. */}
-        <section className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <section className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
           <RoleStatCard
-            icon={<Truck className="h-4 w-4" />}
+            icon={<Truck className="h-3.5 w-3.5" />}
             accent="bg-sky-50 dark:bg-sky-900/20 border-sky-200 dark:border-sky-800 text-sky-600 dark:text-sky-400"
             title="Drivers"
             total={sumStats(statusStats?.drivers)}
@@ -1548,7 +1553,7 @@ export default function AdminUsersPage() {
             onStatusClick={(c) => handleStatusCardClick('DRIVER', c.value)}
           />
           <RoleStatCard
-            icon={<Store className="h-4 w-4" />}
+            icon={<Store className="h-3.5 w-3.5" />}
             accent="bg-violet-50 dark:bg-violet-900/20 border-violet-200 dark:border-violet-800 text-violet-600 dark:text-violet-400"
             title="Business Customers"
             total={sumStats(statusStats?.businessCustomers)}
@@ -1562,7 +1567,7 @@ export default function AdminUsersPage() {
             onStatusClick={(c) => handleStatusCardClick('BUSINESS_CUSTOMER', c.value)}
           />
           <RoleStatCard
-            icon={<User className="h-4 w-4" />}
+            icon={<User className="h-3.5 w-3.5" />}
             accent="bg-teal-50 dark:bg-teal-900/20 border-teal-200 dark:border-teal-800 text-teal-600 dark:text-teal-400"
             title="Private Customers"
             total={sumStats(statusStats?.privateCustomers)}
@@ -1576,7 +1581,7 @@ export default function AdminUsersPage() {
             onStatusClick={(c) => handleStatusCardClick('PRIVATE_CUSTOMER', c.value)}
           />
           <RoleStatCard
-            icon={<Shield className="h-4 w-4" />}
+            icon={<Shield className="h-3.5 w-3.5" />}
             accent="bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800 text-amber-600 dark:text-amber-400"
             title="Admins"
             total={statusStats?.adminsTotal ?? sumStats(statusStats?.admins)}
@@ -1593,14 +1598,15 @@ export default function AdminUsersPage() {
 
         {/* V2 Filters — search/role/status + driver-only ZIP region & ZIP,
             with the ZIP From/To range sweep tucked under "More". */}
-        <Card className="rounded-2xl border-slate-200 dark:border-slate-800 mb-6">
-          <CardContent className="p-4">
+        <Card className="rounded-2xl border-slate-200 dark:border-slate-800 mb-4">
+          <CardContent className="p-3">
             {/* Card actions — pinned to the top-right corner on their own
                 line so they never sit inside the filter row. Clear only
-                renders when a filter is active. */}
+                renders when a filter is active. Compact: the whole filter
+                card was shortened so the table stays in the first screen. */}
             {hasActiveFilters && (
-              <div className="flex items-center justify-end gap-1 mb-2">
-                <Button variant="ghost" size="sm" className="rounded-xl h-8 text-xs text-red-500 hover:text-red-600" onClick={clearFilters}>
+              <div className="flex items-center justify-end gap-1 mb-1">
+                <Button variant="ghost" size="sm" className="rounded-xl h-7 text-xs text-red-500 hover:text-red-600" onClick={clearFilters}>
                   <X className="w-3.5 h-3.5 mr-1" />
                   Clear
                 </Button>
@@ -1611,11 +1617,11 @@ export default function AdminUsersPage() {
                 small tablets, 6 on desktop) so fields never overlap or
                 squeeze at any width. Region + ZIP only render once
                 Role = Driver is chosen (hidden, not disabled). */}
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-6">
+            <div className="grid grid-cols-1 gap-x-2 gap-y-2 sm:grid-cols-2 lg:grid-cols-6">
               {/* Search */}
               <div className="sm:col-span-2 lg:col-span-2">
                 <Label className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Search</Label>
-                <div className="relative mt-1.5">
+                <div className="relative mt-1">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                   <Input
                     value={searchQuery}
@@ -1655,7 +1661,7 @@ export default function AdminUsersPage() {
                     }
                   }}
                 >
-                  <SelectTrigger className="mt-1.5 rounded-xl h-9 text-sm">
+                  <SelectTrigger className="mt-1 rounded-xl h-9 text-sm">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -1687,7 +1693,7 @@ export default function AdminUsersPage() {
                       setPage(1);
                     }}
                   >
-                    <SelectTrigger className="mt-1.5 rounded-xl h-9 text-sm">
+                    <SelectTrigger className="mt-1 rounded-xl h-9 text-sm">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -1718,7 +1724,7 @@ export default function AdminUsersPage() {
                       }
                     }}
                   >
-                    <SelectTrigger className="mt-1.5 rounded-xl h-9 text-sm">
+                    <SelectTrigger className="mt-1 rounded-xl h-9 text-sm">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -1746,7 +1752,7 @@ export default function AdminUsersPage() {
                   value={zipRegion}
                   onValueChange={handleZipRegionChange}
                 >
-                  <SelectTrigger className="mt-1.5 rounded-xl h-9 text-sm w-full min-w-0 [&_[data-slot=select-value]]:block! [&_[data-slot=select-value]]:max-w-full! [&_[data-slot=select-value]]:truncate!">
+                  <SelectTrigger className="mt-1 rounded-xl h-9 text-sm w-full min-w-0 [&_[data-slot=select-value]]:block! [&_[data-slot=select-value]]:max-w-full! [&_[data-slot=select-value]]:truncate!">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -1767,9 +1773,6 @@ export default function AdminUsersPage() {
                     )}
                   </SelectContent>
                 </Select>
-                <p className="mt-1 text-[10px] leading-tight text-slate-400">
-                  Driver home ZIP region.
-                </p>
               </div>
               )}
 
@@ -1788,11 +1791,8 @@ export default function AdminUsersPage() {
                     }}
                   placeholder="e.g. 900"
                   inputMode="numeric"
-                  className="mt-1.5 rounded-xl h-9 w-full"
+                  className="mt-1 rounded-xl h-9 w-full"
                 />
-                <p className="mt-1 text-[10px] leading-tight text-slate-400">
-                  Driver home ZIP. 900 = LA metro.
-                </p>
               </div>
               )}
 
