@@ -1,7 +1,7 @@
 import { Link } from "@tanstack/react-router";
 
 import { SocialLinks } from "./SocialLinks";
-import { WhatsAppIcon } from "./WhatsAppSupportButton";
+import { useWhatsAppSupportUrl, WhatsAppIcon } from "./WhatsAppSupportButton";
 
 /**
  * SiteFooter — the one shared footer for every public page: landing,
@@ -15,6 +15,9 @@ import { WhatsAppIcon } from "./WhatsAppSupportButton";
  * on short pages (auth, legal).
  */
 export function SiteFooter() {
+  // DB-backed WhatsApp link (Admin > Config Hub). Falls back to the
+  // historical link while loading / on error — never renders dead.
+  const whatsappUrl = useWhatsAppSupportUrl();
   return (
     <footer className="bg-white dark:bg-slate-950 border-t border-slate-200 dark:border-slate-800 pt-3 pb-1.5">
       <div className="max-w-[1440px] mx-auto px-6 lg:px-8">
@@ -150,7 +153,7 @@ export function SiteFooter() {
               </li>
               <li>
                 <a
-                  href="https://wa.me/message/YQXTDFV6STKUP1"
+                  href={whatsappUrl}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="mt-1 flex items-center gap-2 text-[13px] leading-[15px] font-semibold text-emerald-700 dark:text-[#25D366] hover:opacity-80 transition-opacity"

@@ -1,62 +1,129 @@
-import { Instagram, Youtube } from "lucide-react";
+import { useDataQuery } from "@/lib/tanstack/dataQuery";
 
-import { WhatsAppIcon } from "./WhatsAppSupportButton";
+import {
+  FacebookIcon,
+  InstagramIcon,
+  LinkedinIcon,
+  MediumIcon,
+  PinterestIcon,
+  SubstackIcon,
+  ThreadsIcon,
+  TiktokIcon,
+  XIcon,
+  YelpIcon,
+  YoutubeIcon,
+} from "./BrandIcons";
+import { WHATSAPP_SUPPORT_URL, WhatsAppIcon } from "./WhatsAppSupportButton";
 
 /**
- * X (formerly Twitter) brand mark — lucide only ships the retired bird
- * logo, and the profile is x.com/101drivers.
+ * SocialLinks — the footer social icon row.
+ *
+ * SINGLE SOURCE OF TRUTH = DATABASE. The links come from the same public
+ * settings endpoint the WhatsApp buttons already use:
+ *   GET /api/appSettings/public/whatsapp-support → { supportUrl, social }
+ * where `social` is the admin-editable platform map (Admin > Config Hub >
+ * "WhatsApp & Social Links"). Rotating a profile there updates this row on
+ * the next fetch — no code change or redeploy.
+ *
+ * Behavior:
+ *  - While the fetch is loading or fails, the row renders the historical
+ *    hardcoded set below (same contract as useWhatsAppSupportUrl's
+ *    fallback) so the footer never renders blank or dead.
+ *  - Once loaded, the DB map wins verbatim: platforms the admin cleared
+ *    (null) are omitted, platforms they add appear automatically.
+ *  - The WhatsApp icon always uses supportUrl (it is not part of the
+ *    social map — it backs every "Message us on WhatsApp" button too).
+ *
+ * The endpoint/params MUST stay identical to useWhatsAppSupportUrl in
+ * WhatsAppSupportButton.tsx — identical React Query keys share one cache
+ * entry, so both consumers cost a single network request.
  */
-function XIcon({ className }: { className?: string }) {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="currentColor"
-      aria-hidden="true"
-      className={className}
-    >
-      <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
-    </svg>
-  );
-}
 
-const SOCIAL_LINKS: Array<{
-  label: string;
-  href: string;
-  Icon: (props: { className?: string }) => React.ReactNode;
-}> = [
-  {
-    label: "Instagram",
-    href: "https://www.instagram.com/101drivers",
-    Icon: ({ className }) => <Instagram className={className} />,
-  },
-  {
-    label: "X (Twitter)",
-    href: "https://x.com/101drivers",
-    Icon: XIcon,
-  },
-  {
-    label: "YouTube",
-    href: "https://www.youtube.com/@101Drivers",
-    Icon: ({ className }) => <Youtube className={className} />,
-  },
-  {
-    label: "WhatsApp",
-    href: "https://wa.me/message/YQXTDFV6STKUP1",
-    Icon: ({ className }) => <WhatsAppIcon className={className} />,
-  },
+/** Same platform set + order as SOCIAL_LINK_PLATFORMS in appSetting.dto.ts. */
+const PLATFORM_META: Record<
+  string,
+  { label: string; Icon: (props: { className?: string }) => React.ReactNode }
+> = {
+  instagram: { label: "Instagram", Icon: InstagramIcon },
+  facebook: { label: "Facebook", Icon: FacebookIcon },
+  x: { label: "X (Twitter)", Icon: XIcon },
+  youtube: { label: "YouTube", Icon: YoutubeIcon },
+  linkedin: { label: "LinkedIn", Icon: LinkedinIcon },
+  tiktok: { label: "TikTok", Icon: TiktokIcon },
+  threads: { label: "Threads", Icon: ThreadsIcon },
+  pinterest: { label: "Pinterest", Icon: PinterestIcon },
+  medium: { label: "Medium", Icon: MediumIcon },
+  substack: { label: "Substack", Icon: SubstackIcon },
+  yelp: { label: "Yelp", Icon: YelpIcon },
+};
+
+const PLATFORM_ORDER = Object.keys(PLATFORM_META);
+
+/** Historical profiles — fallback only (loading / fetch failure). */
+const FALLBACK_SOCIAL: Array<{ key: string; href: string }> = [
+  { key: "instagram", href: "https://www.instagram.com/101drivers" },
+  { key: "x", href: "https://x.com/101drivers" },
+  { key: "youtube", href: "https://www.youtube.com/@101Drivers" },
 ];
 
-/**
- * SocialLinks — the footer social icon row (Instagram / X / YouTube /
- * WhatsApp). Rendered below the footer link sections, above the legal
- * line, on every public footer.
- */
+type PublicSocialSettings = {
+  supportUrl?: string;
+  social?: Record<string, string | null> | null;
+};
+
+function usePublicSocialSettings() {
+  return useDataQuery<PublicSocialSettings>({
+    apiEndPoint: `${import.meta.env.VITE_API_URL}/api/appSettings/public/whatsapp-support`,
+    noFilter: true,
+    fetchWithoutRefresh: true,
+    publicEndpoint: true, // public endpoint — no token refresh on 401
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
 export function SocialLinks({ className = "" }: { className?: string }) {
+  const { data } = usePublicSocialSettings();
+
+  const supportUrl = data?.supportUrl || WHATSAPP_SUPPORT_URL;
+  const social = data?.social ?? null;
+
+  const entries: Array<{
+    key: string;
+    label: string;
+    href: string;
+    Icon: (props: { className?: string }) => React.ReactNode;
+  }> = [];
+
+  if (social) {
+    // DB is the source of truth — render exactly what is stored, in the
+    // stable platform order; unset/cleared platforms are omitted.
+    for (const key of PLATFORM_ORDER) {
+      const href = social[key];
+      if (typeof href === "string" && href.trim()) {
+        entries.push({ key, href, ...PLATFORM_META[key] });
+      }
+    }
+  } else {
+    // Loading or failed fetch — the historical set keeps the footer alive.
+    for (const { key, href } of FALLBACK_SOCIAL) {
+      entries.push({ key, href, ...PLATFORM_META[key] });
+    }
+  }
+
+  if (supportUrl) {
+    entries.push({
+      key: "whatsapp",
+      label: "WhatsApp",
+      href: supportUrl,
+      Icon: WhatsAppIcon,
+    });
+  }
+
   return (
     <div className={`flex items-center gap-2.5 ${className}`}>
-      {SOCIAL_LINKS.map(({ label, href, Icon }) => (
+      {entries.map(({ key, label, href, Icon }) => (
         <a
-          key={label}
+          key={key}
           href={href}
           target="_blank"
           rel="noopener noreferrer"

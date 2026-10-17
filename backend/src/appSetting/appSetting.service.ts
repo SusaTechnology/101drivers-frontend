@@ -64,6 +64,20 @@ export const WHATSAPP_SUPPORT_SETTINGS_KEY = "WHATSAPP_SUPPORT_SETTINGS";
 export const DEFAULT_WHATSAPP_SUPPORT_URL = "https://wa.me/message/YQXTDFV6STKUP1";
 
 /**
+ * Day-one social profiles — served by the PUBLIC settings endpoint when no
+ * admin has ever saved the "WhatsApp & Social Links" settings (row missing,
+ * or a legacy row that predates the social map). These mirror the profiles
+ * the site footer used to hardcode; the DB row wins the moment an admin
+ * saves the Config Hub dialog (which persists the current values, making
+ * the database the single source of truth from then on).
+ */
+export const DEFAULT_SOCIAL_LINKS: SocialLinks = {
+  instagram: "https://www.instagram.com/101drivers",
+  x: "https://x.com/101drivers",
+  youtube: "https://www.youtube.com/@101Drivers",
+};
+
+/**
  * Append a pre-filled "text" message to the admin-configured WhatsApp
  * click-to-chat link, producing a ready-to-open deep link:
  *   https://wa.me/14243132168?text=Hi%2C%20I%20have%20a%20question...
@@ -867,9 +881,21 @@ export class AppSettingService extends AppSettingServiceBase {
         ? ((row.value as { supportUrl: string }).supportUrl || "").trim()
         : "";
 
+    // Social links: respect the stored map once it exists (an admin may
+    // have deliberately cleared a platform — null stays null). Serve the
+    // day-one defaults only while NO social map has ever been persisted,
+    // so the public footer renders real profiles before the first save.
+    const storedValue =
+      row?.value && typeof row.value === "object"
+        ? (row.value as Record<string, unknown>)
+        : undefined;
+    const hasStoredSocialMap = !!storedValue && "social" in storedValue;
+
     return {
       supportUrl: stored || DEFAULT_WHATSAPP_SUPPORT_URL,
-      social: this.readStoredSocialLinks(row?.value),
+      social: hasStoredSocialMap
+        ? this.readStoredSocialLinks(row?.value)
+        : { ...DEFAULT_SOCIAL_LINKS },
     };
   }
 
