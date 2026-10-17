@@ -66,12 +66,18 @@ const FALLBACK_SOCIAL: Array<{ key: string; href: string }> = [
   { key: "youtube", href: "https://www.youtube.com/@101Drivers" },
 ];
 
-type PublicSocialSettings = {
+export type PublicSocialSettings = {
   supportUrl?: string;
   social?: Record<string, string | null> | null;
 };
 
-function usePublicSocialSettings() {
+/**
+ * Public settings hook shared by every social-link surface (footer icon
+ * row, homepage JSON-LD sameAs). Endpoint/params are IDENTICAL to
+ * useWhatsAppSupportUrl in WhatsAppSupportButton.tsx — identical React
+ * Query keys share one cache entry, so all consumers cost ONE request.
+ */
+export function usePublicSocialSettings() {
   return useDataQuery<PublicSocialSettings>({
     apiEndPoint: `${import.meta.env.VITE_API_URL}/api/appSettings/public/whatsapp-support`,
     noFilter: true,
@@ -81,11 +87,28 @@ function usePublicSocialSettings() {
   });
 }
 
-export function SocialLinks({ className = "" }: { className?: string }) {
-  const { data } = usePublicSocialSettings();
-
-  const supportUrl = data?.supportUrl || WHATSAPP_SUPPORT_URL;
+/**
+ * Single derivation of "which platforms does the DB currently publish".
+ * Used by the footer icon row AND the homepage structured-data sameAs so
+ * the two can never disagree:
+ *  - DB map present → exactly its non-empty entries, in platform order.
+ *  - Loading/failed  → the historical fallback set (footer must never
+ *    render blank; sameAs keeps the real profiles meanwhile).
+ * The WhatsApp entry is chat support (wa.me), not a profile page — it is
+ * appended for the icon row only and excluded from sameAs by the caller.
+ */
+export function deriveSocialEntries(
+  data?: PublicSocialSettings | null,
+  options?: { includeWhatsApp?: boolean },
+): Array<{
+  key: string;
+  label: string;
+  href: string;
+  Icon: (props: { className?: string }) => React.ReactNode;
+}> {
+  const includeWhatsApp = options?.includeWhatsApp ?? true;
   const social = data?.social ?? null;
+  const supportUrl = data?.supportUrl || WHATSAPP_SUPPORT_URL;
 
   const entries: Array<{
     key: string;
@@ -110,7 +133,7 @@ export function SocialLinks({ className = "" }: { className?: string }) {
     }
   }
 
-  if (supportUrl) {
+  if (includeWhatsApp && supportUrl) {
     entries.push({
       key: "whatsapp",
       label: "WhatsApp",
@@ -118,6 +141,16 @@ export function SocialLinks({ className = "" }: { className?: string }) {
       Icon: WhatsAppIcon,
     });
   }
+
+  return entries;
+}
+
+export function SocialLinks({ className = "" }: { className?: string }) {
+  const { data } = usePublicSocialSettings();
+
+  // DB-driven icon row — same derivation as the homepage JSON-LD sameAs
+  // (plus the WhatsApp chat entry), so the two can never disagree.
+  const entries = deriveSocialEntries(data, { includeWhatsApp: true });
 
   return (
     <div className={`flex items-center gap-2.5 ${className}`}>

@@ -80,6 +80,10 @@ import {
 } from "@/lib/pricing/quote-usage";
 import { WhatsAppIcon } from "@/components/shared/WhatsAppSupportButton";
 import { SiteFooter } from "@/components/shared/SiteFooter";
+import {
+  usePublicSocialSettings,
+  deriveSocialEntries,
+} from "@/components/shared/SocialLinks";
 import { usePublicDefaultPricing } from "@/hooks/pricing/usePublicDefaultPricing";
 import { SEOHead } from "../shared/SEOHead";
 
@@ -276,6 +280,15 @@ export default function LandingPage() {
 
   // Fetch pickup zones (public endpoint)
   const { zones } = usePickupZones();
+
+  // Social profile links for the JSON-LD sameAs below — same public
+  // settings endpoint the footer icons use (shared React Query cache, so
+  // this adds no extra request). WhatsApp is a chat link, not a profile
+  // page, so it is excluded per Google's social-profile guidelines.
+  const { data: socialSettings } = usePublicSocialSettings();
+  const sameAsProfiles = deriveSocialEntries(socialSettings, {
+    includeWhatsApp: false,
+  }).map((entry) => entry.href);
 
   // Fetch landing page settings (public endpoint, no auth)
   const { data: settings, isLoading: settingsLoading, isError: settingsError, error: settingsErrorMsg } = useDataQuery<LandingPageSettings>({
@@ -902,7 +915,7 @@ export default function LandingPage() {
                 "Flat-rate car delivery",
                 "Automotive logistics",
               ],
-              sameAs: [],
+              sameAs: sameAsProfiles,
             }),
           }}
         />
