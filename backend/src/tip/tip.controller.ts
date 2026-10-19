@@ -1,6 +1,7 @@
 import * as common from "@nestjs/common";
 import * as swagger from "@nestjs/swagger";
 import * as nestAccessControl from "nest-access-control";
+import { Request } from "express";
 import { TipService } from "./tip.service";
 import { TipControllerBase } from "./base/tip.controller.base";
 import { TipWhereUniqueInput } from "./base/TipWhereUniqueInput";
@@ -8,6 +9,7 @@ import { TipUpdateInput } from "./base/TipUpdateInput";
 import { Tip } from "./base/Tip";
 import { AclValidateRequestInterceptor } from "../interceptors/aclValidateRequest.interceptor";
 import { AclFilterResponseInterceptor } from "../interceptors/aclFilterResponse.interceptor";
+import { PrismaService } from "../prisma/prisma.service";
 import * as errors from "../errors";
 import { isRecordNotFoundError } from "../prisma.util";
 
@@ -16,10 +18,84 @@ import { isRecordNotFoundError } from "../prisma.util";
 export class TipController extends TipControllerBase {
   constructor(
     protected readonly service: TipService,
+    private readonly prisma: PrismaService,
     @nestAccessControl.InjectRolesBuilder()
     protected readonly rolesBuilder: nestAccessControl.RolesBuilder
   ) {
     super(service, rolesBuilder);
+  }
+
+  // ── Session-aware access helpers (authorization hardening) ────────
+  private isAdminRequest(request: Request): boolean {
+    const user = (request as any).user ?? null;
+    return Array.isArray(user?.roles) && user.roles.includes("ADMIN");
+  }
+
+  private async resolveSessionCustomerId(request: Request): Promise<string | null> {
+    const user = (request as any).user ?? null;
+    if (!user?.id) return null;
+    const customer = await this.prisma.customer.findUnique({
+      where: { userId: user.id },
+      select: { id: true },
+    });
+    return customer?.id ?? null;
+  }
+
+  /**
+   * GET /tips — ROW-LEVEL SCOPING. Non-admin callers only see tips that
+   * belong to their OWN deliveries. Implemented by merging an owner
+   * filter into the request query before the base handler parses it,
+   * so the base select/shape stays the single source of truth.
+   */
+  @common.UseInterceptors(AclFilterResponseInterceptor)
+  @common.Get()
+  async tips(@common.Req() request: Request): Promise<Tip[]> {
+    if (!this.isAdminRequest(request)) {
+      const sessionCustomerId = await this.resolveSessionCustomerId(request);
+      const ownerWhere = sessionCustomerId
+        ? { delivery: { customerId: sessionCustomerId } }
+        : { id: { in: [] } }; // no customer profile → nothing
+
+      // Express parses `where[delivery][id]=...` into a nested OBJECT
+      // (deepObject style) — merge as objects, never stringify.
+      let parsedWhere: any = {};
+      const rawWhere = (request.query as any)?.where;
+      if (rawWhere && typeof rawWhere === "object") {
+        parsedWhere = rawWhere;
+      }
+      (request.query as any).where = {
+        AND: [parsedWhere, ownerWhere],
+      };
+    }
+    return super.tips(request);
+  }
+
+  /**
+   * GET /tips/:id — same ownership rule for the single-tip read.
+   */
+  @common.UseInterceptors(AclFilterResponseInterceptor)
+  @common.Get("/:id")
+  async tip(
+    @common.Param() params: TipWhereUniqueInput,
+    @common.Req() request?: Request
+  ): Promise<Tip | null> {
+    if (request && !this.isAdminRequest(request)) {
+      const row = await this.prisma.tip.findUnique({
+        where: { id: params.id },
+        select: { delivery: { select: { customerId: true } } },
+      });
+      const sessionCustomerId = await this.resolveSessionCustomerId(request);
+      if (
+        !row ||
+        !sessionCustomerId ||
+        row.delivery?.customerId !== sessionCustomerId
+      ) {
+        throw new errors.NotFoundException(
+          `No resource was found for ${JSON.stringify(params)}`
+        );
+      }
+    }
+    return super.tip(params);
   }
 
   /**
@@ -45,8 +121,29 @@ export class TipController extends TipControllerBase {
   @swagger.ApiForbiddenResponse({ type: errors.ForbiddenException })
   async updateTip(
     @common.Param() params: TipWhereUniqueInput,
-    @common.Body() data: TipUpdateInput
+    @common.Body() data: TipUpdateInput,
+    @common.Req() request?: Request
   ): Promise<Tip | null> {
+    // Ownership gate: only the tip's delivery owner (or an admin) may
+    // update a tip (e.g. mark CAPTURED after the payment dialog).
+    // (`request` optional for base-signature compatibility; always
+    // injected at runtime.)
+    if (request && !this.isAdminRequest(request)) {
+      const row = await this.prisma.tip.findUnique({
+        where: { id: params.id },
+        select: { delivery: { select: { customerId: true } } },
+      });
+      const sessionCustomerId = await this.resolveSessionCustomerId(request);
+      if (
+        !row ||
+        !sessionCustomerId ||
+        row.delivery?.customerId !== sessionCustomerId
+      ) {
+        throw new errors.NotFoundException(
+          `No resource was found for ${JSON.stringify(params)}`
+        );
+      }
+    }
     // Reuse the same service path the base would use, but only inject
     // `delivery.connect` when explicitly provided.
     const payload: any = { ...data };

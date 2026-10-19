@@ -105,8 +105,148 @@ export class DeliveryRequestController extends DeliveryRequestControllerBase {
     super(service, rolesBuilder);
   }
 
+  // ═══════════════════════════════════════════════════════════════════
+  // SESSION-AWARE ACCESS HELPERS (authorization hardening)
+  //
+  // The generated-ACL grants allow broad resource actions for every
+  // role; the real authorization contract is enforced HERE, per
+  // endpoint, from the JWT session:
+  //   - Admin action endpoints are ADMIN-only (assertAdmin).
+  //   - Driver workflow endpoints derive the driver from the session
+  //     JWT, never from the request body/params.
+  //   - Customer-facing reads/writes are scoped to the caller's own
+  //     Customer row (or to deliveries where they are the assigned
+  //     driver).
+  // ═══════════════════════════════════════════════════════════════════
+
+  private sessionUser(request: Request): any {
+    return (request as any).user ?? null;
+  }
+
+  private isAdminRequest(request: Request): boolean {
+    const user = this.sessionUser(request);
+    return Array.isArray(user?.roles)
+      ? user.roles.includes(EnumUserRoles.ADMIN)
+      : false;
+  }
+
+  /** ADMIN-only gate for every admin action endpoint. */
+  private assertAdmin(request: Request): void {
+    if (!this.isAdminRequest(request)) {
+      throw new common.ForbiddenException("Admin access required");
+    }
+  }
+
+  /** Resolve the Customer row id for the session user (or null). */
+  private async resolveSessionCustomerId(request: Request): Promise<string | null> {
+    const user = this.sessionUser(request);
+    if (!user?.id) return null;
+    const customer = await this.prisma.customer.findUnique({
+      where: { userId: user.id },
+      select: { id: true },
+    });
+    return customer?.id ?? null;
+  }
+
+  /** Resolve the Driver row id for the session user (or null). */
+  private async resolveSessionDriverId(request: Request): Promise<string | null> {
+    const user = this.sessionUser(request);
+    if (!user?.id) return null;
+    const driver = await this.prisma.driver.findUnique({
+      where: { userId: user.id },
+      select: { id: true },
+    });
+    return driver?.id ?? null;
+  }
+
+  /**
+   * Non-admin participant gate for per-delivery operations.
+   * The caller must be the delivery's owning customer OR the currently
+   * assigned driver. Everyone else gets a 404 (no existence leak).
+   */
+  private async assertDeliveryParticipantOrAdmin(
+    deliveryId: string,
+    request: Request,
+  ): Promise<void> {
+    if (this.isAdminRequest(request)) return;
+
+    const delivery = await this.prisma.deliveryRequest.findUnique({
+      where: { id: deliveryId },
+      select: {
+        customerId: true,
+        assignments: {
+          where: { unassignedAt: null },
+          select: { driverId: true },
+        },
+      },
+    });
+    if (!delivery) {
+      throw new errors.NotFoundException(
+        `No resource was found for delivery ${deliveryId}`
+      );
+    }
+
+    const customerId = await this.resolveSessionCustomerId(request);
+    if (customerId && delivery.customerId === customerId) return;
+
+    const driverId = await this.resolveSessionDriverId(request);
+    if (driverId && delivery.assignments.some((a) => a.driverId === driverId)) {
+      return;
+    }
+
+    // 404 rather than 403 — do not reveal other customers' deliveries.
+    throw new errors.NotFoundException(
+      `No resource was found for delivery ${deliveryId}`
+    );
+  }
+
+  /**
+   * Bind the acting driver to the SESSION for driver-workflow actions
+   * (book / start-trip / complete-trip / compliance). The body value is
+   * only accepted when it matches the session's own driver profile.
+   * Returns the authoritative driverId.
+   */
+  private async bindSessionDriver(
+    request: Request,
+    bodyDriverId?: string | null,
+  ): Promise<string> {
+    const sessionDriverId = await this.resolveSessionDriverId(request);
+    if (!sessionDriverId) {
+      throw new common.ForbiddenException(
+        "This action requires an authenticated driver account"
+      );
+    }
+    if (bodyDriverId && bodyDriverId !== sessionDriverId) {
+      throw new common.ForbiddenException(
+        "Driver identity must match the authenticated session"
+      );
+    }
+    return sessionDriverId;
+  }
+
+  /**
+   * Enforce that the session user's role set contains the given role —
+   * used to stop body-claimed actorRole escalation (e.g. a customer
+   * claiming actorRole=ADMIN in transition-status).
+   */
+  private assertNoRoleEscalation(request: Request, claimedActorRole?: string | null): void {
+    if (!claimedActorRole) return;
+    if (claimedActorRole === EnumUserRoles.ADMIN) {
+      this.assertAdmin(request);
+      return;
+    }
+    const user = this.sessionUser(request);
+    const roles: string[] = Array.isArray(user?.roles) ? user.roles : [];
+    if (!roles.includes(claimedActorRole)) {
+      throw new common.ForbiddenException(
+        "actorRole must match the authenticated session"
+      );
+    }
+  }
+
   @common.Get("counts")
   async count(@common.Req() request: Request): Promise<number> {
+    this.assertAdmin(request);
     return this.service.count({});
   }
 @common.Post("create-draft-from-quote")
@@ -120,8 +260,19 @@ export class DeliveryRequestController extends DeliveryRequestControllerBase {
   type: errors.ForbiddenException,
 })
 async createDeliveryDraftFromQuote(
-  @common.Body() body: CreateDeliveryDraftFromQuoteBody
+  @common.Body() body: CreateDeliveryDraftFromQuoteBody,
+  @common.Req() request: Request
 ): Promise<DeliveryRequest> {
+  // Ownership binding: non-admin callers can only create drafts for
+  // their OWN customer row (the FE always sends its own profileId).
+  if (!this.isAdminRequest(request)) {
+    const sessionCustomerId = await this.resolveSessionCustomerId(request);
+    if (!sessionCustomerId || sessionCustomerId !== body.customerId) {
+      throw new common.ForbiddenException(
+        "customerId must match the authenticated session"
+      );
+    }
+  }
   return this.service.createDeliveryDraftFromQuote({
     customerId: body.customerId,
     quoteId: body.quoteId ?? null,
@@ -193,8 +344,10 @@ async deliveryRequestLookupMinimal(): Promise<
 })
 async adminForceCancelDelivery(
   @common.Param("id") id: string,
-  @common.Body() body: ForceCancelDeliveryAdminBody
+  @common.Body() body: ForceCancelDeliveryAdminBody,
+  @common.Req() request: Request
 ): Promise<any> {
+  this.assertAdmin(request);
   return this.service.adminForceCancelDelivery({
     deliveryId: id,
     actorUserId: body.actorUserId ?? null,
@@ -219,8 +372,10 @@ async adminForceCancelDelivery(
 })
 async closeDelivery(
   @common.Param("id") id: string,
-  @common.Body() body: { actorUserId?: string; actorRole?: string; reason?: string; applyPenalty?: boolean }
+  @common.Body() body: { actorUserId?: string; actorRole?: string; reason?: string; applyPenalty?: boolean },
+  @common.Req() request: Request
 ): Promise<any> {
+  this.assertAdmin(request);
   return this.service.closeDelivery({
     deliveryId: id,
     actorUserId: body.actorUserId ?? null,
@@ -242,8 +397,10 @@ async closeDelivery(
 })
 async adminOpenDispute(
   @common.Param("id") id: string,
-  @common.Body() body: OpenDisputeAdminBody
+  @common.Body() body: OpenDisputeAdminBody,
+  @common.Req() request: Request
 ): Promise<any> {
+  this.assertAdmin(request);
   return this.service.adminOpenDispute({
     deliveryId: id,
     actorUserId: body.actorUserId ?? null,
@@ -262,8 +419,10 @@ async adminOpenDispute(
 })
 async adminSetLegalHold(
   @common.Param("id") id: string,
-  @common.Body() body: LegalHoldAdminBody
+  @common.Body() body: LegalHoldAdminBody,
+  @common.Req() request: Request
 ): Promise<any> {
+  this.assertAdmin(request);
   return this.service.adminSetLegalHold({
     deliveryId: id,
     actorUserId: body.actorUserId ?? null,
@@ -280,8 +439,10 @@ async adminSetLegalHold(
 })
 async assignDriverToDelivery(
   @common.Param("id") id: string,
-  @common.Body() body: AssignDriverAdminBody
+  @common.Body() body: AssignDriverAdminBody,
+  @common.Req() request: Request
 ): Promise<any> {
+  this.assertAdmin(request);
   return this.service.adminAssignDriver({
     deliveryId: id,
     driverId: body.driverId,
@@ -300,8 +461,10 @@ async assignDriverToDelivery(
 
 async adminReassignDeliveryV2(
   @common.Param("id") id: string,
-  @common.Body() body: ReassignDeliveryAdminPatchBody
+  @common.Body() body: ReassignDeliveryAdminPatchBody,
+  @common.Req() request: Request
 ): Promise<any> {
+  this.assertAdmin(request);
   return this.service.adminReassignDeliveryV2({
     deliveryId: id,
     newDriverId: body.newDriverId,
@@ -318,8 +481,10 @@ async adminReassignDeliveryV2(
 })
 async adminApproveCompliance(
   @common.Param("id") id: string,
-  @common.Body() body: ApproveComplianceAdminBody
+  @common.Body() body: ApproveComplianceAdminBody,
+  @common.Req() request: Request
 ): Promise<any> {
+  this.assertAdmin(request);
   return this.service.adminApproveCompliance({
     deliveryId: id,
     actorUserId: body.actorUserId ?? null,
@@ -334,8 +499,10 @@ async adminApproveCompliance(
   possession: "any",
 })
 async getAdminDeliveries(
-  @common.Query() query: AdminDeliveryListQueryDto
+  @common.Query() query: AdminDeliveryListQueryDto,
+  @common.Req() request: Request
 ): Promise<AdminDeliveryListResponseDto> {
+  this.assertAdmin(request);
   return this.service.getAdminDeliveries({
     status: query.status ?? null,
     from: query.from ? new Date(query.from) : null,
@@ -371,7 +538,8 @@ staleTracking: query.staleTracking === true,
   action: "read",
   possession: "any",
 })
-async getAdminDeliveryStats(): Promise<any> {
+async getAdminDeliveryStats(@common.Req() request: Request): Promise<any> {
+  this.assertAdmin(request);
   return this.service.getAdminDeliveryStats();
 }
 
@@ -383,8 +551,10 @@ async getAdminDeliveryStats(): Promise<any> {
   possession: "any",
 })
 async getAdminDeliveryDetail(
-  @common.Param("id") id: string
+  @common.Param("id") id: string,
+  @common.Req() request: Request
 ): Promise<AdminDeliveryDetailResponseDto> {
+  this.assertAdmin(request);
   return this.service.getAdminDeliveryDetail({ deliveryId: id });
 }
 
@@ -396,8 +566,10 @@ async getAdminDeliveryDetail(
   possession: "any",
 })
 async getDeliveryFinancialSummary(
-  @common.Param("id") id: string
+  @common.Param("id") id: string,
+  @common.Req() request: Request
 ): Promise<any> {
+  this.assertAdmin(request);
   return this.service.getDeliveryFinancialSummary({
     deliveryId: id,
   });
@@ -412,8 +584,10 @@ async getDeliveryFinancialSummary(
 })
 async adminInvoicePostpaid(
   @common.Param("id") id: string,
-  @common.Body() body: AdminInvoicePostpaidBody
+  @common.Body() body: AdminInvoicePostpaidBody,
+  @common.Req() request: Request
 ): Promise<any> {
+  this.assertAdmin(request);
   return this.service.adminInvoicePostpaid({
     deliveryId: id,
     actorUserId: body.actorUserId ?? null,
@@ -431,8 +605,10 @@ async adminInvoicePostpaid(
 })
 async adminMarkPostpaidPaid(
   @common.Param("id") id: string,
-  @common.Body() body: AdminMarkPostpaidPaidBody
+  @common.Body() body: AdminMarkPostpaidPaidBody,
+  @common.Req() request: Request
 ): Promise<any> {
+  this.assertAdmin(request);
   return this.service.adminMarkPostpaidPaid({
     deliveryId: id,
     actorUserId: body.actorUserId ?? null,
@@ -449,8 +625,10 @@ async adminMarkPostpaidPaid(
 })
 async adminMarkPayoutPaid(
   @common.Param("id") id: string,
-  @common.Body() body: AdminMarkPayoutPaidBody
+  @common.Body() body: AdminMarkPayoutPaidBody,
+  @common.Req() request: Request
 ): Promise<any> {
+  this.assertAdmin(request);
   return this.service.adminMarkPayoutPaid({
     deliveryId: id,
     actorUserId: body.actorUserId ?? null,
@@ -468,8 +646,10 @@ async adminMarkPayoutPaid(
 })
 async adminCancelDelivery(
   @common.Param("id") id: string,
-  @common.Body() body: CancelDeliveryAdminBody
+  @common.Body() body: CancelDeliveryAdminBody,
+  @common.Req() request: Request
 ): Promise<any> {
+  this.assertAdmin(request);
   return this.service.adminCancelDelivery({
     deliveryId: id,
     actorUserId: body.actorUserId ?? null,
@@ -504,7 +684,9 @@ async adminCancelDelivery(
 })
 async adminPreviewClosePenalty(
   @common.Param("id") id: string,
+  @common.Req() request: Request,
 ): Promise<any> {
+  this.assertAdmin(request);
   return this.service.adminPreviewClosePenalty(id);
 }
 
@@ -517,8 +699,10 @@ async adminPreviewClosePenalty(
 })
 async adminReassignDelivery(
   @common.Param("id") id: string,
-  @common.Body() body: ReassignDeliveryAdminBody
+  @common.Body() body: ReassignDeliveryAdminBody,
+  @common.Req() request: Request
 ): Promise<any> {
+  this.assertAdmin(request);
   return this.service.adminReassignDelivery({
     deliveryId: id,
     newDriverId: body.newDriverId,
@@ -548,6 +732,18 @@ async createQuotePreview(
     ip: null,
   });
 
+  // Ownership binding: a non-admin caller who supplies a customerId can
+  // only quote for their OWN customer row (FE dealers send their own
+  // profileId; drivers/other roles omit it entirely).
+  if (!this.isAdminRequest(request) && body.customerId) {
+    const sessionCustomerId = await this.resolveSessionCustomerId(request);
+    if (sessionCustomerId !== body.customerId) {
+      throw new common.ForbiddenException(
+        "customerId must match the authenticated session"
+      );
+    }
+  }
+
   return this.service.createQuotePreview({
     pickupAddress: body.pickupAddress,
     dropoffAddress: body.dropoffAddress,
@@ -572,6 +768,16 @@ async createQuotePreview(
     @common.Req() request: Request
   ): Promise<DeliveryRequest> {
     const authenticatedUser = request.user as any;
+    // Ownership binding: non-admin callers can only book their OWN
+    // customer row (the FE always sends its own profileId).
+    if (!this.isAdminRequest(request)) {
+      const sessionCustomerId = await this.resolveSessionCustomerId(request);
+      if (!sessionCustomerId || sessionCustomerId !== body.customerId) {
+        throw new common.ForbiddenException(
+          "customerId must match the authenticated session"
+        );
+      }
+    }
     return this.service.createDeliveryFromAcceptedQuote({
       customerId: body.customerId,
       quoteId: body.quoteId,
@@ -775,8 +981,16 @@ async createQuotePreview(
   type: errors.ForbiddenException,
 })
 async getDriverActiveDelivery(
-  @common.Param("driverId") driverId: string
+  @common.Param("driverId") driverId: string,
+  @common.Req() request: Request
 ): Promise<any> {
+  // Session binding: a driver may only ever read their own active delivery.
+  const sessionDriverId = await this.resolveSessionDriverId(request);
+  if (!sessionDriverId || sessionDriverId !== driverId) {
+    throw new common.ForbiddenException(
+      "driverId must match the authenticated session"
+    );
+  }
   return this.service.getDriverActiveDelivery(driverId);
 }
 
@@ -792,6 +1006,7 @@ async getDriverActiveDelivery(
 })
 async getDriverJobFeed(
   @common.Param("driverId") driverId: string,
+  @common.Req() request: Request,
   @common.Query("limit") limit?: string,
   @common.Query("cursor") cursor?: string,
   @common.Query("urgentOnly") urgentOnly?: string,
@@ -802,6 +1017,13 @@ async getDriverJobFeed(
   @common.Query("sortBy")
   sortBy?: "BEST_MATCH" | "SOONEST" | "NEAREST" | "NEWEST" | "HIGHEST_PAY"
 ): Promise<any> {
+  // Session binding: the feed is always the authenticated driver's own.
+  const sessionDriverId = await this.resolveSessionDriverId(request);
+  if (!sessionDriverId || sessionDriverId !== driverId) {
+    throw new common.ForbiddenException(
+      "driverId must match the authenticated session"
+    );
+  }
   // Translate radiusMiles/datePreset sort values into sortBy for the service
   // Frontend sends sortBy directly; radiusMiles and datePreset are only numeric/date-window filters
   let effectiveSortBy = sortBy ?? "BEST_MATCH";
@@ -837,8 +1059,16 @@ async getDriverJobFeed(
 })
 async getDriverJobDetail(
   @common.Param("driverId") driverId: string,
-  @common.Param("deliveryId") deliveryId: string
+  @common.Param("deliveryId") deliveryId: string,
+  @common.Req() request: Request
 ): Promise<any> {
+  // Session binding: drivers may only read job detail through their own id.
+  const sessionDriverId = await this.resolveSessionDriverId(request);
+  if (!sessionDriverId || sessionDriverId !== driverId) {
+    throw new common.ForbiddenException(
+      "driverId must match the authenticated session"
+    );
+  }
   return this.service.getDriverJobDetail({
     driverId,
     deliveryId,
@@ -858,12 +1088,17 @@ async getDriverJobDetail(
   })
   async bookDelivery(
     @common.Param() params: DeliveryRequestWhereUniqueInput,
-    @common.Body() body: BookDeliveryBody
+    @common.Body() body: BookDeliveryBody,
+    @common.Req() request: Request
   ): Promise<DeliveryRequest> {
+    // Session binding: the booking driver is the JWT session's driver —
+    // the body value (if any) must agree with it.
+    const sessionDriverId = await this.bindSessionDriver(request, body.driverId);
+    const sessionUser = this.sessionUser(request);
     return this.service.bookDelivery({
       deliveryId: params.id,
-      driverId: body.driverId,
-      bookedByUserId: body.bookedByUserId ?? null,
+      driverId: sessionDriverId,
+      bookedByUserId: sessionUser?.id ?? body.bookedByUserId ?? null,
       reason: body.reason ?? null,
       driverLat: body.driverLat ?? null,
       driverLng: body.driverLng ?? null,
@@ -882,12 +1117,20 @@ async getDriverJobDetail(
   })
   async transitionDeliveryStatus(
     @common.Param() params: DeliveryRequestWhereUniqueInput,
-    @common.Body() body: TransitionDeliveryStatusBody
+    @common.Body() body: TransitionDeliveryStatusBody,
+    @common.Req() request: Request
   ): Promise<DeliveryRequest> {
+    // Session hardening: no actorRole escalation, and non-admin callers
+    // may only transition deliveries they own.
+    this.assertNoRoleEscalation(request, body.actorRole);
+    if (!this.isAdminRequest(request)) {
+      await this.assertDeliveryParticipantOrAdmin(params.id, request);
+    }
+    const sessionUser = this.sessionUser(request);
     return this.service.transitionDeliveryStatus({
       deliveryId: params.id,
       toStatus: body.toStatus,
-      actorUserId: body.actorUserId ?? null,
+      actorUserId: sessionUser?.id ?? body.actorUserId ?? null,
       actorRole: body.actorRole ?? null,
       actorType: body.actorType ?? EnumDeliveryStatusHistoryActorType.USER,
       note: body.note ?? null,
@@ -934,8 +1177,12 @@ async getDriverJobDetail(
   })
   async createTrackingLink(
     @common.Param() params: DeliveryRequestWhereUniqueInput,
-    @common.Body() body: CreateTrackingLinkBody
+    @common.Body() body: CreateTrackingLinkBody,
+    @common.Req() request: Request
   ): Promise<TrackingLinkResponseBody> {
+    // Only the owner customer, the assigned driver, or an admin may mint
+    // a live tracking link for a delivery.
+    await this.assertDeliveryParticipantOrAdmin(params.id, request);
     return this.service.createTrackingLink({
       deliveryId: params.id,
       expiresInHours: body.expiresInHours ?? 24,
@@ -954,8 +1201,10 @@ async getDriverJobDetail(
     possession: "any",
   })
   async resendTrackingLink(
-    @common.Param() params: DeliveryRequestWhereUniqueInput
+    @common.Param() params: DeliveryRequestWhereUniqueInput,
+    @common.Req() request: Request
   ): Promise<TrackingLinkResponseBody> {
+    this.assertAdmin(request);
     return this.service.resendTrackingLink({
       deliveryId: params.id,
     });
@@ -969,8 +1218,12 @@ async getDriverJobDetail(
     possession: "any",
   })
   async getTrackingLink(
-    @common.Param() params: DeliveryRequestWhereUniqueInput
+    @common.Param() params: DeliveryRequestWhereUniqueInput,
+    @common.Req() request: Request
   ): Promise<TrackingLinkResponseBody> {
+    // Only the owner customer, the assigned driver, or an admin may read
+    // (or mint) the tracking share link for a delivery.
+    await this.assertDeliveryParticipantOrAdmin(params.id, request);
     return this.service.getTrackingLink({
       deliveryId: params.id,
     });
@@ -988,13 +1241,17 @@ async getDriverJobDetail(
   })
   async startTrip(
   @common.Param() params: DeliveryRequestWhereUniqueInput,
-  @common.Body() body: StartTripBody
+  @common.Body() body: StartTripBody,
+  @common.Req() request: Request
 ): Promise<DeliveryRequest> {
+  // Session binding: the trip is started by the JWT session's driver.
+  const sessionDriverId = await this.bindSessionDriver(request, body.driverId);
+  const sessionUser = this.sessionUser(request);
   return this.service.startTrip({
     deliveryId: params.id,
-    driverId: body.driverId,
-    actorUserId: body.actorUserId ?? null,
-    actorRole: body.actorRole ?? null,
+    driverId: sessionDriverId,
+    actorUserId: sessionUser?.id ?? body.actorUserId ?? null,
+    actorRole: EnumDeliveryStatusHistoryActorRole.DRIVER,
   });
 }
 
@@ -1067,13 +1324,17 @@ async verifyVin(
 })
 async completeTrip(
   @common.Param() params: DeliveryRequestWhereUniqueInput,
-  @common.Body() body: CompleteTripBody
+  @common.Body() body: CompleteTripBody,
+  @common.Req() request: Request
 ): Promise<DeliveryRequest> {
+  // Session binding: the trip is completed by the JWT session's driver.
+  const sessionDriverId = await this.bindSessionDriver(request, body.driverId);
+  const sessionUser = this.sessionUser(request);
   return this.service.completeTrip({
     deliveryId: params.id,
-    driverId: body.driverId,
-    actorUserId: body.actorUserId ?? null,
-    actorRole: body.actorRole ?? null,
+    driverId: sessionDriverId,
+    actorUserId: sessionUser?.id ?? body.actorUserId ?? null,
+    actorRole: EnumDeliveryStatusHistoryActorRole.DRIVER,
   });
 }
 
@@ -1089,11 +1350,14 @@ async completeTrip(
 })
 async submitPickupCompliance(
   @common.Param() params: DeliveryRequestWhereUniqueInput,
-  @common.Body() body: SubmitPickupComplianceBody
+  @common.Body() body: SubmitPickupComplianceBody,
+  @common.Req() request: Request
 ): Promise<DeliveryRequest> {
+  // Session binding: compliance evidence is filed by the session's driver.
+  const sessionDriverId = await this.bindSessionDriver(request, body.driverId);
   return this.service.submitPickupCompliance({
     deliveryId: params.id,
-    driverId: body.driverId,
+    driverId: sessionDriverId,
     vinVerificationCode: body.vinVerificationCode,
     odometerStart: body.odometerStart,
     photos: body.photos ?? [],
@@ -1113,11 +1377,14 @@ async submitPickupCompliance(
 })
 async submitDropoffCompliance(
   @common.Param() params: DeliveryRequestWhereUniqueInput,
-  @common.Body() body: SubmitDropoffComplianceBody
+  @common.Body() body: SubmitDropoffComplianceBody,
+  @common.Req() request: Request
 ): Promise<DeliveryRequest> {
+  // Session binding: compliance evidence is filed by the session's driver.
+  const sessionDriverId = await this.bindSessionDriver(request, body.driverId);
   return this.service.submitDropoffCompliance({
     deliveryId: params.id,
-    driverId: body.driverId,
+    driverId: sessionDriverId,
     odometerEnd: body.odometerEnd,
     photos: body.photos ?? [],
     dashboardPhotoUrl: body.dashboardPhotoUrl ?? null,
@@ -1136,8 +1403,16 @@ async submitDropoffCompliance(
 })
 async getDriverWorkflowSummary(
   @common.Param() params: DeliveryRequestWhereUniqueInput,
-  @common.Param("driverId") driverId: string
+  @common.Param("driverId") driverId: string,
+  @common.Req() request: Request
 ): Promise<any> {
+  // Session binding: workflow summaries are per-driver.
+  const sessionDriverId = await this.resolveSessionDriverId(request);
+  if (!sessionDriverId || sessionDriverId !== driverId) {
+    throw new common.ForbiddenException(
+      "driverId must match the authenticated session"
+    );
+  }
   return this.service.getDriverWorkflowSummary({
     deliveryId: params.id,
     driverId,
@@ -1155,8 +1430,12 @@ async getDriverWorkflowSummary(
 })
 async cancelDelivery(
   @common.Param() params: DeliveryRequestWhereUniqueInput,
-  @common.Body() body: CancelDeliveryBody
+  @common.Body() body: CancelDeliveryBody,
+  @common.Req() request: Request
 ): Promise<DeliveryRequest> {
+  // Cancellation moves money (void auth holds / auto refunds) and is an
+  // ops decision — ADMIN-only. Zero FE callers outside admin surfaces.
+  this.assertAdmin(request);
   return this.service.cancelDelivery({
     deliveryId: params.id,
     actorUserId: body.actorUserId ?? null,
@@ -1392,6 +1671,33 @@ async schedulePreview(
     @common.Req() request: Request
   ): Promise<DeliveryRequest[]> {
     const args = plainToClass(DeliveryRequestFindManyArgs, request.query);
+
+    // ROW-LEVEL SCOPING: the grants allow read:any for every role, so
+    // ownership is enforced here. Admins see everything; customers see
+    // ONLY their own deliveries (the FE dealer-drafts page already
+    // filters by its own id — this makes the filter authoritative);
+    // drivers must use the driver feed endpoints.
+    if (!this.isAdminRequest(request)) {
+      const user = this.sessionUser(request);
+      const isDriver =
+        Array.isArray(user?.roles) && user.roles.includes(EnumUserRoles.DRIVER);
+      if (isDriver) {
+        throw new common.ForbiddenException(
+          "Driver accounts use the driver feed endpoints"
+        );
+      }
+      const sessionCustomerId = await this.resolveSessionCustomerId(request);
+      if (!sessionCustomerId) {
+        // No customer profile → nothing to show. Empty list, not an error,
+        // so odd auth states can never become a data leak.
+        return [];
+      }
+      const ownerFilter = { customerId: sessionCustomerId } as any;
+      args.where = args.where
+        ? { AND: [args.where as any, ownerFilter] }
+        : ownerFilter;
+    }
+
     return this.service.deliveryRequests({
       ...args,
       select: {
@@ -1525,8 +1831,16 @@ async schedulePreview(
     type: errors.ForbiddenException,
   })
   async deliveryRequest(
-    @common.Param() params: DeliveryRequestWhereUniqueInput
+    @common.Param() params: DeliveryRequestWhereUniqueInput,
+    @common.Req() request?: Request
   ): Promise<DeliveryRequest | null> {
+    // ROW-LEVEL SCOPING: owner customer, assigned driver, or admin. A
+    // 404 (not 403) for everyone else — no existence leak.
+    // (`request` is optional so the override signature stays compatible
+    // with the base class; NestJS always injects it at runtime.)
+    if (request) {
+      await this.assertDeliveryParticipantOrAdmin(params.id, request);
+    }
     const result = await this.service.deliveryRequest({
       where: params,
       select: {
@@ -1752,6 +2066,15 @@ async schedulePreview(
     // `request` is declared optional so the override signature stays
     // compatible with the base class. NestJS always injects it at runtime.
     if (request) {
+      // OWNERSHIP + FIELD LOCKDOWN: non-admin callers may only PATCH
+      // their own deliveries, and status/quote/customer relations are
+      // owned by the lifecycle + pricing engines, never by this
+      // generic endpoint. Runs BEFORE the pricing guard below.
+      await this.guardDeliveryPatchOwnershipAndFields(
+        params.id,
+        data as any,
+        request,
+      );
       await this.guardPricingFieldsForDealerEditableStatuses(
         params.id,
         data as any,
@@ -2023,8 +2346,35 @@ async schedulePreview(
     type: errors.ForbiddenException,
   })
   async deleteDeliveryRequest(
-    @common.Param() params: DeliveryRequestWhereUniqueInput
+    @common.Param() params: DeliveryRequestWhereUniqueInput,
+    @common.Req() request?: Request
   ): Promise<DeliveryRequest | null> {
+    // ROW-LEVEL SCOPING: non-admin callers may only delete their OWN
+    // deliveries, and only while still DRAFT (after that, deletion is an
+    // admin decision). 404 for foreign rows — no existence leak.
+    // (`request` optional for base-signature compatibility; always
+    // injected at runtime.)
+    if (request && !this.isAdminRequest(request)) {
+      const delivery = await this.prisma.deliveryRequest.findUnique({
+        where: { id: params.id },
+        select: { customerId: true, status: true },
+      });
+      const sessionCustomerId = await this.resolveSessionCustomerId(request);
+      if (
+        !delivery ||
+        !sessionCustomerId ||
+        delivery.customerId !== sessionCustomerId
+      ) {
+        throw new errors.NotFoundException(
+          `No resource was found for delivery ${params.id}`
+        );
+      }
+      if (delivery.status !== EnumDeliveryRequestStatus.DRAFT) {
+        throw new common.ForbiddenException(
+          "Only DRAFT deliveries can be deleted"
+        );
+      }
+    }
     try {
       return await this.service.deleteDeliveryRequest({
         where: params,
@@ -3363,6 +3713,79 @@ async schedulePreview(
   // and the PATCH endpoint's own role-based access control + business logic
   // already prevents quote/address changes on locked deliveries.
   // ─────────────────────────────────────────────────────────────────
+  /**
+   * PATCH ownership + field lockdown for NON-ADMIN callers.
+   *
+   * 1. Ownership: a non-admin may only PATCH a delivery that belongs to
+   *    their own Customer row. Everyone else gets a 403 (admins are
+   *    exempt and may fix any delivery by hand).
+   *
+   * 2. Lifecycle-field lockdown: `status` (and the quote/customer
+   *    relations that drive pricing) are owned by the lifecycle engine,
+   *    the pricing-edit engine, and the create/promote paths — never by
+   *    this generic PATCH. No FE caller sends them (verified across
+   *    every caller), so they are silently stripped for non-admins:
+   *    the state machine can no longer be bypassed by a crafted PATCH,
+   *    while any legacy client keeps working.
+   */
+  private async guardDeliveryPatchOwnershipAndFields(
+    deliveryId: string,
+    data: any,
+    request: Request,
+  ): Promise<void> {
+    if (this.isAdminRequest(request)) {
+      return;
+    }
+
+    const delivery = await this.prisma.deliveryRequest.findUnique({
+      where: { id: deliveryId },
+      select: { id: true, customerId: true },
+    });
+    if (!delivery) {
+      // Let the downstream handler produce the 404.
+      return;
+    }
+
+    const sessionCustomerId = await this.resolveSessionCustomerId(request);
+    if (!sessionCustomerId || delivery.customerId !== sessionCustomerId) {
+      throw new common.ForbiddenException(
+        "You can only edit your own deliveries"
+      );
+    }
+
+    // Lifecycle/pricing-owned fields — stripped for non-admins.
+    delete data.status;
+    delete data.quote;
+    delete data.quoteId;
+    delete data.createdByUserId;
+    delete data.resubmittedFromId;
+
+    // customerId (scalar FK form used by the FE) must be the caller's own.
+    if (
+      data.customerId !== undefined &&
+      data.customerId !== sessionCustomerId
+    ) {
+      throw new common.ForbiddenException(
+        "customerId must match the authenticated session"
+      );
+    }
+    // Relation form (never sent by the FE): validate then strip.
+    if (data.customer !== undefined) {
+      const connectedId =
+        data.customer?.connect?.id ?? data.customer?.connect ?? undefined;
+      if (
+        connectedId !== undefined &&
+        connectedId !== null &&
+        connectedId !== sessionCustomerId
+      ) {
+        throw new common.ForbiddenException(
+          "customer must match the authenticated session"
+        );
+      }
+      delete data.customer;
+    }
+  }
+
   private async guardPricingFieldsForDealerEditableStatuses(
     deliveryId: string,
     data: any,

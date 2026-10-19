@@ -1,6 +1,7 @@
 import AdminSupportDetailPage from '@/components/pages/admin-support-detail'
 import { createFileRoute, useSearch } from '@tanstack/react-router'
 import { z } from 'zod'
+import { AdminRouteGuard } from '@/components/auth/AdminRouteGuard'
 
 // The id now arrives as a URL search param so the page is deep-linkable
 // (NotificationBell navigates here with `/admin-support-detail?id=…`,
@@ -10,9 +11,17 @@ const searchSchema = z.object({
 })
 
 export const Route = createFileRoute('/admin-support-detail/')({
-  component: RouteComponent,
+  component: AdminGuardedRoute,
   validateSearch: searchSchema,
 })
+
+function AdminGuardedRoute() {
+  return (
+    <AdminRouteGuard>
+      <RouteComponent />
+    </AdminRouteGuard>
+  )
+}
 
 function RouteComponent() {
   const search = useSearch({ from: '/admin-support-detail/' })

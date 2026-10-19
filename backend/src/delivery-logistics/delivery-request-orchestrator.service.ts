@@ -1082,10 +1082,21 @@ export class DeliveryRequestOrchestratorService {
       throw new NotFoundException("Quote not found");
     }
 
-    let resolvedCustomerId: string | null = input.customerId ?? null;
+    // SECURITY (authorization hardening): this is a PUBLIC endpoint. The
+    // customerId field is not accepted — the customer is resolved from
+    // their email below, never from a client-supplied id (an anonymous
+    // caller could otherwise attach drafts to ANY customer). No FE flow
+    // sends customerId here (zero FE callers of this endpoint).
+    if (input.customerId) {
+      throw new BadRequestException(
+        "customerId is not accepted on this endpoint — customers are resolved by their verified email"
+      );
+    }
+
+    let resolvedCustomerId: string | null = null;
     let resolvedCustomerUserId: string | null = null;
 
-    if (!resolvedCustomerId && input.customerEmail) {
+    if (input.customerEmail) {
       const existingCustomer = await this.prisma.customer.findFirst({
         where: {
           customerType: EnumCustomerCustomerType.PRIVATE,
@@ -1720,95 +1731,18 @@ private async createIndividualDeliveryForResolvedCustomer(
 private async resolveIndividualCustomerForCreate(
   input: CreateIndividualDeliveryFromQuoteInput
 ): Promise<ResolvedIndividualCustomerResult> {
+  // SECURITY (authorization hardening): this endpoint is PUBLIC (no auth).
+  // The old customerId fast-path let an anonymous caller target ANY
+  // customer id — auto-approving the account and later charging its saved
+  // Stripe card. No FE flow sends customerId here (verified across the
+  // full git history of QuoteDetails.tsx): the customer is resolved from
+  // their VERIFIED EMAIL (+ OTP for inline signup) below. Reject the
+  // field outright so it can never be used to impersonate another
+  // customer again.
   if (input.customerId) {
-    const customer = await this.prisma.customer.findUnique({
-      where: { id: input.customerId },
-      select: {
-        id: true,
-        userId: true,
-        customerType: true,
-        approvalStatus: true,
-        approvedAt: true,
-        approvedByUserId: true,
-        stripeCustomerId: true,
-        stripeDefaultPaymentMethodId: true,
-        user: {
-          select: {
-            id: true,
-            email: true,
-            emailVerifiedAt: true,
-            fullName: true,
-            phone: true,
-          },
-        },
-      },
-    });
-
-    if (!customer) {
-      throw new NotFoundException("Customer not found");
-    }
-
-    if (!customer.user?.emailVerifiedAt) {
-      if (customer.user?.email) {
-        await this.emailVerificationService.requestVerification(
-          customer.user.email,
-          customer.user.fullName ?? null,
-          "PRIVATE_CUSTOMER"
-        );
-
-        return {
-          kind: "VERIFICATION_REQUIRED",
-          email: customer.user.email,
-          message: "Please verify your email before creating a delivery request.",
-        };
-      }
-
-      throw new BadRequestException(
-        "Customer email is missing and cannot be verified"
-      );
-    }
-
-    if (
-      customer.customerType === EnumCustomerCustomerType.PRIVATE &&
-      customer.approvalStatus !== EnumCustomerApprovalStatus.APPROVED
-    ) {
-      await this.prisma.customer.update({
-        where: { id: customer.id },
-        data: {
-          approvalStatus: EnumCustomerApprovalStatus.APPROVED,
-          approvedAt: customer.approvedAt ?? businessNow().toJSDate(),
-          approvedByUserId: null,
-        },
-      });
-    }
-
-    const normalizedCustomer = await this.prisma.customer.findUniqueOrThrow({
-      where: { id: customer.id },
-      select: {
-        id: true,
-        userId: true,
-        customerType: true,
-        approvalStatus: true,
-        approvedAt: true,
-        approvedByUserId: true,
-        stripeCustomerId: true,
-        stripeDefaultPaymentMethodId: true,
-        user: {
-          select: {
-            id: true,
-            email: true,
-            emailVerifiedAt: true,
-            fullName: true,
-            phone: true,
-          },
-        },
-      },
-    });
-
-    return {
-      kind: "READY",
-      customer: normalizedCustomer,
-    };
+    throw new BadRequestException(
+      "customerId is not accepted on this endpoint — customers are resolved by their verified email"
+    );
   }
 
   const customerEmail = input.customerEmail?.trim().toLowerCase() ?? null;

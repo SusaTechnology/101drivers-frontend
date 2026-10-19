@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Param, Body, Req, Query, Logger, UseGuards, NotFoundException, BadRequestException } from "@nestjs/common";
+import { Controller, Get, Post, Param, Body, Req, Query, Logger, UseGuards, NotFoundException, BadRequestException, ForbiddenException } from "@nestjs/common";
 import { StripeService } from "../providers/stripe/stripe.service";
 import { PrismaService } from "../prisma/prisma.service";
 import * as defaultAuthGuard from "../auth/defaultAuth.guard";
@@ -12,6 +12,83 @@ export class StripePaymentController {
     private readonly stripeService: StripeService,
     private readonly prisma: PrismaService,
   ) {}
+
+  // ── Session-aware access helpers (authorization hardening) ────────
+  private sessionUser(req: any): any {
+    return req?.user ?? null;
+  }
+
+  private isAdminReq(req: any): boolean {
+    const u = this.sessionUser(req);
+    return Array.isArray(u?.roles) && u.roles.includes("ADMIN");
+  }
+
+  private assertAdminReq(req: any): void {
+    if (!this.isAdminReq(req)) {
+      throw new ForbiddenException("Admin access required");
+    }
+  }
+
+  /** Resolve the Customer row id for the session user (or null). */
+  private async resolveSessionCustomerId(req: any): Promise<string | null> {
+    const user = this.sessionUser(req);
+    if (!user?.id) return null;
+    const customer = await this.prisma.customer.findUnique({
+      where: { userId: user.id },
+      select: { id: true },
+    });
+    return customer?.id ?? null;
+  }
+
+  /**
+   * Customer-scoped identity gate: a non-admin caller may only act on
+   * their OWN customer profile (the FE always passes its own profileId).
+   */
+  private async assertOwnCustomerOrAdmin(req: any, customerId: string): Promise<void> {
+    if (this.isAdminReq(req)) return;
+    const sessionCustomerId = await this.resolveSessionCustomerId(req);
+    if (!sessionCustomerId || sessionCustomerId !== customerId) {
+      throw new ForbiddenException(
+        "customerId must match the authenticated session"
+      );
+    }
+  }
+
+  /** Driver-scoped identity gate (same rule for driver profile ids). */
+  private async assertOwnDriverOrAdmin(req: any, driverId: string): Promise<void> {
+    if (this.isAdminReq(req)) return;
+    const user = this.sessionUser(req);
+    if (!user?.id) throw new ForbiddenException("Not authenticated");
+    const driver = await this.prisma.driver.findUnique({
+      where: { userId: user.id },
+      select: { id: true },
+    });
+    if (!driver || driver.id !== driverId) {
+      throw new ForbiddenException(
+        "driverId must match the authenticated session"
+      );
+    }
+  }
+
+  /**
+   * Delivery ownership gate: only the owning customer (or an admin) may
+   * mint payment instruments for a delivery.
+   */
+  private async assertDeliveryOwnerOrAdmin(req: any, deliveryId: string): Promise<void> {
+    if (this.isAdminReq(req)) return;
+    const delivery = await this.prisma.deliveryRequest.findUnique({
+      where: { id: deliveryId },
+      select: { customerId: true },
+    });
+    if (!delivery) {
+      throw new NotFoundException("Delivery not found");
+    }
+    const sessionCustomerId = await this.resolveSessionCustomerId(req);
+    if (!sessionCustomerId || delivery.customerId !== sessionCustomerId) {
+      // 404, not 403 — no existence leak for foreign deliveries.
+      throw new NotFoundException("Delivery not found");
+    }
+  }
 
   /**
    * Get Stripe publishable key for the frontend.
@@ -30,7 +107,10 @@ export class StripePaymentController {
    */
   @Post("stripe/payment-intent/:deliveryId")
   @UseGuards(defaultAuthGuard.DefaultAuthGuard, nestAccessControl.ACGuard)
-  async getOrCreatePaymentIntent(@Param("deliveryId") deliveryId: string) {
+  async getOrCreatePaymentIntent(@Param("deliveryId") deliveryId: string, @Req() req: any) {
+    // Ownership gate: only the delivery's customer (or an admin) may
+    // obtain a clientSecret for it.
+    await this.assertDeliveryOwnerOrAdmin(req, deliveryId);
     // Check if a PaymentIntent already exists for this delivery
     const payment = await this.prisma.payment.findUnique({
       where: { deliveryId },
@@ -123,6 +203,10 @@ export class StripePaymentController {
     if (!deliveryId || !amount || amount <= 0) {
       throw new BadRequestException("Invalid delivery ID or tip amount");
     }
+
+    // Ownership gate: tips can only be attached by the delivery's own
+    // customer (or an admin).
+    await this.assertDeliveryOwnerOrAdmin(req, deliveryId);
 
     if (amount > 500) {
       throw new BadRequestException("Tip amount cannot exceed $500");
@@ -363,6 +447,9 @@ export class StripePaymentController {
     @Body() body?: { note?: string; amount?: number },
     @Req() request?: any,
   ) {
+    // Refunds move money — ADMIN-only (the refund UI lives in the admin
+    // panel exclusively).
+    this.assertAdminReq(request);
     // Task 127: record WHO processed the refund. The webhook that later
     // writes the REFUND PaymentEvent reads this metadata back, so the
     // admin panel's Payment Events timeline can show "Processed by <name>".
@@ -540,11 +627,14 @@ export class StripePaymentController {
    */
   @Post("stripe/save-card")
   @UseGuards(defaultAuthGuard.DefaultAuthGuard, nestAccessControl.ACGuard)
-  async createSetupIntentForCard(@Body() body: { customerId: string; email?: string; name?: string }) {
+  async createSetupIntentForCard(@Body() body: { customerId: string; email?: string; name?: string }, @Req() req: any) {
     const { customerId, email, name } = body;
     if (!customerId) {
       throw new BadRequestException("customerId is required");
     }
+
+    // Identity gate: a session can only save cards onto its own profile.
+    await this.assertOwnCustomerOrAdmin(req, customerId);
 
     const customer = await this.prisma.customer.findUnique({
       where: { id: customerId },
@@ -595,10 +685,13 @@ export class StripePaymentController {
    */
   @Get("stripe/saved-cards/:customerId")
   @UseGuards(defaultAuthGuard.DefaultAuthGuard, nestAccessControl.ACGuard)
-  async getSavedCards(@Param("customerId") customerId: string) {
+  async getSavedCards(@Param("customerId") customerId: string, @Req() req: any) {
     if (!customerId) {
       throw new BadRequestException("customerId is required");
     }
+
+    // Identity gate: card details are readable only by their owner.
+    await this.assertOwnCustomerOrAdmin(req, customerId);
 
     const customer = await this.prisma.customer.findUnique({
       where: { id: customerId },
@@ -665,11 +758,14 @@ export class StripePaymentController {
    */
   @Post("stripe/remove-card")
   @UseGuards(defaultAuthGuard.DefaultAuthGuard, nestAccessControl.ACGuard)
-  async removeSavedCard(@Body() body: { customerId: string; paymentMethodId: string }) {
+  async removeSavedCard(@Body() body: { customerId: string; paymentMethodId: string }, @Req() req: any) {
     const { customerId, paymentMethodId } = body;
     if (!customerId || !paymentMethodId) {
       throw new BadRequestException("customerId and paymentMethodId are required");
     }
+
+    // Identity gate: a session can only detach cards from its own profile.
+    await this.assertOwnCustomerOrAdmin(req, customerId);
 
     const customer = await this.prisma.customer.findUnique({
       where: { id: customerId },
@@ -812,6 +908,10 @@ export class StripePaymentController {
     if (!driverId) {
       throw new BadRequestException("driverId is required");
     }
+
+    // Identity gate: onboarding links to a driver's OWN Stripe Connect
+    // account.
+    await this.assertOwnDriverOrAdmin(req, driverId);
 
     // Fetch driver with personal data + user relation
     const driver = await this.prisma.driver.findUnique({
@@ -975,7 +1075,10 @@ export class StripePaymentController {
    */
   @Get("stripe/connect/status/:driverId")
   @UseGuards(defaultAuthGuard.DefaultAuthGuard, nestAccessControl.ACGuard)
-  async getConnectStatus(@Param("driverId") driverId: string) {
+  async getConnectStatus(@Param("driverId") driverId: string, @Req() req: any) {
+    // Identity gate: Connect status is visible to the driver themself
+    // or to an admin.
+    await this.assertOwnDriverOrAdmin(req, driverId);
     const driver = await this.prisma.driver.findUnique({
       where: { id: driverId },
       select: {
@@ -1060,7 +1163,10 @@ export class StripePaymentController {
   async getCustomerInvoices(
     @Param("customerId") customerId: string,
     @Query() query: any,
+    @Req() req: any,
   ) {
+    // Identity gate: invoices are readable by their own customer/admin.
+    await this.assertOwnCustomerOrAdmin(req, customerId);
     const page = Number(query.page) || 1;
     const pageSize = Number(query.pageSize) || 20;
 
@@ -1099,7 +1205,8 @@ export class StripePaymentController {
    */
   @Get("invoices/admin")
   @UseGuards(defaultAuthGuard.DefaultAuthGuard, nestAccessControl.ACGuard)
-  async getAdminInvoices(@Query() query: any) {
+  async getAdminInvoices(@Query() query: any, @Req() req: any) {
+    this.assertAdminReq(req);
     const page = Number(query.page) || 1;
     const pageSize = Number(query.pageSize) || 20;
 
@@ -1161,7 +1268,9 @@ export class StripePaymentController {
   async markInvoicePaid(
     @Param("invoiceId") invoiceId: string,
     @Body() body?: { note?: string },
+    @Req() req?: any,
   ) {
+    this.assertAdminReq(req);
     const invoice = await this.prisma.invoice.findUnique({
       where: { id: invoiceId },
     });

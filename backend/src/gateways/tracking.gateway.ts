@@ -122,14 +122,69 @@ export class TrackingGateway
   /** Authenticated: join a specific delivery tracking room */
   @UseGuards(WsJwtGuard)
   @SubscribeMessage("join:delivery")
-  handleJoinDelivery(
+  async handleJoinDelivery(
     @ConnectedSocket() client: Socket,
     @MessageBody() data: { deliveryId: string },
   ) {
-    const room = `delivery:${data.deliveryId}`;
+    // SECURITY BOUNDARY (mirrors join:support): membership is re-verified
+    // against the DB on every join — admin, the delivery's owning
+    // customer, or the currently assigned driver. Anyone else gets the
+    // same shape as a failed join for a nonexistent room (no probing).
+    const user = (client as AuthenticatedSocket).user;
+    const deliveryId = `${data?.deliveryId ?? ""}`.trim();
+    if (!user?.sub || !deliveryId) {
+      return { joined: null, reason: "bad_request" };
+    }
+
+    const allowed = await this.canAccessDeliveryRoom(user, deliveryId);
+    if (!allowed) {
+      return { joined: null, reason: "forbidden" };
+    }
+
+    const room = `delivery:${deliveryId}`;
     client.join(room);
-    this.logger.debug(`User ${(client as AuthenticatedSocket).user?.sub} joined ${room}`);
+    this.logger.debug(`User ${user.sub} joined ${room}`);
     return { joined: room };
+  }
+
+  /**
+   * DB-backed participant check for delivery rooms: ADMIN, the owning
+   * customer, or the currently assigned (unassignedAt = null) driver.
+   */
+  private async canAccessDeliveryRoom(
+    user: { sub: string; roles?: string[] },
+    deliveryId: string,
+  ): Promise<boolean> {
+    const roles: string[] = user.roles ?? [];
+    if (roles.includes("ADMIN")) return true;
+
+    const delivery = await this.prisma?.deliveryRequest.findUnique({
+      where: { id: deliveryId },
+      select: {
+        customerId: true,
+        assignments: {
+          where: { unassignedAt: null },
+          select: { driverId: true },
+        },
+      },
+    });
+    if (!delivery) return false;
+
+    const customer = await this.prisma?.customer.findUnique({
+      where: { userId: user.sub },
+      select: { id: true },
+    });
+    if (customer && delivery.customerId === customer.id) return true;
+
+    const driver = await this.prisma?.driver.findUnique({
+      where: { userId: user.sub },
+      select: { id: true },
+    });
+    if (driver && delivery.assignments.some((a) => a.driverId === driver.id)) {
+      return true;
+    }
+
+    return false;
   }
 
   @SubscribeMessage("leave:delivery")
@@ -143,11 +198,27 @@ export class TrackingGateway
 
   /** Unauthenticated: join public tracking room via share token */
   @SubscribeMessage("join:public")
-  handleJoinPublic(
+  async handleJoinPublic(
     @ConnectedSocket() client: Socket,
     @MessageBody() data: { token: string },
   ) {
-    const room = `public:${data.token}`;
+    // Validate the token against the DB before joining: arbitrary room
+    // strings would let one socket allocate unbounded adapter memory,
+    // and joining a room for a token that does not exist serves nobody.
+    // (Format-agnostic — existence is the authority — so legacy tokens
+    // from in-flight trips created before hardening keep working.)
+    const token = `${data?.token ?? ""}`.trim();
+    if (!token) {
+      return { joined: null, reason: "bad_request" };
+    }
+    const exists = await this.prisma?.deliveryRequest.findUnique({
+      where: { trackingShareToken: token },
+      select: { id: true },
+    });
+    if (!exists) {
+      return { joined: null, reason: "forbidden" };
+    }
+    const room = `public:${token}`;
     client.join(room);
     this.logger.debug(`Anonymous client ${client.id} joined ${room}`);
     return { joined: room };
@@ -165,13 +236,32 @@ export class TrackingGateway
   /** Authenticated: dealer joins their dashboard room */
   @UseGuards(WsJwtGuard)
   @SubscribeMessage("join:dealer")
-  handleJoinDealer(
+  async handleJoinDealer(
     @ConnectedSocket() client: Socket,
     @MessageBody() data: { dealerId: string },
   ) {
-    const room = `dealer:${data.dealerId}`;
+    // SECURITY BOUNDARY (mirrors join:support): only ADMIN or the dealer
+    // customer themself may ride this room's delivery/status events.
+    const user = (client as AuthenticatedSocket).user;
+    const dealerId = `${data?.dealerId ?? ""}`.trim();
+    if (!user?.sub || !dealerId) {
+      return { joined: null, reason: "bad_request" };
+    }
+
+    const roles: string[] = user.roles ?? [];
+    if (!roles.includes("ADMIN")) {
+      const own = await this.prisma?.customer.findUnique({
+        where: { userId: user.sub },
+        select: { id: true },
+      });
+      if (!own || own.id !== dealerId) {
+        return { joined: null, reason: "forbidden" };
+      }
+    }
+
+    const room = `dealer:${dealerId}`;
     client.join(room);
-    this.logger.debug(`Dealer ${(client as AuthenticatedSocket).user?.sub} joined ${room}`);
+    this.logger.debug(`Dealer ${user.sub} joined ${room}`);
     return { joined: room };
   }
 

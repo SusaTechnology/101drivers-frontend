@@ -1,15 +1,24 @@
 import AdminPaymentDetailPage from '@/components/pages/admin-payment-detail';
 import { createFileRoute } from '@tanstack/react-router';
 import { useEffect } from 'react';
+import { AdminRouteGuard } from '@/components/auth/AdminRouteGuard'
 
 export const Route = createFileRoute('/admin-payment-detail/')({
-  component: RouteComponent,
+  component: AdminGuardedRoute,
   validateSearch: (search: Record<string, unknown>): { paymentId: string } => {
     return {
       paymentId: (search.paymentId as string) || '',
     };
   },
 });
+
+function AdminGuardedRoute() {
+  return (
+    <AdminRouteGuard>
+      <RouteComponent />
+    </AdminRouteGuard>
+  )
+}
 
 function RouteComponent() {
   const { paymentId } = Route.useSearch();

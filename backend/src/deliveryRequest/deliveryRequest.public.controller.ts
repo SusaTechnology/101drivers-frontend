@@ -4,6 +4,7 @@ import { Request } from "express";
 
 import { DeliveryRequestService } from "./deliveryRequest.service";
 import { QuoteUsageLimitService } from "./quote-usage-limit.service";
+import { AuthService } from "../auth/auth.service";
 import {
   CreateIndividualDeliveryFromQuoteBody,
   CreateIndividualDeliveryDraftFromQuoteBody,
@@ -19,6 +20,7 @@ export class DeliveryRequestPublicController {
   constructor(
     protected readonly service: DeliveryRequestService,
     private readonly quoteUsageLimit: QuoteUsageLimitService,
+    private readonly authService: AuthService,
   ) {}
 
   /**
@@ -76,6 +78,30 @@ async createIndividualDeliveryDraftFromQuote(
     isUrgent: body.isUrgent === true,
   });
 }
+  /**
+   * Resend the signup OTP for the individual (landing) flow.
+   *
+   * The FE (QuoteDetails "Resend code" button) has always called THIS
+   * path, but the route never existed — the button 404'd. Delegates to
+   * the auth service's canonical resend (same validation + email as
+   * POST /api/auth/signup/customer/private/resend-otp), so the contract
+   * matches what the FE already expects: { action, email, message }.
+   */
+  @common.Post("individual/resend-otp")
+  @swagger.ApiOperation({
+    summary: "Public: resend the signup OTP for the individual quote flow",
+  })
+  @common.HttpCode(common.HttpStatus.OK)
+  async resendIndividualOtp(
+    @common.Body() body: { email?: string }
+  ): Promise<any> {
+    const email = (body?.email ?? "").trim();
+    if (!email) {
+      throw new common.BadRequestException("email is required");
+    }
+    return this.authService.resendPrivateCustomerOtp(email);
+  }
+
   @common.Get("individual/quote-usage")
   @swagger.ApiOperation({
     summary:
