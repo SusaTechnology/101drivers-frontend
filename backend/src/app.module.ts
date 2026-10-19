@@ -40,6 +40,7 @@ import { DealerLeadModule } from "./dealerLead/dealerLead.module";
 import { InvestorLeadModule } from "./investorLead/investorLead.module";
 import { GatewayModule } from "./gateways/gateway.module";
 import { AppEventsModule } from "./common/appEvents/appEvents.module";
+import { RateLimitModule } from "./common/rate-limit/rate-limit.service";
 import { HealthModule } from "./health/health.module";
 import { PrismaModule } from "./prisma/prisma.module";
 import { SecretsManagerModule } from "./providers/secrets/secretsManager.module";
@@ -80,6 +81,9 @@ import { GeoModule } from "./geo/geo.module";
     // AuthService/UserService/TrackingGateway can all inject it without
     // any of them importing each other.
     AppEventsModule,
+    // Global leaf rate limiter (see common/rate-limit) — per-email and
+    // per-IP budgets for every public endpoint that sends an email.
+    RateLimitModule,
     GeoModule,
     AuthModule,
     UserModule,

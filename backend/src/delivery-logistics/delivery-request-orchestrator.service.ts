@@ -34,6 +34,7 @@ import {
   EnumSchedulingPolicyCustomerType,
   EnumSchedulingPolicyServiceType,
   EnumUserRoles,
+  Prisma,
 } from "@prisma/client";
 import { PrismaService } from "../prisma/prisma.service";
 import { Logger } from "@nestjs/common";
@@ -865,11 +866,17 @@ export class DeliveryRequestOrchestratorService {
   private async releasePriorQuoteId(
     quoteId: string,
     customerId: string,
+    tx?: Prisma.TransactionClient,
   ): Promise<void> {
+    // When called inside a $transaction, every read/write below rides the
+    // SAME tx client — the release commits (or rolls back) atomically with
+    // the delivery create that depends on it.
+    const db = tx ?? this.prisma;
+
     // Find ANY row holding this quoteId, regardless of customer (because
     // @unique is global) and regardless of status (we'll branch on status
     // below).
-    const priorWithQuote = await this.prisma.deliveryRequest.findFirst({
+    const priorWithQuote = await db.deliveryRequest.findFirst({
       where: { quoteId },
       select: { id: true, status: true, customerId: true },
     });
@@ -899,7 +906,7 @@ export class DeliveryRequestOrchestratorService {
 
     // Otherwise the prior row is in a releasable status (DRAFT, CANCELLED,
     // EXPIRED, CLOSED) — null its quoteId so the new create can proceed.
-    await this.prisma.deliveryRequest.update({
+    await db.deliveryRequest.update({
       where: { id: priorWithQuote.id },
       data: { quoteId: null },
     });
@@ -974,7 +981,12 @@ export class DeliveryRequestOrchestratorService {
       await this.releasePriorQuoteId(input.quoteId, input.customerId);
     }
 
-    const delivery = await this.prisma.deliveryRequest.create({
+    // ── TRANSACTION (P1 atomicity): the draft create + its status
+    // history row commit atomically — a mid-chain failure can no longer
+    // leave one without the other. Pure DB writes inside; nothing
+    // external is called in this window.
+    const delivery = await this.prisma.$transaction(async (tx) => {
+      const created = await tx.deliveryRequest.create({
       data: {
         customerId: input.customerId,
         quoteId: input.quoteId ?? null,
@@ -1040,9 +1052,9 @@ export class DeliveryRequestOrchestratorService {
       },
     });
 
-    await this.prisma.deliveryStatusHistory.create({
+    await tx.deliveryStatusHistory.create({
       data: {
-        deliveryId: delivery.id,
+        deliveryId: created.id,
         actorUserId: input.createdByUserId ?? customer.userId ?? null,
         actorRole: input.createdByRole ?? null,
         actorType: EnumDeliveryStatusHistoryActorType.USER,
@@ -1053,6 +1065,9 @@ export class DeliveryRequestOrchestratorService {
           : "Delivery draft created (no quote yet)",
       },
     });
+
+      return created;
+    }, { timeout: 15000, maxWait: 10000 });
 
     return { id: delivery.id };
   }
@@ -1159,9 +1174,14 @@ export class DeliveryRequestOrchestratorService {
     //
     // We use releasePriorQuoteId (not just CANCELLED) because a dealer may
     // have already saved a DRAFT with this quoteId and is now re-saving it.
-    await this.releasePriorQuoteId(input.quoteId, resolvedCustomerId);
+    // ── TRANSACTION (P1 atomicity): the release JOINS the same tx as the
+    // draft create + history row — if the create fails (unique race, DB
+    // hiccup), the release rolls back too and the old draft keeps its
+    // quoteId. Pure DB writes inside; nothing external in this window.
+    const delivery = await this.prisma.$transaction(async (tx) => {
+      await this.releasePriorQuoteId(input.quoteId, resolvedCustomerId, tx);
 
-    const delivery = await this.prisma.deliveryRequest.create({
+      const created = await tx.deliveryRequest.create({
       data: {
         customerId: resolvedCustomerId,
         quoteId: input.quoteId,
@@ -1227,9 +1247,9 @@ export class DeliveryRequestOrchestratorService {
       },
     });
 
-    await this.prisma.deliveryStatusHistory.create({
+    await tx.deliveryStatusHistory.create({
       data: {
-        deliveryId: delivery.id,
+        deliveryId: created.id,
         actorUserId: resolvedCustomerUserId,
         actorRole: EnumDeliveryStatusHistoryActorRole.PRIVATE_CUSTOMER,
         actorType: EnumDeliveryStatusHistoryActorType.USER,
@@ -1239,7 +1259,10 @@ export class DeliveryRequestOrchestratorService {
       },
     });
 
-    return { id: delivery.id };
+      return { id: created.id };
+    }, { timeout: 15000, maxWait: 10000 });
+
+    return delivery;
   }
 
   async createQuotePreview(input: CreateQuotePreviewInput) {
@@ -1462,9 +1485,19 @@ private async createIndividualDeliveryForResolvedCustomer(
   // We use releasePriorQuoteId (not just CANCELLED) because the individual
   // customer may have previously saved a DRAFT with this quoteId and is now
   // promoting it to a real delivery.
-  await this.releasePriorQuoteId(input.quoteId, customer.id);
+  // ── TRANSACTION (P1 atomicity) ──────────────────────────────────
+  // The writes below (quote release, delivery, status history,
+  // compliance, tracking session, payment) commit atomically: if ANY of
+  // them fails, ALL roll back — no orphan LISTED delivery without
+  // tracking/compliance/payment ever reaches the DB, and the customer
+  // retries cleanly. The Stripe charge STAYS OUTSIDE on purpose
+  // (external call — never inside a DB transaction; same house pattern
+  // as signupDriver's User+Driver transaction).
+  const { delivery, payment } = await this.prisma.$transaction(
+    async (tx) => {
+      await this.releasePriorQuoteId(input.quoteId, customer.id, tx);
 
-  const delivery = await this.prisma.deliveryRequest.create({
+      const delivery = await tx.deliveryRequest.create({
     data: {
       customerId: customer.id,
       quoteId: input.quoteId,
@@ -1530,7 +1563,7 @@ private async createIndividualDeliveryForResolvedCustomer(
     },
   });
 
-  await this.prisma.deliveryStatusHistory.create({
+  await tx.deliveryStatusHistory.create({
     data: {
       deliveryId: delivery.id,
       actorUserId: customer.userId,
@@ -1541,14 +1574,14 @@ private async createIndividualDeliveryForResolvedCustomer(
     },
   });
 
-  await this.prisma.deliveryCompliance.create({
+  await tx.deliveryCompliance.create({
     data: {
       deliveryId: delivery.id,
       vinVerificationCode: input.vinVerificationCode.trim(),
     },
   });
 
-  await this.prisma.trackingSession.create({
+  await tx.trackingSession.create({
     data: {
       deliveryId: delivery.id,
     },
@@ -1557,7 +1590,7 @@ private async createIndividualDeliveryForResolvedCustomer(
   // Create the Payment row first as PENDING — the shared helper will update
   // it to STRIPE/AUTHORIZED on success, or to FAILED with a user-facing
   // message on failure. Either outcome is visible in the DB.
-  const payment = await this.prisma.payment.create({
+  const payment = await tx.payment.create({
     data: {
       deliveryId: delivery.id,
       amount: quote.estimatedPrice,
@@ -1567,6 +1600,14 @@ private async createIndividualDeliveryForResolvedCustomer(
       authorizedAt: businessNow().toJSDate(),
     },
   });
+
+      return { delivery, payment };
+    },
+    // Headroom for a busy DB: six fast writes normally finish well under
+    // the 5s Prisma default, but a rolled-back creation is far costlier
+    // than waiting, so give the window explicit room.
+    { timeout: 15000, maxWait: 10000 },
+  );
 
   // Attempt the actual Stripe charge against the saved card.
   // Throws BadRequestException with a friendly message on failure — the
@@ -2420,9 +2461,16 @@ private async resolveIndividualCustomerForCreate(
     // releasePriorQuoteId handles both CANCELLED and DRAFT, scoped to the
     // same customer. The old row's quoteId is nulled; the row itself stays
     // (CANCELLED for audit, DRAFT for the dealer to delete via onSuccess).
-    await this.releasePriorQuoteId(input.quoteId, input.customerId);
+    //
+    // ── TRANSACTION (P1 atomicity): release + delivery + history +
+    // compliance + tracking session + payment commit atomically — no
+    // orphan LISTED delivery without tracking/compliance/payment. The
+    // Stripe charge below STAYS OUTSIDE on purpose (external call).
+    const { delivery, payment } = await this.prisma.$transaction(
+      async (tx) => {
+        await this.releasePriorQuoteId(input.quoteId, input.customerId, tx);
 
-    const delivery = await this.prisma.deliveryRequest.create({
+        const delivery = await tx.deliveryRequest.create({
       data: {
         customerId: input.customerId,
         quoteId: input.quoteId,
@@ -2493,7 +2541,7 @@ private async resolveIndividualCustomerForCreate(
       },
     });
 
-    await this.prisma.deliveryStatusHistory.create({
+    await tx.deliveryStatusHistory.create({
       data: {
         deliveryId: delivery.id,
         actorUserId: input.createdByUserId ?? null,
@@ -2505,14 +2553,14 @@ private async resolveIndividualCustomerForCreate(
       },
     });
 
-    await this.prisma.deliveryCompliance.create({
+    await tx.deliveryCompliance.create({
       data: {
         deliveryId: delivery.id,
         vinVerificationCode: input.vinVerificationCode.trim(),
       },
     });
 
-    await this.prisma.trackingSession.create({
+    await tx.trackingSession.create({
       data: {
         deliveryId: delivery.id,
       },
@@ -2524,7 +2572,7 @@ private async resolveIndividualCustomerForCreate(
 
     // Create the Payment row first; the shared Stripe helper will update it
     // to STRIPE/AUTHORIZED (prepaid) or leave it MANUAL (postpaid → invoice).
-    const payment = await this.prisma.payment.create({
+    const payment = await tx.payment.create({
       data: {
         deliveryId: delivery.id,
         amount: quote.estimatedPrice,
@@ -2537,6 +2585,11 @@ private async resolveIndividualCustomerForCreate(
         authorizedAt: businessNow().toJSDate(),
       },
     });
+
+        return { delivery, payment };
+      },
+      { timeout: 15000, maxWait: 10000 },
+    );
 
     // For PREPAID business customers, actually charge the saved card via Stripe.
     // Throws a user-facing BadRequestException on failure — no silent fallback.
@@ -2963,7 +3016,14 @@ private async resolveIndividualCustomerForCreate(
     // We DO set quoteId explicitly to `effectiveQuoteId` so that the row is
     // updated atomically when the dealer calculated a fresh quote in the
     // editor (input.quoteId) and the draft row still had the old/null quoteId.
-    const delivery = await this.prisma.deliveryRequest.update({
+    //
+    // ── TRANSACTION (P1 atomicity): promote + history + compliance +
+    // tracking session + payment commit atomically. Previously a failure
+    // mid-chain could leave a LISTED delivery in the driver feed with no
+    // VIN compliance row, no tracking session, and no payment. The Stripe
+    // charge below STAYS OUTSIDE on purpose (external call).
+    const { delivery, payment } = await this.prisma.$transaction(async (tx) => {
+      const delivery = await tx.deliveryRequest.update({
       where: { id: draft.id },
       data: {
         // Persist the resolved quoteId (covers draft-without-quote → promote
@@ -3035,7 +3095,7 @@ private async resolveIndividualCustomerForCreate(
     });
 
     // ─── Step 5: DeliveryStatusHistory (DRAFT → LISTED) ───────────────
-    await this.prisma.deliveryStatusHistory.create({
+    await tx.deliveryStatusHistory.create({
       data: {
         deliveryId: delivery.id,
         actorUserId: input.createdByUserId ?? null,
@@ -3048,7 +3108,7 @@ private async resolveIndividualCustomerForCreate(
     });
 
     // ─── Step 6: DeliveryCompliance (1:1) ─────────────────────────────
-    await this.prisma.deliveryCompliance.create({
+    await tx.deliveryCompliance.create({
       data: {
         deliveryId: delivery.id,
         vinVerificationCode: input.vinVerificationCode.trim(),
@@ -3056,7 +3116,7 @@ private async resolveIndividualCustomerForCreate(
     });
 
     // ─── Step 7: TrackingSession (1:1) ────────────────────────────────
-    await this.prisma.trackingSession.create({
+    await tx.trackingSession.create({
       data: {
         deliveryId: delivery.id,
       },
@@ -3065,7 +3125,7 @@ private async resolveIndividualCustomerForCreate(
     // ─── Step 8: Payment + PaymentEvent ───────────────────────────────
     // paymentType was already resolved at Step 3.5 (above, before the UPDATE)
     // so the postpaid pre-check could run. Re-use that value here.
-    const payment = await this.prisma.payment.create({
+    const payment = await tx.payment.create({
       data: {
         deliveryId: delivery.id,
         amount: quote.estimatedPrice,
@@ -3075,6 +3135,9 @@ private async resolveIndividualCustomerForCreate(
         authorizedAt: businessNow().toJSDate(),
       },
     });
+
+      return { delivery, payment };
+    }, { timeout: 15000, maxWait: 10000 });
 
     // ─── Step 9: Stripe charge (PREPAID only) ─────────────────────────
     // On failure, cancelDeliveryOnPaymentFailure flips the row LISTED → CANCELLED

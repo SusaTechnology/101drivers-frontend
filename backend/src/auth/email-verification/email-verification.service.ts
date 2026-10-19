@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable } from "@nestjs/common";
+import { BadRequestException, HttpException, HttpStatus, Injectable } from "@nestjs/common";
 import { PrismaService } from "../../prisma/prisma.service";
 import { EnumEmailVerificationPurpose } from "@prisma/client";
 import { createHash, randomInt } from "crypto";
@@ -6,12 +6,18 @@ import {
   MailService,
   VerificationAudience,
 } from "../../common/mail/mail.service";
+import {
+  RATE_LIMITS,
+  RATE_LIMIT_MESSAGE,
+  RateLimitService,
+} from "../../common/rate-limit/rate-limit.service";
 
 @Injectable()
 export class EmailVerificationService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly mailService: MailService
+    private readonly mailService: MailService,
+    private readonly rateLimit: RateLimitService
   ) {}
 
   private hashToken(token: string) {
@@ -28,6 +34,22 @@ export class EmailVerificationService {
     audience: VerificationAudience = "DRIVER"
   ) {
     const normalizedEmail = email.trim().toLowerCase();
+
+    // RATE LIMIT (P1 hardening): this method is the SINGLE choke point
+    // every outbound verification email flows through — driver/private/
+    // business signups, every resend path, and password reset. Budget
+    // per RECIPIENT ADDRESS so no inbox can be flooded no matter which
+    // route or IP the requests come from. Limits are far above real
+    // usage (the FE cools resends to 1/60s) — this only trips on abuse.
+    const allowed = this.rateLimit.consume(
+      `otp-send:${normalizedEmail}`,
+      RATE_LIMITS.OTP_SEND_PER_EMAIL.limit,
+      RATE_LIMITS.OTP_SEND_PER_EMAIL.windowMs
+    );
+    if (!allowed) {
+      throw new HttpException(RATE_LIMIT_MESSAGE, HttpStatus.TOO_MANY_REQUESTS);
+    }
+
     const rawToken = this.generateOtp();
     const tokenHash = this.hashToken(rawToken);
     const expiresAt = new Date(Date.now() + 15 * 60 * 1000);

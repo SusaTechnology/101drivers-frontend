@@ -21,10 +21,18 @@ import { JwtAuthGuard } from "./jwt/jwtAuth.guard";
 import { ForgotPasswordDto } from "./dto/ForgotPassword.dto";
 import { ResetPasswordDto } from "./dto/ResetPassword.dto";
 import { VerifyOtpDto } from "./dto/VerifyOtp.dto";
+import {
+  RATE_LIMITS,
+  RateLimitService,
+  assertIpBudget,
+} from "../common/rate-limit/rate-limit.service";
 @ApiTags("auth")
 @Controller("auth")
 export class AuthController {
-  constructor(private readonly authService: AuthService) {}
+  constructor(
+    private readonly authService: AuthService,
+    private readonly rateLimit: RateLimitService
+  ) {}
 
   @Post("login")
   @HttpCode(HttpStatus.OK)
@@ -67,6 +75,11 @@ export class AuthController {
     @Req() request: Request,
     @Res({ passthrough: true }) response: Response
   ): Promise<any> {
+    // Per-IP budget on the SEND path only (no verificationToken = an OTP
+    // email is about to go out). OTP-typing/verify calls are never limited.
+    if (!body.verificationToken) {
+      assertIpBudget(request, "signup-send", this.rateLimit, RATE_LIMITS.SIGNUP_SEND_PER_IP);
+    }
     return this.authService.signupDriver(body, request, response);
   }
 
@@ -101,6 +114,10 @@ export class AuthController {
     @Req() request: Request,
     @Res({ passthrough: true }) response: Response
   ): Promise<any> {
+    // Send path only — same contract as signup/driver above.
+    if (!(body as { verificationToken?: string }).verificationToken) {
+      assertIpBudget(request, "signup-send", this.rateLimit, RATE_LIMITS.SIGNUP_SEND_PER_IP);
+    }
     return this.authService.signupPrivateCustomer(body, request, response);
   }
 
@@ -115,8 +132,10 @@ export class AuthController {
   @Post("signup/customer/private/resend-otp")
   @HttpCode(HttpStatus.OK)
   async resendPrivateCustomerOtp(
-    @Body() body: { email: string }
+    @Body() body: { email: string },
+    @Req() request: Request
   ): Promise<any> {
+    assertIpBudget(request, "otp-resend", this.rateLimit, RATE_LIMITS.RESEND_PER_IP);
     return this.authService.resendPrivateCustomerOtp(body.email);
   }
 
@@ -127,6 +146,10 @@ export class AuthController {
     @Req() request: Request,
     @Res({ passthrough: true }) response: Response
   ): Promise<any> {
+    // Send path only — same contract as signup/driver above.
+    if (!(body as { verificationToken?: string }).verificationToken) {
+      assertIpBudget(request, "signup-send", this.rateLimit, RATE_LIMITS.SIGNUP_SEND_PER_IP);
+    }
     return this.authService.signupBusinessCustomer(body, request, response);
   }
 
@@ -146,8 +169,10 @@ export class AuthController {
   @Post("forgot-password")
   @HttpCode(HttpStatus.OK)
   async forgotPassword(
-    @Body() body: ForgotPasswordDto
+    @Body() body: ForgotPasswordDto,
+    @Req() request: Request
   ): Promise<{ success: boolean; message: string }> {
+    assertIpBudget(request, "forgot-password", this.rateLimit, RATE_LIMITS.PASSWORD_RESET_PER_IP);
     return this.authService.forgotPassword(body);
   }
 

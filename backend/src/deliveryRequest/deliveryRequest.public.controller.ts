@@ -6,6 +6,11 @@ import { DeliveryRequestService } from "./deliveryRequest.service";
 import { QuoteUsageLimitService } from "./quote-usage-limit.service";
 import { AuthService } from "../auth/auth.service";
 import {
+  RATE_LIMITS,
+  RateLimitService,
+  assertIpBudget,
+} from "../common/rate-limit/rate-limit.service";
+import {
   CreateIndividualDeliveryFromQuoteBody,
   CreateIndividualDeliveryDraftFromQuoteBody,
   IndividualQuotePreviewBody,
@@ -21,6 +26,7 @@ export class DeliveryRequestPublicController {
     protected readonly service: DeliveryRequestService,
     private readonly quoteUsageLimit: QuoteUsageLimitService,
     private readonly authService: AuthService,
+    private readonly rateLimit: RateLimitService,
   ) {}
 
   /**
@@ -93,8 +99,14 @@ async createIndividualDeliveryDraftFromQuote(
   })
   @common.HttpCode(common.HttpStatus.OK)
   async resendIndividualOtp(
-    @common.Body() body: { email?: string }
+    @common.Body() body: { email?: string },
+    @common.Req() request: Request
   ): Promise<any> {
+    // Per-IP budget mirroring /auth/signup/customer/private/resend-otp —
+    // both resends share one bucket so splitting traffic across the two
+    // routes can't double an attacker's budget. Per-EMAIL flooding is
+    // already capped inside EmailVerificationService.requestVerification.
+    assertIpBudget(request, "otp-resend", this.rateLimit, RATE_LIMITS.RESEND_PER_IP);
     const email = (body?.email ?? "").trim();
     if (!email) {
       throw new common.BadRequestException("email is required");

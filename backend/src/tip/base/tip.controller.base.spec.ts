@@ -14,6 +14,7 @@ import { AclValidateRequestInterceptor } from "../../interceptors/aclValidateReq
 import { map } from "rxjs";
 import { TipController } from "../tip.controller";
 import { TipService } from "../tip.service";
+import { PrismaService } from "../../prisma/prisma.service";
 
 const nonExistingId = "nonExistingId";
 const existingId = "existingId";
@@ -63,12 +64,32 @@ const service = {
   },
 };
 
+// TipController now injects PrismaService for its row-level ownership
+// gates (session customer resolution + tip→delivery owner lookup). The
+// mocked session below wires both so the gates PASS THROUGH for the
+// owned tip and 404 for the unknown one — the same contract production
+// enforces — instead of failing module compilation on the missing
+// dependency.
+const SESSION_CUSTOMER_ID = "sessionCustomerId";
+const prismaServiceMock = {
+  customer: {
+    findUnique: () => ({ id: SESSION_CUSTOMER_ID }),
+  },
+  tip: {
+    findUnique: ({ where }: { where?: { id?: string } }) =>
+      where?.id === existingId
+        ? { delivery: { customerId: SESSION_CUSTOMER_ID } }
+        : null,
+  },
+};
+
 const basicAuthGuard = {
   canActivate: (context: ExecutionContext) => {
     const argumentHost = context.switchToHttp();
     const request = argumentHost.getRequest();
     request.user = {
       roles: ["user"],
+      id: "sessionUserId",
     };
     return true;
   },
@@ -104,6 +125,10 @@ describe("Tip", () => {
         {
           provide: TipService,
           useValue: service,
+        },
+        {
+          provide: PrismaService,
+          useValue: prismaServiceMock,
         },
       ],
       controllers: [TipController],
