@@ -295,13 +295,17 @@ export function DriverOnboardingComplete({ token }: DriverOnboardingCompleteProp
     defaultValues: {
       ssn: "",
       licenseNumber: "",
-      licenseState: "",
+      // California pre-selected: 101 Drivers operates exclusively in CA,
+      // so the overwhelming majority of drivers hold a CA license and
+      // live in CA (the signup ZIP guard is California-only anyway).
+      // The dropdown stays fully editable for out-of-state licenses.
+      licenseState: "CA",
       licenseFrontUrl: "",
       licenseBackUrl: "",
       residentialAddressLine1: "",
       residentialAddressLine2: "",
       residentialCity: "",
-      residentialState: "",
+      residentialState: "CA",
       selfiePhotoUrl: "",
     },
   });
@@ -847,7 +851,11 @@ export function DriverOnboardingComplete({ token }: DriverOnboardingCompleteProp
                   Issuing State{!watchLicenseState && <span className="text-red-500">*</span>}
                 </Label>
                 <Select
-                  value={watchLicenseState}
+                  // Never hand Radix an empty string: with value="" the
+                  // selection state is "defined but matches no item", which
+                  // combined with the validation re-render could swallow a
+                  // click. undefined = a clean "no selection" placeholder.
+                  value={watchLicenseState || undefined}
                   onValueChange={handleLicenseStateChange}
                 >
                   <SelectTrigger
@@ -862,7 +870,18 @@ export function DriverOnboardingComplete({ token }: DriverOnboardingCompleteProp
                   >
                     <SelectValue placeholder="Select state" />
                   </SelectTrigger>
-                  <SelectContent className="max-h-64 overflow-y-auto">
+                  {/* position="popper" — THE glitch fix: the repo default is
+                      "item-aligned", which floats the list OVER the trigger
+                      and auto-scrolls it on open, so the list shifts under
+                      the pointer and clicks land wrong / close the popup
+                      (the "worked after a few tries" symptom). popper
+                      anchors the list BELOW the trigger like a normal
+                      dropdown — clicks land exactly where they look. */}
+                  <SelectContent
+                    position="popper"
+                    className="max-h-64 overflow-y-auto z-50"
+                    sideOffset={4}
+                  >
                     {US_STATES.map((s) => (
                       <SelectItem key={s.value} value={s.value}>
                         {s.value} — {s.label}
@@ -1129,9 +1148,8 @@ export function DriverOnboardingComplete({ token }: DriverOnboardingCompleteProp
                     )}
                   </Label>
                   <Select
-                    value={watchState}
+                    value={watchState || undefined}
                     onValueChange={handleStateChange}
-                    disabled={false}
                   >
                     <SelectTrigger
                       className={cn(
@@ -1145,7 +1163,14 @@ export function DriverOnboardingComplete({ token }: DriverOnboardingCompleteProp
                     >
                       <SelectValue placeholder="Select state" />
                     </SelectTrigger>
-                    <SelectContent className="max-h-64 overflow-y-auto">
+                    {/* Same glitch fix as the License State dropdown above:
+                        popper anchors the list below the trigger instead of
+                        item-aligned's floating/auto-scrolling overlay. */}
+                    <SelectContent
+                      position="popper"
+                      className="max-h-64 overflow-y-auto z-50"
+                      sideOffset={4}
+                    >
                       {US_STATES.map((s) => (
                         <SelectItem key={s.value} value={s.value}>
                           {s.value} — {s.label}
