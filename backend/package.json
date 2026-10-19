@@ -8,6 +8,8 @@
     "build": "prisma generate && nest build",
     "test": "jest",
     "seed": "ts-node scripts/seed.ts",
+    "email:campaign": "ts-node scripts/send-invite-approval-emails.ts",
+    "email:campaign:dry": "ts-node scripts/send-invite-approval-emails.ts --dry-run",
     "seed:referral": "ts-node scripts/seed-referral-settings.ts",
     "referral:backfill": "ts-node scripts/backfill-referral-payouts.ts",
     "pricing:backfill-personal-flat": "ts-node scripts/backfill-personal-flat-pricing.ts",
