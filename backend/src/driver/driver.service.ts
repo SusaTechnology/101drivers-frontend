@@ -229,6 +229,29 @@ export class DriverService extends DriverServiceBase {
       body.profilePhotoUrl
     );
 
+    // Primary ZIP (same authoritative field as signup). Same rule as the
+    // signup guard: 5 digits, California range 90001–96199 — the driver
+    // app's preferences form already enforces this client-side, this is
+    // the server backstop so Driver.residentialZip can never drift
+    // out-of-state through the profile endpoint.
+    const normalizedResidentialZip =
+      typeof body.residentialZip === "string" && body.residentialZip.trim()
+        ? body.residentialZip.trim()
+        : null;
+    if (normalizedResidentialZip) {
+      if (!/^\d{5}$/.test(normalizedResidentialZip)) {
+        throw new BadRequestException(
+          "A valid 5-digit ZIP code is required."
+        );
+      }
+      const zipNumeric = parseInt(normalizedResidentialZip, 10);
+      if (zipNumeric < 90001 || zipNumeric > 96199) {
+        throw new BadRequestException(
+          "We currently only operate in California. Enter a California ZIP code (90001–96199)."
+        );
+      }
+    }
+
     await this.prisma.$transaction(async (tx) => {
       await tx.driver.update({
         where: { id: driverId },
@@ -236,6 +259,9 @@ export class DriverService extends DriverServiceBase {
           ...(body.phone !== undefined ? { phone: normalizedPhone } : {}),
           ...(body.profilePhotoUrl !== undefined
             ? { profilePhotoUrl: normalizedProfilePhotoUrl }
+            : {}),
+          ...(normalizedResidentialZip
+            ? { residentialZip: normalizedResidentialZip }
             : {}),
         },
       });
@@ -367,8 +393,22 @@ if (body.alerts) {
       }
     });
 
+    // ZIP changed on the preferences page → re-derive the service-area
+    // badge (green/gray) exactly like signup/onboarding zip changes.
+    // Best-effort and non-blocking: a geocode outage must never fail a
+    // preferences save — the next zip change or polygon save re-runs.
+    if (normalizedResidentialZip) {
+      void this.serviceArea
+        .evaluateDriverByZip({
+          driverId,
+          zipRaw: normalizedResidentialZip,
+          source: "profile preferences update",
+        })
+        .catch(() => {});
+    }
+
     return this.domain.findUnique({ id: driverId });
-  } 
+  }
  async getWaitlistedDrivers(): Promise<any[]> {
   return this.domain.findMany({
     where: {

@@ -264,7 +264,11 @@ export default function DriverPreferencesPage() {
       form.reset({
         phone: driverProfile.phone || '',
         profilePhotoUrl: driverProfile.profilePhotoUrl || '',
-        primaryZip: driverProfile.preferences?.city || '',
+        // Primary ZIP = the ZIP captured at REGISTRATION (Driver.residentialZip
+        // — the same value admin sees and the service-area badge derives
+        // from). Fall back to the legacy preferences.city slot for drivers
+        // who saved a ZIP here before the residentialZip sync existed.
+        primaryZip: driverProfile.residentialZip || driverProfile.preferences?.city || '',
         radius: driverProfile.preferences?.radiusMiles?.toString() || '25',
         homeBaseLat: driverProfile.location?.homeBaseLat ?? undefined,
         homeBaseLng: driverProfile.location?.homeBaseLng ?? undefined,
@@ -523,7 +527,15 @@ export default function DriverPreferencesPage() {
     const payload = {
       phone: data.phone || undefined,
       profilePhotoUrl: data.profilePhotoUrl || undefined,
+      // Authoritative ZIP: updates Driver.residentialZip (what admin sees,
+      // what service-area eligibility derives from) so the driver app and
+      // admin always agree. The backend re-runs the service-area check on
+      // change.
+      residentialZip: data.primaryZip || undefined,
       preferences: {
+        // Legacy slot: the job feed's city-preference scoring reads
+        // preferences.city, so keep writing the ZIP there exactly as
+        // before while residentialZip is now the source of truth.
         city: data.primaryZip || undefined,
         radiusMiles: data.radius ? parseFloat(data.radius) : null,
       },

@@ -7,6 +7,7 @@ import {
   IsString,
   IsUrl,
   ArrayUnique,
+  Matches,
 } from "class-validator";
 import { Type } from "class-transformer";
 
@@ -69,6 +70,22 @@ export class UpdateDriverProfileBody {
   @IsOptional()
   @IsString()
   phone?: string | null;
+
+  /**
+   * The driver's primary/home ZIP — the SAME authoritative field the
+   * signup form writes (Driver.residentialZip, shown on admin driver
+   * pages and used for service-area eligibility). The preferences page
+   * keeps it in sync when the driver edits it, so the driver app and
+   * admin always agree. Mirrors the signup rule: 5 digits, California
+   * range 90001–96199 (enforced in the service).
+   */
+  @swagger.ApiProperty({ required: false, nullable: true })
+  @IsOptional()
+  @IsString()
+  @Matches(/^\d{5}$/, {
+    message: "residentialZip must be a 5-digit ZIP code",
+  })
+  residentialZip?: string | null;
 
   @swagger.ApiProperty({ required: false, nullable: true })
   @IsOptional()

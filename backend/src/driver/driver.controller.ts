@@ -420,6 +420,12 @@ async rejectDriver(
 
         phone: true,
 
+        // Primary/home ZIP — captured at signup, authoritative (admin
+        // shows it; the service-area badge derives from it). Exposed so
+        // the driver preferences page prefills the Primary ZIP field with
+        // the registration value instead of an empty/legacy one.
+        residentialZip: true,
+
         preferences: {
           select: {
             id: true,
