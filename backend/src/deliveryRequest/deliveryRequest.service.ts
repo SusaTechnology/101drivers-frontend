@@ -25,6 +25,7 @@ import {
 } from "@prisma/client";
 
 import { PrismaService } from "../prisma/prisma.service";
+import { AnalyticsService } from "../analytics/analytics.service";
 import { DeliveryRequestServiceBase } from "./base/deliveryRequest.service.base";
 import { DeliveryRequestDomain } from "../domain/deliveryRequest/deliveryRequest.domain";
 import { DeliveryRequestPolicyService } from "../domain/deliveryRequest/deliveryRequestPolicy.service";
@@ -71,7 +72,11 @@ constructor(
   private readonly deliveryCancellationEngine: DeliveryCancellationEngine,
   private readonly adminDeliveryEngine: AdminDeliveryEngine,
   private readonly paymentPayoutEngine: PaymentPayoutEngine,
-  private readonly schedulingPolicyEngine: SchedulingPolicyEngine
+  private readonly schedulingPolicyEngine: SchedulingPolicyEngine,
+  // Product analytics (Task 72) — DELIVERY_CREATED events at the ONE
+  // choke point every creation path funnels through. recordSafe never
+  // throws; a ledger failure can never fail a creation.
+  private readonly analytics: AnalyticsService
 
 
 ) {
@@ -167,7 +172,20 @@ async createQuotePreview(input: CreateQuotePreviewInput): Promise<any> {
       recipientPhone: this.trimOptionalString(input.recipientPhone) ?? null,
     });
 
-    return this.domain.findUnique({ id: created.id });
+    const delivery = await this.domain.findUnique({ id: created.id });
+
+    // Product analytics: dealer delivery created (Task 72).
+    this.analytics.recordSafe({
+      type: "DELIVERY_CREATED",
+      metadata: {
+        deliveryId: created.id,
+        status: (delivery as any)?.status ?? null,
+        source: "dealer",
+        customerId: (delivery as any)?.customerId ?? null,
+      },
+    });
+
+    return delivery;
   }
 
   async promoteDraftToDelivery(
@@ -185,7 +203,20 @@ async createQuotePreview(input: CreateQuotePreviewInput): Promise<any> {
       recipientPhone: this.trimOptionalString(input.recipientPhone) ?? null,
     });
 
-    return this.domain.findUnique({ id: promoted.id });
+    const delivery = await this.domain.findUnique({ id: promoted.id });
+
+    // Product analytics: dealer draft promoted to a real delivery (Task 72).
+    this.analytics.recordSafe({
+      type: "DELIVERY_CREATED",
+      metadata: {
+        deliveryId: promoted.id,
+        status: (delivery as any)?.status ?? null,
+        source: "draft-promotion",
+        customerId: (delivery as any)?.customerId ?? null,
+      },
+    });
+
+    return delivery;
   }
 
   async createIndividualDeliveryFromAcceptedQuote(
@@ -239,6 +270,18 @@ async createQuotePreview(input: CreateQuotePreviewInput): Promise<any> {
     }
 
     const delivery = await this.domain.findUnique({ id: result.deliveryId });
+
+    // Product analytics: individual (anonymous funnel) delivery created
+    // (Task 72). Fires only on action === "CREATED" (guarded above).
+    this.analytics.recordSafe({
+      type: "DELIVERY_CREATED",
+      metadata: {
+        deliveryId: result.deliveryId,
+        status: (delivery as any)?.status ?? null,
+        source: "individual",
+        customerId: (delivery as any)?.customerId ?? null,
+      },
+    });
 
     return {
       action: "CREATED",

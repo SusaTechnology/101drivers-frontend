@@ -41,6 +41,7 @@ import { InvestorLeadModule } from "./investorLead/investorLead.module";
 import { GatewayModule } from "./gateways/gateway.module";
 import { AppEventsModule } from "./common/appEvents/appEvents.module";
 import { RateLimitModule } from "./common/rate-limit/rate-limit.service";
+import { AnalyticsModule } from "./analytics/analytics.module";
 import { HealthModule } from "./health/health.module";
 import { PrismaModule } from "./prisma/prisma.module";
 import { SecretsManagerModule } from "./providers/secrets/secretsManager.module";
@@ -84,6 +85,9 @@ import { GeoModule } from "./geo/geo.module";
     // Global leaf rate limiter (see common/rate-limit) — per-email and
     // per-IP budgets for every public endpoint that sends an email.
     RateLimitModule,
+    // Product analytics (Task 72) — event ledger + admin metrics API.
+    // Leaf module; business modules import it for recordSafe() hooks.
+    AnalyticsModule,
     GeoModule,
     AuthModule,
     UserModule,

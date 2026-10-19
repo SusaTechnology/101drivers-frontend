@@ -15,11 +15,15 @@ import { DeliveryPricingEditEngine } from "src/domain/deliveryRequest/deliveryPr
 import { DeliveryRequestPublicController } from "./deliveryRequest.public.controller";
 import { SchedulingPolicyEngineModule } from "../domain/schedulingPolicy/schedulingPolicy.module";
 import { QuoteUsageLimitService } from "./quote-usage-limit.service";
+import { AnalyticsModule } from "../analytics/analytics.module";
 import { AppSettingModule } from "../appSetting/appSetting.module";
 
 @Module({
   imports: [
     DeliveryRequestModuleBase,
+    // Product analytics (Task 72) — leaf module; DeliveryRequestService
+    // records DELIVERY_CREATED via AnalyticsService.recordSafe().
+    AnalyticsModule,
     forwardRef(() => AuthModule),
     DeliveryLogisticsModule,
     forwardRef(() => GatewayModule),

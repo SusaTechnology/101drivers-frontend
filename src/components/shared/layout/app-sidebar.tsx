@@ -33,6 +33,7 @@ import {
   CreditCard,
   Gavel,
   LayoutDashboard,
+  LineChart,
   LifeBuoy,
   Newspaper,
   PanelLeftClose,
@@ -65,6 +66,7 @@ const ITEM_ICONS: Record<string, LucideIcon> = {
   '/admin-cms': Newspaper,
   '/admin-insurance-reporting': ShieldCheck,
   '/admin-reports': BarChart3,
+  '/admin-metrics': LineChart,
   '/admin-config': Settings2,
   '/admin-audit-logs': ScrollText,
 };

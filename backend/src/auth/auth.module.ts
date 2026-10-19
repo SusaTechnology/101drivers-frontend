@@ -18,6 +18,7 @@ import { CustomerModule } from "../customer/customer.module";
 import { DriverModule } from "../driver/driver.module";
 import { ReferralModule } from "../referral/referral.module";
 import { EmailVerificationService } from "./email-verification/email-verification.service";
+import { AnalyticsModule } from "../analytics/analytics.module";
 import { MailModule } from "src/common/mail/mail.module";
 import { NotificationEventEngine } from "src/domain/notificationEvent/notificationEvent.engine";
 import { PrismaService } from "../prisma/prisma.service";
@@ -25,6 +26,9 @@ import { GeoModule } from "../geo/geo.module";
 @Module({
   imports: [
     GeoModule,
+    // Product analytics (Task 72) — leaf module; AuthService records
+    // SIGNUP/LOGIN events via AnalyticsService.recordSafe().
+    AnalyticsModule,
     forwardRef(() => UserModule),
     forwardRef(() => CustomerModule),
     forwardRef(() => DriverModule),

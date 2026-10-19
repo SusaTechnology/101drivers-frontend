@@ -2132,3 +2132,38 @@ model ServiceAreaZipCache {
   lng       Float
   fetchedAt DateTime @default(now())
 }
+
+// ── Product analytics: immutable event ledger (Task 72) ─────────────
+// Big-company pattern: every web visit, signup, login and delivery
+// creation lands here as ONE immutable row. Server-side events
+// (SIGNUP / LOGIN / DELIVERY_CREATED) are recorded by the services that
+// perform the action; PAGE_VIEW is pinged by the SPA and enriched with
+// the session user when a valid Bearer token is present.
+//
+// This table IS the historical record — it is never pruned, so
+// all-time graphs and raw record audits work from day one. Dashboards
+// aggregate on the fly over the (type, occurredAt) index; if volume
+// ever demands it, add a daily rollup table WITHOUT dropping this one.
+// type: PAGE_VIEW | SIGNUP | LOGIN | DELIVERY_CREATED
+model AnalyticsEvent {
+  id         String    @id @default(cuid())
+  type       String
+  occurredAt DateTime  @default(now())
+  // Session user id when known (User.id — never a Customer/Driver row id)
+  userId     String?
+  // Primary role of the session user at event time
+  role       String?
+  // FE page-view session id (sticky per browser tab session)
+  sessionId  String?
+  // PAGE_VIEW: app route path. Other types: null (use metadata)
+  path       String?
+  referrer   String?
+  userAgent  String?
+  // Free-form extras, e.g. {deliveryId, status, source} or {email domain}
+  metadata   Json?
+  createdAt  DateTime  @default(now())
+
+  @@index([type, occurredAt])
+  @@index([occurredAt])
+  @@index([userId])
+}

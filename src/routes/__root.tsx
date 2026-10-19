@@ -4,6 +4,7 @@ import { TanStackDevtools } from '@tanstack/react-devtools'
 import { useEffect } from 'react'
 import { PWAInstallPrompt } from '../components/pwa/PWAInstallPrompt'
 import { NotFoundScreen } from '../components/shared/NotFoundScreen'
+import { PageViewTracker } from '../components/shared/PageViewTracker'
 
 /**
  * Pathname prefixes that should NOT be indexed by search engines.
@@ -103,6 +104,9 @@ export const Route = createRootRoute({
     useRobotsMeta()
     return (
       <>
+        {/* Product analytics (Task 72) — one PAGE_VIEW per navigation,
+            fully silent, renders nothing. */}
+        <PageViewTracker />
         <Outlet />
         <PWAInstallPrompt />
         <TanStackDevtools

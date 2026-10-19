@@ -17,6 +17,7 @@ export interface AdminNavItem {
 
 export const navItems: AdminNavItem[] = [
   { href: '/admin-dashboard', label: 'Dashboard', active: true },
+  { href: '/admin-metrics', label: 'Metrics' },
   { href: '/admin-users', label: 'Users' },
   { href: '/admin-deliveries', label: 'Deliveries' },
   {

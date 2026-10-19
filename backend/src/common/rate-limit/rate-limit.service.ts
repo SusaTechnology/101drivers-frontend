@@ -37,6 +37,13 @@ export const RATE_LIMITS = {
   RESEND_PER_IP: { limit: 10, windowMs: 15 * 60 * 1000 },
   /** Forgot-password calls per client IP. */
   PASSWORD_RESET_PER_IP: { limit: 10, windowMs: 15 * 60 * 1000 },
+  /**
+   * Analytics PAGE_VIEW pings per client IP (Task 72). Generous for an
+   * honest human clicking through the SPA; hostile to ledger-flooding
+   * scripts. Ingest NEVER blocks any other flow — worst case a 429 on
+   * the ping itself, which the FE swallows silently.
+   */
+  ANALYTICS_INGEST_PER_IP: { limit: 120, windowMs: 60 * 1000 },
 } as const;
 
 export const RATE_LIMIT_MESSAGE =

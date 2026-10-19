@@ -25,6 +25,7 @@ import { ResetPasswordDto } from "./dto/ResetPassword.dto";
 import { NotificationEventEngine } from "../domain/notificationEvent/notificationEvent.engine";
 import { MailService } from "src/common/mail/mail.service";
 import { AppEventsService, APP_EVENT } from "../common/appEvents/appEvents.service";
+import { AnalyticsService } from "../analytics/analytics.service";
 import { ReferralService } from "../referral/referral.service";
 import {
   EnumCustomerCustomerType,
@@ -102,6 +103,9 @@ export class AuthService {
     // Signup flows ping it so admin surfaces (Users-page stat cards) can
     // live-update without AuthModule depending on the socket gateway.
     private readonly appEvents: AppEventsService,
+    // Product analytics (Task 72) — recordSafe never throws; a ledger
+    // failure can never fail an auth flow.
+    private readonly analytics: AnalyticsService,
   ) {}
 
   private normalizeIdentifier(identifier: string): string {
@@ -300,6 +304,16 @@ export class AuthService {
     response.cookie("refreshToken", refreshToken, {
       ...cookieOptions,
       maxAge: REFRESH_COOKIE_MAX_MS,
+    });
+
+    // Product analytics: successful login (fire-and-forget, never fails
+    // the auth flow). Server-side recording — never trusted from clients.
+    this.analytics.recordSafe({
+      type: "LOGIN",
+      userId: user.id,
+      role: Array.isArray(user.roles) && user.roles.length
+        ? String(user.roles[0])
+        : null,
     });
 
     return {
@@ -672,6 +686,13 @@ export class AuthService {
     // Ping admin surfaces (Users-page stat cards) — new waitlisted driver.
     this.appEvents.emit(APP_EVENT.USER_STATS_CHANGED);
 
+    // Product analytics: driver registration completed (Task 72).
+    this.analytics.recordSafe({
+      type: "SIGNUP",
+      userId,
+      role: "DRIVER",
+    });
+
     return this.issueToken(
       userId,
       username,
@@ -978,6 +999,14 @@ export class AuthService {
       // Ping admin surfaces (Users-page stat cards) — new private customer.
       this.appEvents.emit(APP_EVENT.USER_STATS_CHANGED);
 
+      // Product analytics: private-customer registration completed via the
+      // two-step OTP flow (Task 72).
+      this.analytics.recordSafe({
+        type: "SIGNUP",
+        userId,
+        role: "PRIVATE_CUSTOMER",
+      });
+
       return this.issueToken(
         userId,
         username,
@@ -1075,6 +1104,14 @@ export class AuthService {
     // Ping admin surfaces (Users-page stat cards) — new private customer
     // (legacy full-payload path).
     this.appEvents.emit(APP_EVENT.USER_STATS_CHANGED);
+
+    // Product analytics: private-customer registration completed via the
+    // legacy full-payload path (Task 72).
+    this.analytics.recordSafe({
+      type: "SIGNUP",
+      userId,
+      role: "PRIVATE_CUSTOMER",
+    });
 
     return this.issueToken(
       userId,
@@ -1295,6 +1332,13 @@ export class AuthService {
 
     // Ping admin surfaces (Users-page stat cards) — new business customer.
     this.appEvents.emit(APP_EVENT.USER_STATS_CHANGED);
+
+    // Product analytics: business-customer registration completed (Task 72).
+    this.analytics.recordSafe({
+      type: "SIGNUP",
+      userId,
+      role: "BUSINESS_CUSTOMER",
+    });
 
     return this.issueToken(
       userId,

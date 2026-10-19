@@ -84,6 +84,7 @@ import { Route as AdminPayoutDetailIndexRouteImport } from './routes/admin-payou
 import { Route as AdminPaymentsIndexRouteImport } from './routes/admin-payments/index'
 import { Route as AdminPaymentDetailIndexRouteImport } from './routes/admin-payment-detail/index'
 import { Route as AdminNotificationPolicyIndexRouteImport } from './routes/admin-notification-policy/index'
+import { Route as AdminMetricsIndexRouteImport } from './routes/admin-metrics/index'
 import { Route as AdminLandingPageSettingsIndexRouteImport } from './routes/admin-landing-page-settings/index'
 import { Route as AdminInsuranceReportingIndexRouteImport } from './routes/admin-insurance-reporting/index'
 import { Route as AdminDisputesIndexRouteImport } from './routes/admin-disputes/index'
@@ -532,6 +533,11 @@ const AdminNotificationPolicyIndexRoute =
     path: '/admin-notification-policy/',
     getParentRoute: () => rootRouteImport,
   } as any)
+const AdminMetricsIndexRoute = AdminMetricsIndexRouteImport.update({
+  id: '/admin-metrics/',
+  path: '/admin-metrics/',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AdminLandingPageSettingsIndexRoute =
   AdminLandingPageSettingsIndexRouteImport.update({
     id: '/admin-landing-page-settings/',
@@ -836,6 +842,7 @@ export interface FileRoutesByFullPath {
   '/admin-disputes/': typeof AdminDisputesIndexRoute
   '/admin-insurance-reporting/': typeof AdminInsuranceReportingIndexRoute
   '/admin-landing-page-settings/': typeof AdminLandingPageSettingsIndexRoute
+  '/admin-metrics/': typeof AdminMetricsIndexRoute
   '/admin-notification-policy/': typeof AdminNotificationPolicyIndexRoute
   '/admin-payment-detail/': typeof AdminPaymentDetailIndexRoute
   '/admin-payments/': typeof AdminPaymentsIndexRoute
@@ -962,6 +969,7 @@ export interface FileRoutesByTo {
   '/admin-disputes': typeof AdminDisputesIndexRoute
   '/admin-insurance-reporting': typeof AdminInsuranceReportingIndexRoute
   '/admin-landing-page-settings': typeof AdminLandingPageSettingsIndexRoute
+  '/admin-metrics': typeof AdminMetricsIndexRoute
   '/admin-notification-policy': typeof AdminNotificationPolicyIndexRoute
   '/admin-payment-detail': typeof AdminPaymentDetailIndexRoute
   '/admin-payments': typeof AdminPaymentsIndexRoute
@@ -1090,6 +1098,7 @@ export interface FileRoutesById {
   '/admin-disputes/': typeof AdminDisputesIndexRoute
   '/admin-insurance-reporting/': typeof AdminInsuranceReportingIndexRoute
   '/admin-landing-page-settings/': typeof AdminLandingPageSettingsIndexRoute
+  '/admin-metrics/': typeof AdminMetricsIndexRoute
   '/admin-notification-policy/': typeof AdminNotificationPolicyIndexRoute
   '/admin-payment-detail/': typeof AdminPaymentDetailIndexRoute
   '/admin-payments/': typeof AdminPaymentsIndexRoute
@@ -1219,6 +1228,7 @@ export interface FileRouteTypes {
     | '/admin-disputes/'
     | '/admin-insurance-reporting/'
     | '/admin-landing-page-settings/'
+    | '/admin-metrics/'
     | '/admin-notification-policy/'
     | '/admin-payment-detail/'
     | '/admin-payments/'
@@ -1345,6 +1355,7 @@ export interface FileRouteTypes {
     | '/admin-disputes'
     | '/admin-insurance-reporting'
     | '/admin-landing-page-settings'
+    | '/admin-metrics'
     | '/admin-notification-policy'
     | '/admin-payment-detail'
     | '/admin-payments'
@@ -1472,6 +1483,7 @@ export interface FileRouteTypes {
     | '/admin-disputes/'
     | '/admin-insurance-reporting/'
     | '/admin-landing-page-settings/'
+    | '/admin-metrics/'
     | '/admin-notification-policy/'
     | '/admin-payment-detail/'
     | '/admin-payments/'
@@ -1579,6 +1591,7 @@ export interface RootRouteChildren {
   AdminDisputesIndexRoute: typeof AdminDisputesIndexRoute
   AdminInsuranceReportingIndexRoute: typeof AdminInsuranceReportingIndexRoute
   AdminLandingPageSettingsIndexRoute: typeof AdminLandingPageSettingsIndexRoute
+  AdminMetricsIndexRoute: typeof AdminMetricsIndexRoute
   AdminNotificationPolicyIndexRoute: typeof AdminNotificationPolicyIndexRoute
   AdminPaymentDetailIndexRoute: typeof AdminPaymentDetailIndexRoute
   AdminPaymentsIndexRoute: typeof AdminPaymentsIndexRoute
@@ -2187,6 +2200,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminNotificationPolicyIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/admin-metrics/': {
+      id: '/admin-metrics/'
+      path: '/admin-metrics'
+      fullPath: '/admin-metrics/'
+      preLoaderRoute: typeof AdminMetricsIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/admin-landing-page-settings/': {
       id: '/admin-landing-page-settings/'
       path: '/admin-landing-page-settings'
@@ -2618,6 +2638,7 @@ const rootRouteChildren: RootRouteChildren = {
   AdminDisputesIndexRoute: AdminDisputesIndexRoute,
   AdminInsuranceReportingIndexRoute: AdminInsuranceReportingIndexRoute,
   AdminLandingPageSettingsIndexRoute: AdminLandingPageSettingsIndexRoute,
+  AdminMetricsIndexRoute: AdminMetricsIndexRoute,
   AdminNotificationPolicyIndexRoute: AdminNotificationPolicyIndexRoute,
   AdminPaymentDetailIndexRoute: AdminPaymentDetailIndexRoute,
   AdminPaymentsIndexRoute: AdminPaymentsIndexRoute,
