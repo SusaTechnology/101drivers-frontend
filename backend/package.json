@@ -21,7 +21,8 @@
     "docker:dev": "docker-compose -f docker-compose.dev.yml up -d",
     "package:container": "docker build .",
     "compose:up": "docker-compose up -d",
-    "compose:down": "docker-compose down --volumes"
+    "compose:down": "docker-compose down --volumes",
+    "restore:identity-original": "ts-node scripts/restore-driver-identity-original.ts"
   },
   "dependencies": {
     "@apollo/server": "^4.9.4",
