@@ -294,6 +294,8 @@ export function DriverOnboardingComplete({ token }: DriverOnboardingCompleteProp
     setValue,
     watch,
     trigger,
+    setError,
+    clearErrors,
     formState: { errors },
   } = useForm<OnboardingCompleteFormData>({
     resolver: zodResolver(onboardingCompleteSchema),
@@ -389,8 +391,28 @@ export function DriverOnboardingComplete({ token }: DriverOnboardingCompleteProp
       }
 
       if (!res.ok) {
-        const errData = await res.json().catch(() => ({}));
-        throw new Error(errData.message || `Request failed (${res.status})`);
+        const errData: any = await res.json().catch(() => ({}));
+        const code: string | undefined = errData?.code;
+        const message: string =
+          errData?.message || `Request failed (${res.status})`;
+
+        // Identity reuse (one driver account per SSN / per driver license):
+        // the server answers a NEUTRAL 409 — nothing about the existing
+        // account. Surface it ON the field (red border + message), scroll
+        // the driver there, and skip the generic error toast — the field
+        // itself is the explanation.
+        if (code === "SSN_ALREADY_REGISTERED") {
+          setError("ssn", { type: "manual", message });
+          focusField("ssn");
+          return;
+        }
+        if (code === "LICENSE_ALREADY_REGISTERED") {
+          setError("licenseNumber", { type: "manual", message });
+          focusField("licenseNumber");
+          return;
+        }
+
+        throw new Error(message);
       }
 
       toast.success("Onboarding information submitted successfully!", {
@@ -422,10 +444,13 @@ export function DriverOnboardingComplete({ token }: DriverOnboardingCompleteProp
   const handleSSNChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
       const rawDigits = e.target.value.replace(/\D/g, "").slice(0, 9);
+      // A fresh edit dismisses a server "already registered" error — the
+      // driver is correcting the value, the red state should follow.
+      clearErrors("ssn");
       setSsnDisplay(rawDigits);
       setValue("ssn", rawDigits, { shouldValidate: true });
     },
-    [setValue]
+    [setValue, clearErrors]
   );
 
   // State change handler
@@ -528,6 +553,15 @@ export function DriverOnboardingComplete({ token }: DriverOnboardingCompleteProp
 
   const onSubmit = (data: OnboardingCompleteFormData) => {
     submitOnboarding(data);
+  };
+
+  // Bring an errored field into view after the state update renders it.
+  const focusField = (id: string) => {
+    requestAnimationFrame(() => {
+      const el = document.getElementById(id);
+      el?.scrollIntoView({ behavior: "smooth", block: "center" });
+      (el as HTMLElement | null)?.focus?.({ preventScroll: true });
+    });
   };
 
   // ==================== AUTH / TOKEN GUARD RENDERING ====================
@@ -819,7 +853,11 @@ export function DriverOnboardingComplete({ token }: DriverOnboardingCompleteProp
                     id="licenseNumber"
                     {...register("licenseNumber", {
                     maxLength: 15,
-                    onChange: () => { if (watchLicenseNumber?.trim()) trigger("licenseNumber"); }
+                    onChange: () => {
+                      // Any edit dismisses a server "already registered" error.
+                      clearErrors("licenseNumber");
+                      if (watchLicenseNumber?.trim()) trigger("licenseNumber");
+                    }
                   })}
                     className={cn(
                       "h-14 rounded-2xl pr-10 transition-colors",
