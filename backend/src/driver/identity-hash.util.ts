@@ -11,10 +11,13 @@
 // are never stored in the hash columns at all.
 //
 // ⚠ KEEP IN SYNC with prisma/migrations/<ts>_driver_identity_uniqueness:
-// the migration backfills these hashes in SQL with pgcrypto's hmac() using
-// the SAME pepper string and the SAME normalization. If you set the
-// IDENTITY_HASH_PEPPER env var, the backfill must be re-run with the same
-// value (ask for the re-backfill script before rotating).
+// that migration ONLY adds the nullable unique columns — it never backfills
+// or modifies existing rows (legacy rows stay NULL and are excluded from
+// uniqueness). Hashes are computed and stored exclusively by THIS module at
+// signup / profile save, so the rule applies to new registrations only.
+// If you rotate IDENTITY_HASH_PEPPER, rows written under the old pepper
+// keep their old hashes (pepper is baked into the stored value) — new
+// signups would not collide with them until they re-save their identity.
 const PEPPER = process.env.IDENTITY_HASH_PEPPER || "101drivers-identity-hash-v1";
 
 import { createHmac } from "crypto";
