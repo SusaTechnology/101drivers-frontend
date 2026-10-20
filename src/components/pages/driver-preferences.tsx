@@ -5,6 +5,7 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { cn } from '@/lib/utils'
+import { useIsDesktop } from '@/lib/useIsDesktop'
 import { safeLocalStorage } from '@/lib/safeStorage'
 import { useTheme } from '@/lib/theme'
 import { toast } from 'sonner'
@@ -140,6 +141,11 @@ const MOCK_PREFERENCES = {
 }
 
 export default function DriverPreferencesPage() {
+  // Camera-only photo policy: the profile selfie must be captured live with
+  // the phone camera — desktop file-picker uploads are blocked (desktop
+  // browsers silently ignore the `capture` attribute, so the guard is
+  // UI-level, same as the onboarding and pickup-checklist pages).
+  const isDesktop = useIsDesktop()
   const [mounted, setMounted] = useState(false)
   const { theme, setTheme } = useTheme()
   const navigate = useNavigate()
@@ -432,6 +438,10 @@ export default function DriverPreferencesPage() {
   }
 
   const handlePreviewClick = () => {
+    // Camera-only: on desktop there is no native camera behind the picker —
+    // opening it would fall back to choosing a file from disk, which the
+    // photo policy forbids. The UI shows the "use your phone" note instead.
+    if (isDesktop) return
     fileInputRef.current?.click()
   }
 
@@ -695,31 +705,34 @@ export default function DriverPreferencesPage() {
                     ref={fileInputRef}
                     type="file"
                     accept="image/*"
+                    capture="user"
                     className="hidden"
                     onChange={handleFileChange}
                   />
-                  {!displayPhotoUrl && !uploadPhoto.isPending && (
-                    <p className="text-xs text-slate-400 dark:text-slate-500 leading-relaxed">
-                      Tap to add a photo
+                  {isDesktop ? (
+                    <p className="text-xs text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-900/10 border border-amber-300 dark:border-amber-800 rounded-xl px-3 py-2 leading-relaxed">
+                      Camera only — please open this page on your phone to take or retake your selfie with the camera.
                     </p>
-                  )}
-                  {uploadPhoto.isPending && (
-                    <p className="text-xs text-primary flex items-center gap-1">
-                      <Loader2 className="w-3 h-3 animate-spin" />
-                      Uploading...
-                    </p>
-                  )}
-                  {displayPhotoUrl && !uploadPhoto.isPending && (
-                    <p className="text-xs text-emerald-600 dark:text-emerald-400">
-                      Photo ready ·{' '}
-                      <button
-                        type="button"
-                        onClick={handlePreviewClick}
-                        className="font-bold underline underline-offset-2 text-primary hover:text-primary/80 transition"
-                      >
-                        Change selfie
-                      </button>
-                    </p>
+                  ) : (
+                    <>
+                      {!displayPhotoUrl && !uploadPhoto.isPending && (
+                        <p className="text-xs text-slate-400 dark:text-slate-500 leading-relaxed">
+                          Tap to add a photo
+                        </p>
+                      )}
+                      {displayPhotoUrl && !uploadPhoto.isPending && (
+                        <p className="text-xs text-emerald-600 dark:text-emerald-400">
+                          Photo ready ·{' '}
+                          <button
+                            type="button"
+                            onClick={handlePreviewClick}
+                            className="font-bold underline underline-offset-2 text-primary hover:text-primary/80 transition"
+                          >
+                            Change selfie
+                          </button>
+                        </p>
+                      )}
+                    </>
                   )}
                 </div>
               </div>

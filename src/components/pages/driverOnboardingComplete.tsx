@@ -53,6 +53,7 @@ import {
   Camera,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useIsDesktop } from "@/lib/useIsDesktop";
 import {
   useDataQuery,
   useDataMutation,
@@ -214,6 +215,10 @@ interface DriverOnboardingCompleteProps {
 }
 
 export function DriverOnboardingComplete({ token }: DriverOnboardingCompleteProps) {
+  // Camera-only photo policy: license + selfie must be captured live with a
+  // phone camera — desktop file-picker uploads are blocked (desktop browsers
+  // silently ignore the `capture` attribute, so the guard is UI-level).
+  const isDesktop = useIsDesktop();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [ssnDisplay, setSsnDisplay] = useState("");
   const [ssnVisible, setSsnVisible] = useState(false);
@@ -895,6 +900,22 @@ export function DriverOnboardingComplete({ token }: DriverOnboardingCompleteProp
               </div>
 
               {/* License Photos - Front and Back */}
+              {isDesktop && (
+                <div className="p-4 rounded-2xl bg-amber-50 dark:bg-amber-900/10 border-2 border-amber-300 dark:border-amber-800 flex items-start gap-3">
+                  <div className="w-9 h-9 rounded-xl bg-amber-500/15 flex items-center justify-center shrink-0">
+                    <AlertCircle className="w-5 h-5 text-amber-600 dark:text-amber-400" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-extrabold text-amber-900 dark:text-amber-200">
+                      Use Your Phone to Take These Photos
+                    </p>
+                    <p className="text-[12px] text-amber-700 dark:text-amber-300 mt-1">
+                      License and selfie photos must be captured live with your phone's camera — desktop
+                      file uploads are disabled. Please open this page on your mobile device to continue.
+                    </p>
+                  </div>
+                </div>
+              )}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 {/* License Front */}
                 <div
@@ -924,14 +945,25 @@ export function DriverOnboardingComplete({ token }: DriverOnboardingCompleteProp
                       <img
                         src={licenseFrontPreview}
                         alt="License front"
-                        className="w-full h-32 object-cover rounded-xl border border-slate-200 dark:border-slate-700 cursor-pointer hover:opacity-80 transition-opacity"
-                        onClick={() => licenseFrontInputRef.current?.click()}
+                        className={cn(
+                          "w-full h-32 object-cover rounded-xl border border-slate-200 dark:border-slate-700",
+                          !isDesktop && "cursor-pointer hover:opacity-80 transition-opacity"
+                        )}
+                        onClick={isDesktop ? undefined : () => licenseFrontInputRef.current?.click()}
                       />
                       {licenseFrontUploading && (
                         <p className="text-[10px] text-sky-500 mt-1">Uploading...</p>
                       )}
-                      <p className="text-[10px] text-slate-400 mt-1">Tap the photo to retake or change</p>
+                      <p className="text-[10px] text-slate-400 mt-1">
+                        {isDesktop ? "Photos can only be taken on your phone." : "Tap the photo to retake or change"}
+                      </p>
                     </>
+                  ) : isDesktop ? (
+                    <div className="w-full h-32 rounded-xl border-2 border-dashed border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-800/40 flex flex-col items-center justify-center gap-1.5 text-center px-3">
+                      <Camera className="w-6 h-6 text-slate-400" />
+                      <span className="text-xs font-bold text-slate-600 dark:text-slate-300">Camera only — use your phone</span>
+                      <span className="text-[10px] text-slate-400 leading-snug">Open this page on your phone to take this photo with your camera.</span>
+                    </div>
                   ) : (
                     <button
                       type="button"
@@ -975,14 +1007,25 @@ export function DriverOnboardingComplete({ token }: DriverOnboardingCompleteProp
                       <img
                         src={licenseBackPreview}
                         alt="License back"
-                        className="w-full h-32 object-cover rounded-xl border border-slate-200 dark:border-slate-700 cursor-pointer hover:opacity-80 transition-opacity"
-                        onClick={() => licenseBackInputRef.current?.click()}
+                        className={cn(
+                          "w-full h-32 object-cover rounded-xl border border-slate-200 dark:border-slate-700",
+                          !isDesktop && "cursor-pointer hover:opacity-80 transition-opacity"
+                        )}
+                        onClick={isDesktop ? undefined : () => licenseBackInputRef.current?.click()}
                       />
                       {licenseBackUploading && (
                         <p className="text-[10px] text-sky-500 mt-1">Uploading...</p>
                       )}
-                      <p className="text-[10px] text-slate-400 mt-1">Tap the photo to retake or change</p>
+                      <p className="text-[10px] text-slate-400 mt-1">
+                        {isDesktop ? "Photos can only be taken on your phone." : "Tap the photo to retake or change"}
+                      </p>
                     </>
+                  ) : isDesktop ? (
+                    <div className="w-full h-32 rounded-xl border-2 border-dashed border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-800/40 flex flex-col items-center justify-center gap-1.5 text-center px-3">
+                      <Camera className="w-6 h-6 text-slate-400" />
+                      <span className="text-xs font-bold text-slate-600 dark:text-slate-300">Camera only — use your phone</span>
+                      <span className="text-[10px] text-slate-400 leading-snug">Open this page on your phone to take this photo with your camera.</span>
+                    </div>
                   ) : (
                     <button
                       type="button"
@@ -1235,45 +1278,69 @@ export function DriverOnboardingComplete({ token }: DriverOnboardingCompleteProp
                     onChange={handleSelfieChange}
                     className="hidden"
                   />
-                  <button
-                    type="button"
-                    onClick={() => selfieInputRef.current?.click()}
-                    disabled={isSubmitting || selfieUploading}
-                    className={cn(
-                      "w-20 h-20 rounded-2xl border-2 border-dashed flex items-center justify-center transition-all",
-                      "hover:border-lime-500 hover:bg-lime-50 dark:hover:bg-lime-900/10",
-                      errors.selfiePhotoUrl
-                        ? "border-red-400 text-red-400"
-                        : selfiePreview
-                          ? "border-green-400 text-green-500"
-                          : "border-slate-300 dark:border-slate-600 text-slate-400"
-                    )}
-                  >
-                    {selfieUploading ? (
-                      <div className="animate-spin w-6 h-6 border-2 border-current border-t-transparent rounded-full" />
-                    ) : selfiePreview ? (
-                      <img src={selfiePreview} alt="Selfie" className="w-full h-full object-cover rounded-2xl" />
-                    ) : (
-                      <Camera className="w-8 h-8" />
-                    )}
-                  </button>
-                  <div className="flex-1">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => selfieInputRef.current?.click()}
-                      disabled={isSubmitting || selfieUploading}
-                      className="w-full h-10 rounded-xl"
-                    >
-                      <Camera className="w-4 h-4 mr-2" />
-                      {selfieUploading ? "Uploading..." : selfiePreview ? "Change Photo" : "Take / Upload Selfie"}
-                    </Button>
-                    {selfiePreview && (
-                      <p className="text-[10px] text-green-600 dark:text-green-400 mt-1 font-medium">
-                        Photo uploaded successfully
-                      </p>
-                    )}
-                  </div>
+                  {isDesktop ? (
+                    <>
+                      <div className="w-20 h-20 rounded-2xl border-2 border-dashed border-slate-300 dark:border-slate-600 flex items-center justify-center shrink-0">
+                        {selfieUploading ? (
+                          <div className="animate-spin w-6 h-6 border-2 border-slate-400 border-t-transparent rounded-full" />
+                        ) : selfiePreview ? (
+                          <img src={selfiePreview} alt="Selfie" className="w-full h-full object-cover rounded-2xl" />
+                        ) : (
+                          <Camera className="w-8 h-8 text-slate-400" />
+                        )}
+                      </div>
+                      <div className="flex-1">
+                        <div className="w-full rounded-xl border border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/10 px-3 py-2.5">
+                          <p className="text-xs font-extrabold text-amber-900 dark:text-amber-200">Camera only — use your phone</p>
+                          <p className="text-[10px] text-amber-700 dark:text-amber-300 mt-0.5">
+                            Open this page on your phone to take your selfie with the camera. Desktop file uploads are disabled.
+                          </p>
+                        </div>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => selfieInputRef.current?.click()}
+                        disabled={isSubmitting || selfieUploading}
+                        className={cn(
+                          "w-20 h-20 rounded-2xl border-2 border-dashed flex items-center justify-center transition-all",
+                          "hover:border-lime-500 hover:bg-lime-50 dark:hover:bg-lime-900/10",
+                          errors.selfiePhotoUrl
+                            ? "border-red-400 text-red-400"
+                            : selfiePreview
+                              ? "border-green-400 text-green-500"
+                              : "border-slate-300 dark:border-slate-600 text-slate-400"
+                        )}
+                      >
+                        {selfieUploading ? (
+                          <div className="animate-spin w-6 h-6 border-2 border-current border-t-transparent rounded-full" />
+                        ) : selfiePreview ? (
+                          <img src={selfiePreview} alt="Selfie" className="w-full h-full object-cover rounded-2xl" />
+                        ) : (
+                          <Camera className="w-8 h-8" />
+                        )}
+                      </button>
+                      <div className="flex-1">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={() => selfieInputRef.current?.click()}
+                          disabled={isSubmitting || selfieUploading}
+                          className="w-full h-10 rounded-xl"
+                        >
+                          <Camera className="w-4 h-4 mr-2" />
+                          {selfieUploading ? "Uploading..." : selfiePreview ? "Change Photo" : "Take / Upload Selfie"}
+                        </Button>
+                        {selfiePreview && (
+                          <p className="text-[10px] text-green-600 dark:text-green-400 mt-1 font-medium">
+                            Photo uploaded successfully
+                          </p>
+                        )}
+                      </div>
+                    </>
+                  )}
                 </div>
                 {errors.selfiePhotoUrl && (
                   <p className="text-xs text-red-500 font-medium">

@@ -526,9 +526,19 @@ function parseUsersDeepLink(
 // Clear filters button — both just change state, and the mirror effect
 // below persists exactly what the admin currently sees. Dashboard deep
 // links still win on a fresh mount (an explicit tile click is a fresh
-// intent), and page/pageSize are intentionally NOT persisted: a restored
-// page number past a changed result count would read as a broken table.
+// intent).
+//
+// PAGE is persisted too (same rationale as filters: the admin works page
+// by page — open a user on page 12, come back, and the table must land on
+// page 12 again, not page 1). The original concern — a restored page
+// number past a changed result count reading as a broken table — is
+// handled by the clamp effect below: once the V2 response reports
+// totalPages, any restored page beyond it snaps back to the last valid
+// page instead of rendering empty rows.
 const ADMIN_USERS_FILTERS_KEY = 'admin-users-filters-v1';
+// Ordered ids of the users page the admin last viewed — the detail page's
+// Previous/Next pager walks exactly this working set.
+const ADMIN_USERS_WORKING_SET_KEY = 'admin-users-working-set-v1';
 
 interface StoredAdminUserFilters {
   searchQuery: string;
@@ -537,6 +547,7 @@ interface StoredAdminUserFilters {
   adminStatusFilter: string;
   zipFilter: string;
   zipRegion: string;
+  page: number;
 }
 
 function readStoredAdminUserFilters(): Partial<StoredAdminUserFilters> | null {
@@ -557,6 +568,16 @@ function readStoredAdminUserFilters(): Partial<StoredAdminUserFilters> | null {
     ] as const) {
       const value = source[key];
       if (typeof value === 'string') out[key] = value.slice(0, 200);
+    }
+    // page: integer 1..10000 only — anything else is treated as absent so a
+    // tampered/stale entry can never select a nonsense page.
+    if (
+      typeof source.page === 'number' &&
+      Number.isInteger(source.page) &&
+      source.page >= 1 &&
+      source.page <= 10000
+    ) {
+      out.page = source.page;
     }
     return out;
   } catch {
@@ -905,7 +926,13 @@ export default function AdminUsersPage() {
   // Typing a ZIP prefix means the admin is doing something finer than a
   // named region — the onChange handler flips the picker to "custom"
   // instead of silently keeping a region filter alongside it.
-  const [page, setPage] = useState(1);
+  // Page restores from the same stored snapshot (see persistence notes
+  // above): open a user on page 12, come back, land on page 12 again.
+  const [page, setPage] = useState(
+    storedFilters?.page !== undefined && storedFilters.page >= 1
+      ? storedFilters.page
+      : 1,
+  );
   const [pageSize, setPageSize] = useState(25);
 
   // The dashboard can navigate here with a NEW deep link while this page
@@ -941,12 +968,13 @@ export default function AdminUsersPage() {
           adminStatusFilter,
           zipFilter,
           zipRegion,
+          page,
         }),
       );
     } catch {
       // best-effort only
     }
-  }, [searchQuery, roleFilter, statusFilter, adminStatusFilter, zipFilter, zipRegion]);
+  }, [searchQuery, roleFilter, statusFilter, adminStatusFilter, zipFilter, zipRegion, page]);
 
   // ==================== DIALOG STATE ====================
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -988,6 +1016,46 @@ export default function AdminUsersPage() {
   const summary = v2Data?.summary;
   const summaryLoading = usersLoading;
   const refetchSummary = refetchUsers;
+
+  // ── Stale-page clamp ──
+  // The restored page can outlive its own result set (filters changed in
+  // another tab, rows deleted since, deep link changed the filter mix).
+  // Once the server reports totalPages, a page beyond it snaps back to the
+  // last valid page — the table self-heals instead of rendering empty rows.
+  // Within-bounds pages are untouched (no fight with the admin's hand).
+  // (Named v2TotalPages — the pagination footer below declares its own
+  // totalPages for the rendering path.)
+  const v2TotalPages = v2Data?.pagination?.totalPages;
+  useEffect(() => {
+    if (v2TotalPages !== undefined && page > v2TotalPages) {
+      setPage(Math.max(1, v2TotalPages));
+    }
+  }, [v2TotalPages, page]);
+
+  // ── Working-set ids (drives Prev/Next on the user detail page) ──
+  // The rows currently on screen, in table order, are the admin's working
+  // set for this page. Persisting them lets the detail page offer
+  // "Previous / Next user" navigation without going back through the list —
+  // same sessionStorage scope (per tab) and same best-effort contract as the
+  // filter persistence above. Scoped to THIS page of results on purpose:
+  // at the end of the working page the admin returns to the list (which now
+  // lands on the same page) instead of the app silently paging through the
+  // whole directory.
+  const workingSetIds = useMemo(
+    () => (v2Data?.rows ?? []).map((r) => r.id),
+    [v2Data?.rows],
+  );
+  useEffect(() => {
+    if (workingSetIds.length === 0) return;
+    try {
+      sessionStorage.setItem(
+        ADMIN_USERS_WORKING_SET_KEY,
+        JSON.stringify({ ids: workingSetIds, savedAt: Date.now() }),
+      );
+    } catch {
+      // best-effort only
+    }
+  }, [workingSetIds]);
 
   // ── Status stat cards (dedicated global-stats endpoint) ──
   // Rows of small per-status count cards above the table: Drivers first,

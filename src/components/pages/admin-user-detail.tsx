@@ -1,6 +1,6 @@
 // components/pages/admin-user-detail.tsx
 // Admin User Detail Page - Real API Integration
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import { Link, useNavigate } from '@tanstack/react-router';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -9,6 +9,8 @@ import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import {
   ArrowLeft,
+  ChevronLeft,
+  ChevronRight,
   LogOut,
   History,
   Bell,
@@ -349,6 +351,82 @@ export default function AdminUserDetailPage({ userId }: AdminUserDetailPageProps
   const navigate = useNavigate();
   const { actionItems, signOut: adminSignOut } = useAdminActions();
   const actorUserId = getActorUserId();
+
+  // ══ Working-set pager (Previous / Next user) ══
+  // The users list persists the ordered ids of the page the admin last
+  // viewed (sessionStorage, per tab — see admin-users.tsx working-set
+  // section). This pager walks exactly that working set, so "I'm done with
+  // this user → next user" never requires going back through the list and
+  // re-paging to find where you were. Hidden entirely when the current user
+  // isn't in the stored set (deep link, direct URL, stale tab) — the buttons
+  // don't render instead of guessing an order the admin never chose.
+  const workingSetIds = useMemo<string[]>(() => {
+    try {
+      const raw = sessionStorage.getItem('admin-users-working-set-v1');
+      if (!raw) return [];
+      const parsed: unknown = JSON.parse(raw);
+      const ids = (parsed as { ids?: unknown })?.ids;
+      return Array.isArray(ids)
+        ? ids.filter((id): id is string => typeof id === 'string')
+        : [];
+    } catch {
+      return [];
+    }
+  }, []);
+
+  const workingSetIndex = workingSetIds.indexOf(userId);
+  const prevUserId = workingSetIndex > 0 ? workingSetIds[workingSetIndex - 1] : null;
+  const nextUserId =
+    workingSetIndex >= 0 && workingSetIndex < workingSetIds.length - 1
+      ? workingSetIds[workingSetIndex + 1]
+      : null;
+
+  const goToUser = useCallback(
+    (id: string) => {
+      // Same navigation pattern the users list uses (handleViewUser) — the
+      // template-literal path is how this param route is addressed everywhere
+      // in the codebase and keeps TanStack's param typing happy.
+      navigate({ to: `/admin-user-detail/${id}` });
+    },
+    [navigate],
+  );
+
+  // Keyboard shortcuts: Alt+← / Alt+→ walk the working set. Alt keeps the
+  // shortcuts from colliding with typing — plain arrows keep scrolling and
+  // text-caret behavior exactly as before. Fields are skipped while a form
+  // control is focused so editing is never interrupted.
+  useEffect(() => {
+    if (!prevUserId && !nextUserId) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (!e.altKey) return;
+      const target = e.target as HTMLElement | null;
+      if (
+        target &&
+        (target.isContentEditable ||
+          ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName))
+      ) {
+        return;
+      }
+      if (e.key === 'ArrowLeft' && prevUserId) {
+        e.preventDefault();
+        goToUser(prevUserId);
+      } else if (e.key === 'ArrowRight' && nextUserId) {
+        e.preventDefault();
+        goToUser(nextUserId);
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [prevUserId, nextUserId, goToUser]);
+
+  // Switching users via the pager must start each profile clean: the
+  // previous profile's edit session and SSN visibility never leak into the
+  // next user, and the view resets to the top of the new profile.
+  useEffect(() => {
+    setEditMode('none');
+    setSsnVisible(false);
+    window.scrollTo({ top: 0, behavior: 'auto' });
+  }, [userId]);
 
   // Dialog state — 'delete-user' is used for orphaned User rows (no
   // Customer/Driver attached) so admin can clean up failed signups in-place.
@@ -1071,7 +1149,7 @@ export default function AdminUserDetailPage({ userId }: AdminUserDetailPageProps
       />
 
       <main className="w-full max-w-[1440px] mx-auto px-6 lg:px-8 py-10 lg:py-12">
-        {/* Breadcrumb */}
+        {/* Breadcrumb + working-set pager */}
         <div className="flex flex-wrap items-center gap-2 text-sm">
           <Link
             to="/admin-users"
@@ -1082,6 +1160,37 @@ export default function AdminUserDetailPage({ userId }: AdminUserDetailPageProps
           </Link>
           <span className="text-slate-400">/</span>
           <span className="font-black text-slate-900 dark:text-white">User details</span>
+          {workingSetIndex >= 0 && workingSetIds.length > 0 && (
+            <div className="ml-auto inline-flex items-center gap-1.5">
+              <span className="text-xs font-bold text-slate-400 whitespace-nowrap mr-1">
+                User {workingSetIndex + 1} of {workingSetIds.length}
+              </span>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={!prevUserId}
+                onClick={() => prevUserId && goToUser(prevUserId)}
+                className="rounded-lg h-8 px-2.5"
+                title="Previous user in your list (Alt+←)"
+              >
+                <ChevronLeft className="w-4 h-4" />
+                <span className="hidden sm:inline ml-1 text-xs">Prev</span>
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={!nextUserId}
+                onClick={() => nextUserId && goToUser(nextUserId)}
+                className="rounded-lg h-8 px-2.5"
+                title="Next user in your list (Alt+→)"
+              >
+                <span className="hidden sm:inline mr-1 text-xs">Next</span>
+                <ChevronRight className="w-4 h-4" />
+              </Button>
+            </div>
+          )}
         </div>
 
         {/* Loading State */}
