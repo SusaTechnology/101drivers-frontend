@@ -18,19 +18,19 @@ import { useCmsCareersList } from "@/lib/cms";
 const WHY_SECTIONS = [
   {
     icon: Briefcase,
-    title: "Real work, real routes",
+    title: "Real routes, real pay",
     description:
-      "Every role here supports real deliveries moving across California every day — no filler projects.",
+      "Every role supports real deliveries moving across California every day — no filler projects.",
   },
   {
     icon: Clock,
-    title: "Fast decisions",
+    title: "Decisions in days, not weeks",
     description:
       "Applications are reviewed within a few days. You will always hear back, one way or the other.",
   },
   {
     icon: HeartHandshake,
-    title: "Support that shows up",
+    title: "A team that picks up",
     description:
       "The same fast, direct support we give customers and drivers is what you get as a teammate.",
   },
@@ -74,9 +74,11 @@ function CareersPage() {
             Careers at 101 Drivers
           </h1>
           <p className="text-sm lg:text-base text-slate-500 dark:text-slate-400 mt-3 leading-relaxed">
-            We are a small California-only team moving cars for dealerships and
-            individuals — with documented proof at every step. Want to help
-            build it? Below are the roles we are hiring for right now.
+            We are a fast-growing car delivery service opening service areas
+            across Southern California for businesses, dealerships, rental
+            companies, repair shops, and individuals who need personal vehicle
+            deliveries — pickup from a shop, drop-off at a dealership, or
+            straight to your door, with documented proof at every step.
           </p>
         </section>
 
@@ -100,14 +102,11 @@ function CareersPage() {
           ))}
         </section>
 
-        {/* Open roles — cards generated from the src/content/careers registry */}
+        {/* Current openings — cards generated from the src/content/careers registry */}
         <section>
-          <h2 className="text-xl font-black text-slate-900 dark:text-white mb-1">
-            Open roles
+          <h2 className="text-xl font-black text-slate-900 dark:text-white mb-6">
+            Current openings
           </h2>
-          <p className="text-sm text-slate-500 dark:text-slate-400 mb-6">
-            Sample listings — contact us even if your role is not listed.
-          </p>
           <ContentCardGrid>
             {roles.map((role) => (
               <ContentCard
