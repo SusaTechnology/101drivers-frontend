@@ -7,7 +7,7 @@
 // "track of records" table. Data comes from the ADMIN-only
 // /api/analytics/* endpoints; all numbers are server-authoritative.
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   Activity,
   BarChart3,
@@ -43,6 +43,7 @@ import { navItems } from '@/lib/items/navItems'
 import { Brand } from '@/lib/items/brand'
 import { useAdminActions } from '@/hooks/useAdminActions'
 import {
+  LIVE_REFRESH_MS,
   metricsWindow,
   useAnalyticsHourly,
   useAnalyticsOverview,
@@ -148,6 +149,13 @@ export default function AdminMetricsPage() {
   const hourly = useAnalyticsHourly(win, range === '24H')
   const records = useAnalyticsRecords(win, recordsType, recordsPage)
 
+  // Ticking clock so the "Updated Ns ago" readout stays honest between polls.
+  const [nowTick, setNowTick] = useState(() => Date.now())
+  useEffect(() => {
+    const t = setInterval(() => setNowTick(Date.now()), 5000)
+    return () => clearInterval(t)
+  }, [])
+
   const data = overview.data
 
   // Main chart rows: hourly for 24H, daily for 7D/30D, monthly for 12M.
@@ -175,6 +183,12 @@ export default function AdminMetricsPage() {
   }, [range, hourly.data, data])
 
   const isFetching = overview.isFetching || (range === '24H' && hourly.isFetching)
+
+  // Live readout: seconds since the last successful overview poll.
+  const secondsAgo =
+    overview.dataUpdatedAt > 0
+      ? Math.max(0, Math.round((nowTick - overview.dataUpdatedAt) / 1000))
+      : null
 
   const changeRange = (next: MetricsRange) => {
     setRange(next)
@@ -240,10 +254,29 @@ export default function AdminMetricsPage() {
                 </button>
               ))}
             </div>
+            <div
+              className="flex items-center gap-1.5 rounded-lg border bg-muted/40 px-2.5 py-1.5 text-xs"
+              title={`Auto-refreshes every ${LIVE_REFRESH_MS / 1000}s while this tab is open`}
+            >
+              <span className="relative flex h-2 w-2">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-green-500 opacity-60" />
+                <span className="relative inline-flex h-2 w-2 rounded-full bg-green-500" />
+              </span>
+              <span className="font-semibold text-green-600">Live</span>
+              {secondsAgo !== null && (
+                <span className="text-muted-foreground tabular-nums">
+                  · {secondsAgo}s ago
+                </span>
+              )}
+            </div>
             <Button
               variant="outline"
               size="sm"
-              onClick={() => overview.refetch()}
+              onClick={() => {
+                overview.refetch()
+                hourly.refetch()
+                records.refetch()
+              }}
               disabled={isFetching}
               className="gap-1.5"
             >

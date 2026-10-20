@@ -2,12 +2,20 @@
 // GET /api/analytics/overview, /analytics/timeseries, /analytics/records.
 // All endpoints are ADMIN-gated server-side; the fetch wrapper attaches
 // the session token and the backend rejects non-admins with 403.
+//
+// LIVE DASHBOARD: every hook polls on the shared interval below so the
+// page reflects new visits/sign-ups/log-ins/deliveries without a manual
+// refresh (React Query skips interval fires while the tab is hidden, so
+// a backgrounded dashboard costs nothing).
 
 import { useDataQuery } from '@/lib/tanstack/dataQuery';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || '';
 
 export type MetricsRange = '24H' | '7D' | '30D' | '12M' | 'CUSTOM';
+
+/** Shared live-poll cadence — the metrics page is real-time, not a snapshot. */
+export const LIVE_REFRESH_MS = 15 * 1000;
 
 export interface MetricsWindow {
   from: string; // ISO
@@ -103,8 +111,8 @@ export function useAnalyticsOverview(win: MetricsWindow) {
     )}&to=${encodeURIComponent(win.to)}`,
     noFilter: true,
     queryKey: ['analytics', 'overview', win.from, win.to],
-    staleTime: 30 * 1000,
-    refetchInterval: 60 * 1000, // big-company live feel without hammering
+    staleTime: LIVE_REFRESH_MS,
+    refetchInterval: LIVE_REFRESH_MS,
   });
 }
 
@@ -117,8 +125,8 @@ export function useAnalyticsHourly(win: MetricsWindow, enabled: boolean) {
     noFilter: true,
     queryKey: ['analytics', 'timeseries-hour', win.from, win.to],
     enabled,
-    staleTime: 30 * 1000,
-    refetchInterval: 60 * 1000,
+    staleTime: LIVE_REFRESH_MS,
+    refetchInterval: LIVE_REFRESH_MS,
   });
 }
 
@@ -153,7 +161,7 @@ export function useAnalyticsRecords(
     apiEndPoint: `${API_BASE_URL}/api/analytics/records?${params.toString()}`,
     noFilter: true,
     queryKey: ['analytics', 'records', type, win.from, win.to, String(page)],
-    staleTime: 15 * 1000,
-    refetchInterval: 60 * 1000,
+    staleTime: LIVE_REFRESH_MS,
+    refetchInterval: LIVE_REFRESH_MS,
   });
 }

@@ -437,8 +437,27 @@ export default function AdminUserDetailPage({ userId }: AdminUserDetailPageProps
   const [editMode, setEditMode] = useState<'none' | 'user' | 'customer' | 'driver'>('none');
   const [postpaidEnabled, setPostpaidEnabled] = useState(false);
 
-  // SSN visibility state
+  // SSN visibility state — masked by default. The eye toggle also drives the
+  // AUDITED decrypt fetch: the detail payload only ever carries the last 4
+  // digits; the full SSN is decrypted server-side on demand via
+  // GET /api/users/:id/driver-ssn, which writes an AdminAuditLog row for
+  // every successful reveal. staleTime 0 + enabled-gated so each explicit
+  // reveal is a fresh, individually-audited call — nothing decrypts just
+  // because the profile page opened.
   const [ssnVisible, setSsnVisible] = useState(false);
+  const ssnRevealQuery = useDataQuery<{
+    available: boolean;
+    ssn?: string;
+    lastFour?: string | null;
+    reason?: string;
+    message?: string;
+  }>({
+    apiEndPoint: `${import.meta.env.VITE_API_URL}/api/users/${userId}/driver-ssn`,
+    queryKey: ['admin', 'driver-ssn', userId],
+    enabled: ssnVisible,
+    noFilter: true,
+    staleTime: 0,
+  });
 
   // Photo dialog state
   const [photoDialogOpen, setPhotoDialogOpen] = useState(false);
@@ -2308,22 +2327,27 @@ export default function AdminUserDetailPage({ userId }: AdminUserDetailPageProps
                               </div>
                             </div>
                           )}
-                          {/* SSN with show/hide toggle */}
+                          {/* SSN — masked by default; revealing decrypts the stored
+                              ciphertext through the audit-logged reveal endpoint.
+                              Drivers registered before encrypted storage have no
+                              full SSN on file (only the last 4 was ever kept). */}
                           {user.driver.ssnLastFour && (
                             <div>
                               <Label className="text-xs font-bold text-slate-500">SSN</Label>
                               <div className="text-sm flex items-center gap-2 mt-1">
                                 <ShieldCheck className="w-4 h-4 text-slate-400" />
                                 <span className="font-mono tracking-wider">
-                                  {ssnVisible
-                                    ? user.driver.ssnLastFour
-                                    : '•••-••-' + user.driver.ssnLastFour.slice(-4)}
+                                  {!ssnVisible || ssnRevealQuery.isLoading
+                                    ? `•••-••-${user.driver.ssnLastFour.slice(-4)}`
+                                    : ssnRevealQuery.data?.available && ssnRevealQuery.data.ssn
+                                      ? ssnRevealQuery.data.ssn
+                                      : `•••-••-${user.driver.ssnLastFour.slice(-4)}`}
                                 </span>
                                 <button
                                   type="button"
                                   onClick={() => setSsnVisible(!ssnVisible)}
                                   className="ml-1 p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-                                  title={ssnVisible ? 'Hide SSN' : 'Show SSN'}
+                                  title={ssnVisible ? 'Hide SSN' : 'Reveal full SSN (audit-logged)'}
                                 >
                                   {ssnVisible ? (
                                     <EyeOff className="w-4 h-4 text-slate-400" />
@@ -2332,6 +2356,24 @@ export default function AdminUserDetailPage({ userId }: AdminUserDetailPageProps
                                   )}
                                 </button>
                               </div>
+                              {ssnVisible && ssnRevealQuery.isLoading && (
+                                <p className="text-[10px] text-slate-400 mt-1">Decrypting…</p>
+                              )}
+                              {ssnVisible && !ssnRevealQuery.isLoading && ssnRevealQuery.data && !ssnRevealQuery.data.available && (
+                                <p className="text-[11px] text-amber-600 mt-1">
+                                  {ssnRevealQuery.data.message}
+                                </p>
+                              )}
+                              {ssnVisible && !ssnRevealQuery.isLoading && ssnRevealQuery.data?.available && (
+                                <p className="text-[10px] text-slate-400 mt-1">
+                                  Full SSN decrypted for background checking — this reveal is audit-logged.
+                                </p>
+                              )}
+                              {ssnVisible && !ssnRevealQuery.isLoading && ssnRevealQuery.isError && (
+                                <p className="text-[11px] text-red-500 mt-1">
+                                  Could not load the full SSN — please try again.
+                                </p>
+                              )}
                             </div>
                           )}
                           {/* License Info */}
