@@ -23,7 +23,8 @@
     "compose:up": "docker-compose up -d",
     "compose:down": "docker-compose down --volumes",
     "restore:identity-original": "ts-node scripts/restore-driver-identity-original.ts",
-    "backfill:ssn-encrypted": "ts-node scripts/backfill-driver-ssn-encrypted.ts"
+    "backfill:ssn-encrypted": "ts-node scripts/backfill-driver-ssn-encrypted.ts",
+    "rotate:ssn-key": "ts-node scripts/rotate-driver-ssn-encryption-key.ts"
   },
   "dependencies": {
     "@apollo/server": "^4.9.4",
