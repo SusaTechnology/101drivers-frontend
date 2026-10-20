@@ -234,8 +234,10 @@ const formatDateToStr = (date: Date): string => {
 // this wrapper makes the experience match: on a desktop UA the signup
 // form NEVER MOUNTS — the visitor gets the full-screen "Signup is
 // mobile only" card with a QR code instead. The check is synchronous
-// (localStorage-cached for 30 days), so a returning desktop visitor
-// never sees the form flash. The rule is OS-based, never screen size:
+// inside this component body, so the FIRST render already branches —
+// the form can never flash before the card, and the verdict is always
+// computed fresh from the live user agent (no stale cache).
+// The rule is OS-based, never screen size:
 // iPads and Android tablets report mobile OSes in their UA and pass.
 export default function DriverOnboardingPage() {
   if (shouldShowMobileOnlySignup()) {

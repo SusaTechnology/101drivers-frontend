@@ -14,12 +14,11 @@
 // reports itself as macOS Safari, so by the OS-only rule it is treated
 // as a Mac — inherent to "user agent is the gate".
 //
-// Desktop verdicts are cached in localStorage for 30 days so repeat
-// desktop visitors get the mobile-only card instantly on first paint —
-// no form flash — and a returning phone never pays the re-check.
-
-const DESKTOP_CACHE_KEY = "signup:desktop-blocked:v1";
-const DESKTOP_CACHE_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
+// No localStorage cache (deliberate): the check below is synchronous,
+// so the signup page's very first render already branches — the form
+// cannot flash before the card, and there is no cached verdict to go
+// stale (a desktop-site toggle or browser UA change takes effect on
+// the next visit instead of being frozen for 30 days).
 
 /** Anything in here means the browser reports a mobile OS. */
 const MOBILE_SIGNAL_RE =
@@ -37,40 +36,13 @@ export function isDesktopUserAgent(userAgent: string | null | undefined): boolea
   return DESKTOP_OS_RE.test(ua);
 }
 
-function readDesktopCache(): boolean | null {
-  try {
-    const raw = localStorage.getItem(DESKTOP_CACHE_KEY);
-    if (!raw) return null;
-    const ts = Number(raw);
-    if (!Number.isFinite(ts) || Date.now() - ts > DESKTOP_CACHE_TTL_MS) {
-      localStorage.removeItem(DESKTOP_CACHE_KEY);
-      return null;
-    }
-    return true;
-  } catch {
-    return null;
-  }
-}
-
-function writeDesktopCache(): void {
-  try {
-    localStorage.setItem(DESKTOP_CACHE_KEY, String(Date.now()));
-  } catch {
-    // Private mode / storage full — the live UA check still answers.
-  }
-}
-
 /**
  * Should this browser see the "Signup is mobile only" card instead of
- * the driver signup form? SYNCHRONOUS by design: the first render of
- * the signup page can branch before anything paints, so a returning
- * desktop visitor never sees the form flash.
+ * the driver signup form? SYNCHRONOUS by design: called in the signup
+ * page's component body, so the first render already branches and the
+ * form never paints before the card. Always computed fresh from the
+ * live user agent — no cached verdict to go stale or lock anyone out.
  */
 export function shouldShowMobileOnlySignup(): boolean {
-  if (readDesktopCache()) return true;
-  if (isDesktopUserAgent(navigator.userAgent)) {
-    writeDesktopCache();
-    return true;
-  }
-  return false;
+  return isDesktopUserAgent(navigator.userAgent);
 }
