@@ -89,11 +89,19 @@ export function encryptSsn(ssn9Digits: string): string | null {
 export function decryptSsn(payload: string | null | undefined): string | null {
   if (!payload) return null;
   const parts = payload.split(":");
-  if (parts.length !== 5 || parts[0] !== FORMAT_VERSION) return null;
+  // ⚠ FORMAT_VERSION ("enc:v1") itself contains a colon, so the joined
+  // ciphertext "enc:v1:<iv>:<tag>:<ct>" splits into FIVE parts where the
+  // version occupies parts[0] AND parts[1]. The original parser compared
+  // parts[0] against "enc:v1" (never true) and read iv/tag/ct one index
+  // early — it returned null for EVERY payload, meaning no encrypted SSN
+  // could ever be revealed. Zero encrypted rows ever existed while that
+  // parser shipped (caught by the backfill round-trip guard), so fixing the
+  // parse in place is fully backward-compatible.
+  if (parts.length !== 5 || parts[0] !== "enc" || parts[1] !== "v1") return null;
   try {
-    const iv = Buffer.from(parts[1], "base64");
-    const tag = Buffer.from(parts[2], "base64");
-    const ciphertext = Buffer.from(parts[3], "base64");
+    const iv = Buffer.from(parts[2], "base64");
+    const tag = Buffer.from(parts[3], "base64");
+    const ciphertext = Buffer.from(parts[4], "base64");
     const decipher = createDecipheriv("aes-256-gcm", deriveKey(), iv);
     decipher.setAuthTag(tag);
     const plain = Buffer.concat([decipher.update(ciphertext), decipher.final()]);
