@@ -158,6 +158,26 @@ model Driver {
   selfiePhotoUrl   String?
   agreementAcceptedAt  DateTime?
   ssnLastFour      String?
+  // ── Identity uniqueness (one driver account per SSN / per license) ──
+  // Deterministic HMAC-SHA256 hashes (app pepper — see
+  // src/driver/identity-hash.util.ts). The raw identifiers are checked for
+  // duplicates through these columns only; NULLs (pre-onboarding drivers)
+  // never collide. ssnHash covers the FULL 9-digit SSN; licenseNumberHash
+  // covers (license number + issuing state) because US license numbers are
+  // unique within an issuing state, not necessarily across states.
+  ssnHash            String?  @unique
+  licenseNumberHash  String?  @unique
+  // ── Full SSN, AES-256-GCM encrypted at rest (src/driver/ssn-crypto.util.ts) ──
+  // Admins run background checks MANUALLY (until a checker API is
+  // integrated), so they must be able to see the full SSN. The value is
+  // therefore stored two-way encrypted — decryptable only by the server
+  // with its key — and the ONLY decryption path is the admin
+  // GET /api/users/:id/driver-ssn endpoint, which writes an AdminAuditLog
+  // row (actor, driver, timestamp) on every reveal. NULL for drivers who
+  // onboarded before this column existed: their full SSN was never stored
+  // (the identity-uniqueness migration truncated it to the last 4), and
+  // there is nothing to backfill from.
+  ssnEncrypted       String?
   stripeConnectAccountId String?
   stripeConnectOnboardingComplete Boolean @default(false)
   status           EnumDriverStatus           @default(WAITLISTED)
@@ -2159,6 +2179,11 @@ model AnalyticsEvent {
   path       String?
   referrer   String?
   userAgent  String?
+  // Client IP as seen by the server (x-forwarded-for aware). Written
+  // server-side for every event so LOGIN/SIGNUP/PAGE_VIEW rows are
+  // attributable in the admin records ledger — null for rows created
+  // before this column existed.
+  ip         String?
   // Free-form extras, e.g. {deliveryId, status, source} or {email domain}
   metadata   Json?
   createdAt  DateTime  @default(now())
@@ -2166,4 +2191,28 @@ model AnalyticsEvent {
   @@index([type, occurredAt])
   @@index([occurredAt])
   @@index([userId])
+}
+
+// ── Mobile-only signup spam radar ──────────────────────────────────────
+// One row per driver-registration attempt rejected by the mobile-only
+// user-agent guard (auth controller signup/driver). This is the audit
+// trail for the desktop-blocking rule AND the spam radar: repeated rows
+// from one IP (with different emails) = a script probing the endpoint.
+// Deliberately its own table — NOT AdminAuditLog (that ledger is for
+// admin actions) and NOT AnalyticsEvent (those are product metrics; the
+// guard fires before any account exists). Indexed on (ip, createdAt) for
+// the "who keeps hammering us" query and createdAt for window counts.
+model BlockedSignup {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  ip        String?
+  userAgent String?
+  // Attempted email — captured only when the body actually carried one
+  // (early UA rejects may fire before any parsing), truncated to 255.
+  email     String?
+  // DESKTOP_UA | EMPTY_UA — why the gate closed.
+  reason    String?
+
+  @@index([ip, createdAt])
+  @@index([createdAt])
 }

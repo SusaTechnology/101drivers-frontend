@@ -1,6 +1,7 @@
 import { Injectable, Logger } from "@nestjs/common";
 
 import { PrismaService } from "../prisma/prisma.service";
+import { AppEventsService, APP_EVENT } from "../common/appEvents/appEvents.service";
 
 // ═══════════════════════════════════════════════════════════════════════
 // Product analytics — immutable event ledger (Task 72)
@@ -37,6 +38,8 @@ export interface RecordAnalyticsEventInput {
   path?: string | null;
   referrer?: string | null;
   userAgent?: string | null;
+  /** Client IP (x-forwarded-for aware) — attribution for the records ledger. */
+  ip?: string | null;
   metadata?: Record<string, unknown> | null;
 }
 
@@ -61,7 +64,15 @@ export interface TimeseriesBucket {
 export class AnalyticsService {
   private readonly logger = new Logger(AnalyticsService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  /** Last AppEventsService publish — the live ping is throttled so a burst
+   *  of PAGE_VIEWs cannot flood the staff:ops socket room. */
+  private lastLivePublishAt = 0;
+  private static LIVE_PUBLISH_THROTTLE_MS = 3000;
+
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly appEvents?: AppEventsService
+  ) {}
 
   // ── Recording ────────────────────────────────────────────────────────
 
@@ -81,13 +92,34 @@ export class AnalyticsService {
           path: clampText(input.path, 512) ?? null,
           referrer: clampText(input.referrer, 512) ?? null,
           userAgent: clampText(input.userAgent, 512) ?? null,
+          ip: clampText(input.ip, 128) ?? null,
           metadata: (input.metadata ?? undefined) as any,
         },
       });
+      this.publishLivePingThrottled();
     } catch (err: any) {
       this.logger.warn(
         `analytics record failed (${input.type}): ${err?.message ?? err}`
       );
+    }
+  }
+
+  /**
+   * Contentless "metrics changed" ping (staff:ops room via the socket
+   * gateway) so the admin metrics page live-refreshes between its 15s
+   * safety-net polls. Throttled to one per few seconds — a visit burst
+   * is ONE refresh, not one per event.
+   */
+  private publishLivePingThrottled(): void {
+    const now = Date.now();
+    if (now - this.lastLivePublishAt < AnalyticsService.LIVE_PUBLISH_THROTTLE_MS) {
+      return;
+    }
+    this.lastLivePublishAt = now;
+    try {
+      this.appEvents?.emit(APP_EVENT.ANALYTICS_CHANGED);
+    } catch {
+      // The bus never breaks the emitter — belt and braces.
     }
   }
 
@@ -272,6 +304,49 @@ export class AnalyticsService {
         take: pageSize,
       }),
       this.prisma.analyticsEvent.count({ where }),
+    ]);
+
+    return { rows, total, page, pageSize };
+  }
+
+  /**
+   * Admin spam radar: driver-registration attempts rejected by the
+   * mobile-only user-agent guard. Window counts + the raw rows
+   * (timestamp, IP, user agent, attempted email, reason) feed the
+   * "Blocked signups" panel on the metrics page.
+   */
+  async blockedSignups(params: {
+    from?: Date | null;
+    to?: Date | null;
+    page?: number | null;
+    pageSize?: number | null;
+  }): Promise<any> {
+    const page = Math.max(1, Math.floor(params.page ?? 1));
+    const pageSize = Math.min(200, Math.max(1, Math.floor(params.pageSize ?? 25)));
+
+    const where: any = {};
+    if (params.from || params.to) {
+      where.createdAt = {};
+      if (params.from) where.createdAt.gte = params.from;
+      if (params.to) where.createdAt.lt = params.to;
+    }
+
+    const [rows, total] = await Promise.all([
+      this.prisma.blockedSignup.findMany({
+        where,
+        orderBy: { createdAt: "desc" },
+        select: {
+          id: true,
+          createdAt: true,
+          ip: true,
+          userAgent: true,
+          email: true,
+          reason: true,
+        },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+      }),
+      this.prisma.blockedSignup.count({ where }),
     ]);
 
     return { rows, total, page, pageSize };

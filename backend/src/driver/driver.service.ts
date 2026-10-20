@@ -1,6 +1,11 @@
 // src/driver/driver.service.ts
 
-import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from "@nestjs/common";
 import {
   AdminAuditLog as PrismaAdminAuditLog,
   DeliveryAssignment as PrismaDeliveryAssignment,
@@ -23,7 +28,53 @@ import { UpdateDriverProfileBody } from "./dto/driverProfile.dto";
 import { EnumDriverStatus } from "@prisma/client";
 import { DriverApprovalEngine } from "../domain/driver/driverApproval.engine";
 import { CompleteDriverOnboardingDto } from "./dto/driverOnboardingComplete.dto";
+import {
+  licenseIdentityHash,
+  normalizeSsn,
+  ssnIdentityHash,
+} from "./identity-hash.util";
+import { encryptSsn } from "./ssn-crypto.util";
 import { ServiceAreaService } from "../geo/service-area.service";
+
+// ============================================================
+// Identity uniqueness — one driver account per SSN / per license
+// ============================================================
+// SSNs are nationally unique (SSA); US driver license numbers are unique
+// WITHIN an issuing state, so the license rule is per (number, state).
+// Checks run through the deterministic HMAC columns (Driver.ssnHash /
+// Driver.licenseNumberHash) so the raw identifiers are never compared or
+// stored a second time. Every error below is deliberately NEUTRAL — the
+// response must never hint at who the existing account is (no email,
+// name, status or count — "without revealing extra info").
+const SSN_TAKEN_MESSAGE =
+  "This SSN is already registered on 101 Drivers. Each driver must register with their own unique SSN. If you believe this is a mistake, please contact support.";
+const LICENSE_TAKEN_MESSAGE =
+  "This driver license number is already registered on 101 Drivers. Each driver must register with their own unique driver license. If you believe this is a mistake, please contact support.";
+
+function identityConflict(
+  kind: "SSN_ALREADY_REGISTERED" | "LICENSE_ALREADY_REGISTERED"
+): ConflictException {
+  return new ConflictException({
+    statusCode: 409,
+    error: "Conflict",
+    code: kind,
+    message: kind === "SSN_ALREADY_REGISTERED"
+      ? SSN_TAKEN_MESSAGE
+      : LICENSE_TAKEN_MESSAGE,
+  });
+}
+
+/** Map a race-lost unique-index violation (Prisma P2002) to the same
+ *  neutral 409 the pre-check produces. Returns null for other errors. */
+function identityConflictFrom(error: unknown): ConflictException | null {
+  if ((error as any)?.code !== "P2002") return null;
+  const target = JSON.stringify((error as any)?.meta?.target ?? "");
+  return identityConflict(
+    target.includes("ssnHash")
+      ? "SSN_ALREADY_REGISTERED"
+      : "LICENSE_ALREADY_REGISTERED"
+  );
+}
 
 @Injectable()
 export class DriverService extends DriverServiceBase {
@@ -408,7 +459,7 @@ if (body.alerts) {
     }
 
     return this.domain.findUnique({ id: driverId });
-  }
+  } 
  async getWaitlistedDrivers(): Promise<any[]> {
   return this.domain.findMany({
     where: {
@@ -568,10 +619,63 @@ async driverLookupList(): Promise<
   }));
 }
 
-async completeOnboarding(
-  driverId: string,
-  dto: CompleteDriverOnboardingDto
-): Promise<any> {
+  // ============================================================
+  // Identity uniqueness helpers (both onboarding paths use these)
+  // ============================================================
+
+  /**
+   * Block a second driver account from reusing an SSN or a driver license
+   * that any existing driver already registered with. Pre-check only —
+   * the DB unique indexes are the final say (see identityConflictFrom).
+   * Throws a NEUTRAL 409: no hint about who the existing account is.
+   */
+  private async assertIdentityNotTaken(
+    dto: CompleteDriverOnboardingDto
+  ): Promise<void> {
+    const [ssnClash, licenseClash] = await Promise.all([
+      this.prisma.driver.findFirst({
+        where: { ssnHash: ssnIdentityHash(dto.ssn) },
+        select: { id: true },
+      }),
+      this.prisma.driver.findFirst({
+        where: {
+          licenseNumberHash: licenseIdentityHash(dto.licenseNumber, dto.licenseState),
+        },
+        select: { id: true },
+      }),
+    ]);
+    if (ssnClash) {
+      throw identityConflict("SSN_ALREADY_REGISTERED");
+    }
+    if (licenseClash) {
+      throw identityConflict("LICENSE_ALREADY_REGISTERED");
+    }
+  }
+
+  /**
+   * The identity fields written to the Driver row at onboarding time:
+   *   • ssnLastFour — display + Stripe ssn_last_4 (what the column always
+   *     claimed, and exactly what Stripe expects)
+   *   • ssnHash / licenseNumberHash — the deterministic hashes that enforce
+   *     uniqueness without ever comparing raw identifiers
+   *   • ssnEncrypted — the full SSN AES-256-GCM encrypted at rest
+   *     (ssn-crypto.util.ts). Admins run background checks manually for
+   *     now, so the full value must be recoverable — but only through the
+   *     audit-logged admin reveal endpoint, never in any other response.
+   */
+  private identityDataFor(dto: CompleteDriverOnboardingDto) {
+    return {
+      ssnLastFour: normalizeSsn(dto.ssn).slice(-4),
+      ssnHash: ssnIdentityHash(dto.ssn),
+      licenseNumberHash: licenseIdentityHash(dto.licenseNumber, dto.licenseState),
+      ssnEncrypted: encryptSsn(dto.ssn),
+    };
+  }
+
+  async completeOnboarding(
+    driverId: string,
+    dto: CompleteDriverOnboardingDto
+  ): Promise<any> {
   const driver = await this.prisma.driver.findUnique({
     where: { id: driverId },
     select: {
@@ -596,39 +700,52 @@ async completeOnboarding(
     throw new BadRequestException("Onboarding has already been completed");
   }
 
-  const ssnLastFour = dto.ssn;
+  // One driver account per SSN / per license — neutral 409 on reuse.
+  await this.assertIdentityNotTaken(dto);
+
+  // ssnLastFour + hashes + the AES-256-GCM-encrypted full SSN (see
+  // identityDataFor) — the raw SSN is never stored in plaintext.
+  const identityData = this.identityDataFor(dto);
 
   // Update driver record with onboarding data
-  await this.prisma.$transaction([
-    this.prisma.driver.update({
-      where: { id: driverId },
-      data: {
-        licenseNumber: dto.licenseNumber.trim(),
-        licenseState: dto.licenseState.trim(),
-        licenseFrontUrl: dto.licenseFrontUrl.trim(),
-        licenseBackUrl: dto.licenseBackUrl.trim(),
-        ssnLastFour,
-        residentialAddressLine1: dto.residentialAddressLine1.trim(),
-        residentialAddressLine2: dto.residentialAddressLine2
-          ? dto.residentialAddressLine2.trim()
-          : null,
-        residentialCity: dto.residentialCity.trim(),
-        residentialState: dto.residentialState.trim(),
-        // ZIP is no longer collected on the onboarding form. When the
-        // client omits it, keep the ZIP already stored from signup
-        // untouched; when a client still sends it, honor it.
-        ...(dto.residentialZip
-          ? { residentialZip: dto.residentialZip.trim() }
-          : {}),
-        selfiePhotoUrl: dto.selfiePhotoUrl.trim(),
-        status: EnumDriverStatus.PENDING_APPROVAL,
-        onboardingCompletedAt: new Date(),
-        ...(dto.agreementAcceptedAt
-          ? { agreementAcceptedAt: new Date(dto.agreementAcceptedAt) }
-          : {}),
-      },
-    }),
-  ]);
+  try {
+    await this.prisma.$transaction([
+      this.prisma.driver.update({
+        where: { id: driverId },
+        data: {
+          licenseNumber: dto.licenseNumber.trim(),
+          licenseState: dto.licenseState.trim(),
+          licenseFrontUrl: dto.licenseFrontUrl.trim(),
+          licenseBackUrl: dto.licenseBackUrl.trim(),
+          ...identityData,
+          residentialAddressLine1: dto.residentialAddressLine1.trim(),
+          residentialAddressLine2: dto.residentialAddressLine2
+            ? dto.residentialAddressLine2.trim()
+            : null,
+          residentialCity: dto.residentialCity.trim(),
+          residentialState: dto.residentialState.trim(),
+          // ZIP is no longer collected on the onboarding form. When the
+          // client omits it, keep the ZIP already stored from signup
+          // untouched; when a client still sends it, honor it.
+          ...(dto.residentialZip
+            ? { residentialZip: dto.residentialZip.trim() }
+            : {}),
+          selfiePhotoUrl: dto.selfiePhotoUrl.trim(),
+          status: EnumDriverStatus.PENDING_APPROVAL,
+          onboardingCompletedAt: new Date(),
+          ...(dto.agreementAcceptedAt
+            ? { agreementAcceptedAt: new Date(dto.agreementAcceptedAt) }
+            : {}),
+        },
+      }),
+    ]);
+  } catch (err) {
+    // Two submissions racing past the pre-check: the unique indexes have
+    // the final say — same neutral error, no information leak.
+    const conflict = identityConflictFrom(err);
+    if (conflict) throw conflict;
+    throw err;
+  }
 
   // Zip changed during onboarding → re-derive the service-area badge
   // (green/gray). Best-effort and non-blocking: a geocode outage must
@@ -700,39 +817,49 @@ async completeOnboardingByToken(
     throw new BadRequestException("Onboarding has already been completed");
   }
 
-  const ssnLastFour = dto.ssn;
+  // One driver account per SSN / per license — neutral 409 on reuse
+  // (same contract as the authed completeOnboarding above).
+  await this.assertIdentityNotTaken(dto);
+
+  const identityData = this.identityDataFor(dto);
 
   // Update driver record with onboarding data
-  await this.prisma.$transaction([
-    this.prisma.driver.update({
-      where: { id: driver.id },
-      data: {
-        licenseNumber: dto.licenseNumber.trim(),
-        licenseState: dto.licenseState.trim(),
-        licenseFrontUrl: dto.licenseFrontUrl.trim(),
-        licenseBackUrl: dto.licenseBackUrl.trim(),
-        ssnLastFour,
-        residentialAddressLine1: dto.residentialAddressLine1.trim(),
-        residentialAddressLine2: dto.residentialAddressLine2
-          ? dto.residentialAddressLine2.trim()
-          : null,
-        residentialCity: dto.residentialCity.trim(),
-        residentialState: dto.residentialState.trim(),
-        // ZIP is no longer collected on the onboarding form. When the
-        // client omits it, keep the ZIP already stored from signup
-        // untouched; when a client still sends it, honor it.
-        ...(dto.residentialZip
-          ? { residentialZip: dto.residentialZip.trim() }
-          : {}),
-        selfiePhotoUrl: dto.selfiePhotoUrl.trim(),
-        status: EnumDriverStatus.PENDING_APPROVAL,
-        onboardingCompletedAt: new Date(),
-        ...(dto.agreementAcceptedAt
-          ? { agreementAcceptedAt: new Date(dto.agreementAcceptedAt) }
-          : {}),
-      },
-    }),
-  ]);
+  try {
+    await this.prisma.$transaction([
+      this.prisma.driver.update({
+        where: { id: driver.id },
+        data: {
+          licenseNumber: dto.licenseNumber.trim(),
+          licenseState: dto.licenseState.trim(),
+          licenseFrontUrl: dto.licenseFrontUrl.trim(),
+          licenseBackUrl: dto.licenseBackUrl.trim(),
+          ...identityData,
+          residentialAddressLine1: dto.residentialAddressLine1.trim(),
+          residentialAddressLine2: dto.residentialAddressLine2
+            ? dto.residentialAddressLine2.trim()
+            : null,
+          residentialCity: dto.residentialCity.trim(),
+          residentialState: dto.residentialState.trim(),
+          // ZIP is no longer collected on the onboarding form. When the
+          // client omits it, keep the ZIP already stored from signup
+          // untouched; when a client still sends it, honor it.
+          ...(dto.residentialZip
+            ? { residentialZip: dto.residentialZip.trim() }
+            : {}),
+          selfiePhotoUrl: dto.selfiePhotoUrl.trim(),
+          status: EnumDriverStatus.PENDING_APPROVAL,
+          onboardingCompletedAt: new Date(),
+          ...(dto.agreementAcceptedAt
+            ? { agreementAcceptedAt: new Date(dto.agreementAcceptedAt) }
+            : {}),
+        },
+      }),
+    ]);
+  } catch (err) {
+    const conflict = identityConflictFrom(err);
+    if (conflict) throw conflict;
+    throw err;
+  }
 
   // Same zip-change re-derivation as completeOnboarding above.
   if (dto.residentialZip) {

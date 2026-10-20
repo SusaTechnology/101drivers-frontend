@@ -37,6 +37,7 @@ import {
 } from "@prisma/client";
 import { CustomerService } from "src/customer/customer.service";
 import { DriverService } from "src/driver/driver.service";
+import { decryptSsn, formatSsnForDisplay } from "../driver/ssn-crypto.util";
 import { PasswordService } from "src/auth/password.service";
 import { AppEventsService, APP_EVENT } from "../common/appEvents/appEvents.service";
 @Injectable()
@@ -1678,6 +1679,75 @@ async getAdminUserDetail(id: string): Promise<any> {
     recentScheduleChangesDecided,
   };
 }
+
+/**
+ * Admin "reveal full SSN" for manual background checking.
+ *
+ * The full SSN exists only as AES-256-GCM ciphertext (Driver.ssnEncrypted);
+ * this is the SINGLE decryption path. Every successful reveal writes an
+ * AdminAuditLog row (actor, target user + driver, timestamp) so PII access
+ * is permanently attributable. Drivers onboarded before encrypted storage
+ * have no full SSN on file (nothing was ever stored beyond the last 4) —
+ * the response says so instead of pretending.
+ */
+async revealDriverSsn(userId: string, actorUserId: string | null): Promise<any> {
+  const driver = await this.prisma.driver.findFirst({
+    where: { userId },
+    select: {
+      id: true,
+      userId: true,
+      ssnEncrypted: true,
+      ssnLastFour: true,
+    },
+  });
+
+  if (!driver) {
+    throw new BadRequestException("No driver profile exists for this user");
+  }
+
+  if (!driver.ssnEncrypted) {
+    return {
+      available: false,
+      reason: "NOT_ON_FILE",
+      lastFour: driver.ssnLastFour ?? null,
+      message:
+        "Full SSN is not on file for this driver (registered before encrypted SSN storage). Only the last 4 digits are stored.",
+    };
+  }
+
+  const decrypted = decryptSsn(driver.ssnEncrypted);
+
+  if (!decrypted) {
+    return {
+      available: false,
+      reason: "DECRYPT_FAILED",
+      lastFour: driver.ssnLastFour ?? null,
+      message:
+        "The stored SSN could not be decrypted. The server's SSN_ENCRYPTION_KEY does not match the key used when this driver registered.",
+    };
+  }
+
+  if (actorUserId) {
+    await this.prisma.adminAuditLog.create({
+      data: {
+        action: EnumAdminAuditLogAction.OTHER,
+        actorUserId,
+        actorType: EnumAdminAuditLogActorType.USER,
+        userId: driver.userId,
+        driverId: driver.id,
+        reason:
+          "DRIVER_SSN_REVEALED — full SSN decrypted via admin user detail for manual background check",
+      },
+    });
+  }
+
+  return {
+    available: true,
+    ssn: formatSsnForDisplay(decrypted),
+    lastFour: driver.ssnLastFour ?? null,
+  };
+}
+
 async adminUpdateUser(input: {
   userId: string;
   email?: string;

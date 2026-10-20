@@ -12,7 +12,7 @@ import {
 import { JwtService } from "@nestjs/jwt";
 import { Request } from "express";
 
-import { RateLimitService, assertIpBudget, RATE_LIMITS } from "../common/rate-limit/rate-limit.service";
+import { RateLimitService, assertIpBudget, RATE_LIMITS, clientIpFromRequest } from "../common/rate-limit/rate-limit.service";
 import { PrismaService } from "../prisma/prisma.service";
 import { DefaultAuthGuard } from "../auth/defaultAuth.guard";
 import { Public } from "../decorators/public.decorator";
@@ -78,6 +78,7 @@ export class AnalyticsController {
       path: body?.path,
       referrer: body?.referrer,
       userAgent: request.headers["user-agent"],
+      ip: clientIpFromRequest(request),
     });
 
     return { ok: true };
@@ -136,6 +137,28 @@ export class AnalyticsController {
     this.assertAdmin(request);
     return this.analytics.records({
       type: this.parseEventType(type),
+      from: this.parseDate(from, "from"),
+      to: this.parseDate(to, "to"),
+      page: page ? Number(page) : null,
+      pageSize: pageSize ? Number(pageSize) : null,
+    });
+  }
+
+  /**
+   * Spam radar — driver-registration attempts blocked by the mobile-only
+   * user-agent guard (BlockedSignup ledger: timestamp, IP, user agent,
+   * attempted email, reason). ADMIN-only like every other query here.
+   */
+  @Get("blocked-signups")
+  async blockedSignups(
+    @Req() request: Request,
+    @Query("from") from?: string,
+    @Query("to") to?: string,
+    @Query("page") page?: string,
+    @Query("pageSize") pageSize?: string
+  ): Promise<any> {
+    this.assertAdmin(request);
+    return this.analytics.blockedSignups({
       from: this.parseDate(from, "from"),
       to: this.parseDate(to, "to"),
       page: page ? Number(page) : null,

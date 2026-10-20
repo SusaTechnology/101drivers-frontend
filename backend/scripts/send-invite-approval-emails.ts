@@ -37,12 +37,32 @@
  *   npx ts-node scripts/send-invite-approval-emails.ts --dry-run
  *   npx ts-node scripts/send-invite-approval-emails.ts --yes            # live
  *   Flags:
- *     --dry-run          list recipients + templates, send nothing
- *     --only=invited     only the invited-driver email
- *     --only=approved    only the approved (driver + dealer) emails
- *     --limit=N          cap recipients (smoke test on the server first)
- *     --yes              skip the interactive confirmation (live runs)
- *     --wait=180         seconds to wait for SMTP results (default 180)
+ *     --dry-run                        list recipients + templates, send nothing
+ *     --only=invited                   only the invited-driver email
+ *     --only=approved                  only the approved (driver + dealer) emails
+ *     --limit=N                        cap recipients (smoke test on the server first)
+ *     --yes                            skip the interactive confirmation (live runs)
+ *     --wait=180                       seconds for the FINAL settle pass (default 180)
+ *     --retry-failed-from=<report>     RESUME: skip everyone marked SENT in that
+ *                                      earlier report JSON (no duplicate emails)
+ *     --stagger-ms=700                 delay between two sends (default 700)
+ *     --pause-on-rate-limit-minutes=60 auto-pause when the SMTP host answers
+ *                                      421 "Too many messages ... last hour"
+ *                                      (default 60; 0 = disable, fail fast)
+ *     --max-pauses=24                  max auto-pauses per run (default 24; 0 = disable)
+ *     --ack-seconds=60                 per-recipient wait for SENT/FAILED before
+ *                                      moving on (default 60)
+ *
+ * ── Rate limits (421 4.4.5 "Too many messages from this host last hour") ──
+ *   Shared/cPanel-style SMTP hosts cap messages per rolling hour (often ~20).
+ *   When the host answers 421, the run STOPS DEAD (it never hammers a
+ *   throttled server), prints a countdown while it waits the window out
+ *   (default 60 min), then retries and continues with the rest. A campaign
+ *   larger than the hourly cap therefore takes several hours BY DESIGN —
+ *   run it under nohup/screen/pm2. Ctrl+C is safe at any moment: nothing
+ *   already SENT is ever re-sent; resume later with
+ *     npx ts-node scripts/send-invite-approval-emails.ts --yes \
+ *       --retry-failed-from=email-campaign-reports/<latest-report>.json
  *
  * Safety: if SMTP is not configured the script ABORTS BEFORE queueing
  * (nothing is written to the NotificationEvent ledger) and the report says
@@ -81,6 +101,12 @@ const ONLY = flag("only") as "invited" | "approved" | undefined;
 const LIMIT = Number(flag("limit") ?? 0) || 0;
 const ASSUME_YES = flag("yes") === "true";
 const WAIT_SECONDS = Number(flag("wait") ?? 180) || 180;
+// rate-limit resilience — see the "Rate limits" note in the header
+const RETRY_FROM = flag("retry-failed-from");
+const STAGGER_MS = Math.max(0, Number(flag("stagger-ms") ?? 700) || 0);
+const PAUSE_MINUTES = Math.max(0, Number(flag("pause-on-rate-limit-minutes") ?? 60) || 0);
+const MAX_PAUSES = Math.max(0, Number(flag("max-pauses") ?? 24) || 0);
+const ACK_SECONDS = Math.max(10, Number(flag("ack-seconds") ?? 60) || 60);
 
 const SEND_INVITED = ONLY !== "approved"; // default: both
 const SEND_APPROVED = ONLY !== "invited";
@@ -118,7 +144,64 @@ type ResultRow = Recipient & {
   notificationEventId: string | null;
   errorMessage: string | null;
   crossRoleDuplicate: boolean;
+  attempts: number; // send attempts for this recipient (1 = no retry happened)
 };
+
+// The provider's refusal looks like:
+//   "Failed to send email: Invalid greeting. response=421 4.4.5 Too many
+//    messages from this host last hour"
+function isRateLimitError(msg: string | null | undefined): boolean {
+  if (!msg) return false;
+  return (
+    /\b421\b/.test(msg) ||
+    /4\.4\.5/.test(msg) ||
+    /too many messages/i.test(msg) ||
+    /rate.?limit/i.test(msg)
+  );
+}
+
+/** Countdown that keeps the terminal alive during long (hourly) pauses. */
+async function sleepWithProgress(ms: number, label: string): Promise<void> {
+  if (ms <= 0) return;
+  const end = Date.now() + ms;
+  for (;;) {
+    const remainMin = Math.ceil(Math.max(0, end - Date.now()) / 60000);
+    process.stdout.write(`\r${label} — about ${remainMin} min left…   `);
+    if (Date.now() >= end) break;
+    await new Promise((res) => setTimeout(res, Math.min(30_000, end - Date.now())));
+  }
+  process.stdout.write("\r" + " ".repeat(110) + "\r");
+}
+
+/**
+ * Resume support: read a previous campaign report and collect the emails it
+ * recorded as SENT — those must never be emailed twice.
+ */
+function loadPreviouslySent(reportPath: string): Set<string> {
+  let raw: any;
+  try {
+    raw = JSON.parse(fs.readFileSync(reportPath, "utf8"));
+  } catch (e: any) {
+    console.error(
+      `\nABORT: cannot read --retry-failed-from report "${reportPath}": ${e?.message}`
+    );
+    process.exit(1);
+  }
+  const rows = Array.isArray(raw?.results) ? raw.results : [];
+  const sent = new Set<string>();
+  for (const row of rows) {
+    if (row?.status === "SENT" && typeof row?.email === "string") {
+      sent.add(row.email.trim().toLowerCase());
+    }
+  }
+  if (sent.size === 0) {
+    console.warn(
+      `\nWARNING: "${path.basename(reportPath)}" contains no SENT rows — ` +
+        "proceeding as a FULL send (everyone in scope gets an email)."
+    );
+  }
+  return sent;
+}
 
 // ── Templates: verbatim copies of the system's own emails ─────────────────
 const appDomain = (process.env.APP_DOMAIN || "101drivers.techbee.et").replace(
@@ -352,7 +435,22 @@ async function main() {
   }
 
   let scoped = recipients;
-  if (LIMIT > 0) scoped = recipients.slice(0, LIMIT);
+
+  // ── Resume mode: never re-email anyone the previous report marked SENT ──
+  let previouslySentExcluded = 0;
+  if (RETRY_FROM) {
+    const sentEmails = loadPreviouslySent(RETRY_FROM);
+    const before = scoped.length;
+    scoped = scoped.filter((r) => !r.email || !sentEmails.has(r.email));
+    previouslySentExcluded = before - scoped.length;
+    console.log(
+      `\nresume: loaded "${path.basename(RETRY_FROM)}" — ` +
+        `${sentEmails.size} email(s) already SENT there, ` +
+        `${previouslySentExcluded} recipient(s) excluded from this run.`
+    );
+  }
+
+  if (LIMIT > 0) scoped = scoped.slice(0, LIMIT);
 
   // ── Scope summary ───────────────────────────────────────────────────────
   const countBy = (fn: (r: Recipient) => boolean) => scoped.filter(fn).length;
@@ -394,115 +492,132 @@ async function main() {
     process.exit(1);
   }
 
-  // ── Queue emails (dedup per category; stagger to be gentle on SMTP) ─────
+  // ── Queue emails (dedup per category; one attempt in flight at a time; ──
+  //    stops dead on 421 rate-limit, waits the hourly window out, resumes) ─
   const results: ResultRow[] = [];
   const seen = new Map<string, Category>(); // email -> first category that claims it
-  const queuedIds: string[] = [];
+
+  type QueueItem = {
+    r: Recipient;
+    crossRoleDuplicate: boolean;
+    row: ResultRow; // ONE report row per recipient, mutated across retries
+  };
+  const queue: QueueItem[] = [];
 
   for (const r of scoped) {
     if (!r.email) {
-      results.push({ ...r, status: "SKIPPED_NO_EMAIL", notificationEventId: null, errorMessage: null, crossRoleDuplicate: false });
+      results.push({ ...r, status: "SKIPPED_NO_EMAIL", notificationEventId: null, errorMessage: null, crossRoleDuplicate: false, attempts: 0 });
       continue;
     }
     const firstClaim = seen.get(r.email);
     if (firstClaim === r.category) {
-      results.push({ ...r, status: "SKIPPED_DUPLICATE", notificationEventId: null, errorMessage: `duplicate ${r.category} for ${r.email}`, crossRoleDuplicate: false });
+      results.push({ ...r, status: "SKIPPED_DUPLICATE", notificationEventId: null, errorMessage: `duplicate ${r.category} for ${r.email}`, crossRoleDuplicate: false, attempts: 0 });
       continue;
     }
     const crossRoleDuplicate = firstClaim !== undefined && firstClaim !== r.category;
     if (!crossRoleDuplicate) seen.set(r.email, r.category);
-
-    try {
-      let queued: { id: string } | null = null;
-      if (r.category === "INVITED_DRIVER") {
-        const tpl = buildInvitedDriverEmail(r.name, (r as any).onboardingToken ?? "");
-        queued = await engine.queueAndSend({
-          driverId: r.refId,
-          channel: EnumNotificationEventChannel.EMAIL,
-          toEmail: r.email,
-          ...tpl,
-          payload: {
-            campaignId: CAMPAIGN_ID,
-            driverId: r.refId,
-            note: "Bulk invite re-send (campaign script)",
-          } as Prisma.InputJsonValue,
-        });
-      } else if (r.category === "APPROVED_DRIVER") {
-        const tpl = buildApprovedDriverEmail(r.name, (r as any).approvedAt ?? null);
-        queued = await engine.queueAndSend({
-          driverId: r.refId,
-          channel: EnumNotificationEventChannel.EMAIL,
-          toEmail: r.email,
-          ...tpl,
-          payload: {
-            campaignId: CAMPAIGN_ID,
-            driverId: r.refId,
-            note: "Bulk approval re-send (campaign script)",
-          } as Prisma.InputJsonValue,
-        });
-      } else {
-        const tpl = buildApprovedDealerEmail({
-          customerType: (r as any).customerType ?? null,
-          businessName: (r as any).businessName ?? null,
-          contactName: (r as any).contactName ?? null,
-          userFullName: (r as any).userFullName ?? null,
-          postpaidEnabled: (r as any).postpaidEnabled ?? false,
-        });
-        queued = await engine.queueAndSend({
-          customerId: r.refId,
-          channel: EnumNotificationEventChannel.EMAIL,
-          toEmail: r.email,
-          ...tpl,
-          payload: {
-            campaignId: CAMPAIGN_ID,
-            customerId: r.refId,
-            note: "Bulk approval re-send (campaign script)",
-          } as Prisma.InputJsonValue,
-        });
-      }
-
-      if (!queued) {
-        // queueAndSend returns null only when cross-role suppression fired (not expected here)
-        results.push({ ...r, status: "FAILED", notificationEventId: null, errorMessage: "suppressed by cross-role guard", crossRoleDuplicate });
-        continue;
-      }
-      queuedIds.push(queued.id);
-      results.push({ ...r, status: "QUEUED", notificationEventId: queued.id, errorMessage: null, crossRoleDuplicate });
-      console.log(`  queued [${r.category}] ${r.email} → event ${queued.id}`);
-    } catch (e: any) {
-      results.push({ ...r, status: "FAILED", notificationEventId: null, errorMessage: e?.message ?? String(e), crossRoleDuplicate });
-    }
-    await new Promise((res) => setTimeout(res, 700)); // stagger SMTP load
+    const item: QueueItem = {
+      r,
+      crossRoleDuplicate,
+      row: { ...r, status: "QUEUED", notificationEventId: null, errorMessage: null, crossRoleDuplicate, attempts: 0 },
+    };
+    queue.push(item);
+    results.push(item.row);
   }
 
-  // ── Poll until every queued event settles (SENT / FAILED) ───────────────
-  const deadline = Date.now() + WAIT_SECONDS * 1000;
-  const pending = () => results.filter((x) => x.status === "QUEUED");
-  while (pending().length > 0 && Date.now() < deadline) {
-    await new Promise((res) => setTimeout(res, 2000));
-    for (const row of pending()) {
-      const ev = await prisma.notificationEvent.findUnique({
-        where: { id: row.notificationEventId! },
-        select: { status: true, errorMessage: true },
-      });
-      if (!ev) continue;
-      if (ev.status === EnumNotificationEventStatus.SENT) row.status = "SENT";
-      if (ev.status === EnumNotificationEventStatus.FAILED) {
-        row.status = "FAILED";
-        row.errorMessage = ev.errorMessage ?? "unknown SMTP error";
+  const pauseMs = PAUSE_MINUTES * 60_000;
+  let pausesUsed = 0;
+
+  const logRateLimitPause = (remaining: number) => {
+    console.log(
+      `\n  [rate-limit] SMTP host refused the send: "421 4.4.5 Too many messages from this host last hour".`
+    );
+    console.log(
+      `  [rate-limit] pausing ${PAUSE_MINUTES} min so the hourly window can clear, then resuming ` +
+        `(${remaining} recipient(s) still to go) — pause ${pausesUsed}/${MAX_PAUSES}.`
+    );
+    console.log(
+      `  [rate-limit] Ctrl+C is safe anytime; nothing already SENT is re-sent — resume with --retry-failed-from=<report>.`
+    );
+  };
+
+  // main pipeline
+  let idx = 0;
+  while (idx < queue.length) {
+    const item = queue[idx];
+    item.row.attempts++;
+    item.row.status = "QUEUED";
+    item.row.errorMessage = null;
+    item.row.notificationEventId = null;
+
+    const q = await queueOne(item.r, engine);
+    if (!q.ok) {
+      item.row.status = "FAILED";
+      item.row.errorMessage = q.error;
+      if (!q.suppressed && isRateLimitError(q.error) && pauseMs > 0 && pausesUsed < MAX_PAUSES) {
+        pausesUsed++;
+        logRateLimitPause(queue.length - idx);
+        await sleepWithProgress(pauseMs, "  waiting out the hourly window");
+        continue; // retry the SAME recipient without advancing
+      }
+      console.log(`  FAILED [${item.r.category}] ${item.r.email} — ${item.row.errorMessage}`);
+      await new Promise((res) => setTimeout(res, STAGGER_MS));
+      idx++;
+      continue;
+    }
+    item.row.notificationEventId = q.id;
+    console.log(`  queued [${item.r.category}] ${item.r.email} → event ${q.id} (attempt ${item.row.attempts})`);
+
+    const ackedStatus = await ackOne(item.row, prisma, ACK_SECONDS);
+
+    if (
+      ackedStatus === "FAILED" &&
+      isRateLimitError(item.row.errorMessage) &&
+      pauseMs > 0 &&
+      pausesUsed < MAX_PAUSES
+    ) {
+      pausesUsed++;
+      logRateLimitPause(queue.length - idx);
+      await sleepWithProgress(pauseMs, "  waiting out the hourly window");
+      continue; // retry the SAME recipient without advancing
+    }
+    await new Promise((res) => setTimeout(res, STAGGER_MS));
+    idx++;
+  }
+
+  // ── Final courtesy pass: give slow events one last chance to settle ─────
+  const stillQueued = () => results.filter((x) => x.status === "QUEUED");
+  if (stillQueued().length > 0) {
+    console.log(`\n  final wait: ${stillQueued().length} event(s) still unsettled (up to ${WAIT_SECONDS}s)…`);
+    const deadline = Date.now() + WAIT_SECONDS * 1000;
+    while (stillQueued().length > 0 && Date.now() < deadline) {
+      await new Promise((res) => setTimeout(res, 2000));
+      for (const row of stillQueued()) {
+        const ev = await prisma.notificationEvent.findUnique({
+          where: { id: row.notificationEventId! },
+          select: { status: true, errorMessage: true },
+        });
+        if (!ev) continue;
+        if (ev.status === EnumNotificationEventStatus.SENT) row.status = "SENT";
+        if (ev.status === EnumNotificationEventStatus.FAILED) {
+          row.status = "FAILED";
+          row.errorMessage = ev.errorMessage ?? "unknown SMTP error";
+        }
       }
     }
   }
-  for (const row of pending()) row.status = "TIMEOUT_STILL_QUEUED";
+  for (const row of stillQueued()) row.status = "TIMEOUT_STILL_QUEUED";
 
   // ── Report ──────────────────────────────────────────────────────────────
   const summary = {
     totalInScope: scoped.length,
+    previouslySentExcluded,
     sent: results.filter((r) => r.status === "SENT").length,
     failed: results.filter((r) => r.status === "FAILED").length,
     timedOut: results.filter((r) => r.status === "TIMEOUT_STILL_QUEUED").length,
     skippedNoEmail: results.filter((r) => r.status === "SKIPPED_NO_EMAIL").length,
     skippedDuplicate: results.filter((r) => r.status === "SKIPPED_DUPLICATE").length,
+    rateLimitPauses: pausesUsed,
   };
   console.log("\n── campaign result ──");
   for (const [k, v] of Object.entries(summary)) console.log(`  ${k.padEnd(18)}: ${v}`);
@@ -514,29 +629,145 @@ async function main() {
     );
   }
 
-  writeReport(scoped, results, {
+  const remainingRateLimited = results.filter(
+    (r) => r.status === "FAILED" && isRateLimitError(r.errorMessage)
+  ).length;
+
+  const reportPath = writeReport(scoped, results, {
     smtpConfigured: mail.isConfigured,
     aborted: null,
     dryRun: false,
     summary,
     campaignId: CAMPAIGN_ID,
+    resumedFrom: RETRY_FROM ?? null,
+    pausesUsed,
   });
 
   await prisma.$disconnect();
+
+  if (remainingRateLimited > 0 && reportPath) {
+    console.log(
+      `\n  RATE-LIMITED: ${remainingRateLimited} recipient(s) were refused by the SMTP host ` +
+        `(pause budget of ${MAX_PAUSES} exhausted or pausing disabled).`
+    );
+    console.log(
+      `  Resume later WITHOUT re-emailing anyone who already got their message:\n` +
+        `    npx ts-node scripts/send-invite-approval-emails.ts --yes --retry-failed-from=${reportPath}\n`
+    );
+  }
+
   process.exit(summary.failed > 0 || summary.timedOut > 0 ? 1 : 0);
 }
 
 const CAMPAIGN_ID = `campaign-${new Date().toISOString().replace(/[:.]/g, "-")}`;
 
+/**
+ * Queue ONE recipient through the real pipeline (NotificationEventEngine →
+ * ledger row QUEUED → async SMTP deliver). Never throws — returns the ledger
+ * id or an error string. The 421 refusal usually surfaces later, in ackOne,
+ * via the ledger row's errorMessage.
+ */
+async function queueOne(
+  r: Recipient,
+  engine: NotificationEventEngine
+): Promise<{ ok: true; id: string } | { ok: false; error: string; suppressed: boolean }> {
+  try {
+    let queued: { id: string } | null = null;
+    if (r.category === "INVITED_DRIVER") {
+      const tpl = buildInvitedDriverEmail(r.name, (r as any).onboardingToken ?? "");
+      queued = await engine.queueAndSend({
+        driverId: r.refId,
+        channel: EnumNotificationEventChannel.EMAIL,
+        toEmail: r.email!,
+        ...tpl,
+        payload: {
+          campaignId: CAMPAIGN_ID,
+          driverId: r.refId,
+          note: "Bulk invite re-send (campaign script)",
+        } as Prisma.InputJsonValue,
+      });
+    } else if (r.category === "APPROVED_DRIVER") {
+      const tpl = buildApprovedDriverEmail(r.name, (r as any).approvedAt ?? null);
+      queued = await engine.queueAndSend({
+        driverId: r.refId,
+        channel: EnumNotificationEventChannel.EMAIL,
+        toEmail: r.email!,
+        ...tpl,
+        payload: {
+          campaignId: CAMPAIGN_ID,
+          driverId: r.refId,
+          note: "Bulk approval re-send (campaign script)",
+        } as Prisma.InputJsonValue,
+      });
+    } else {
+      const tpl = buildApprovedDealerEmail({
+        customerType: (r as any).customerType ?? null,
+        businessName: (r as any).businessName ?? null,
+        contactName: (r as any).contactName ?? null,
+        userFullName: (r as any).userFullName ?? null,
+        postpaidEnabled: (r as any).postpaidEnabled ?? false,
+      });
+      queued = await engine.queueAndSend({
+        customerId: r.refId,
+        channel: EnumNotificationEventChannel.EMAIL,
+        toEmail: r.email!,
+        ...tpl,
+        payload: {
+          campaignId: CAMPAIGN_ID,
+          customerId: r.refId,
+          note: "Bulk approval re-send (campaign script)",
+        } as Prisma.InputJsonValue,
+      });
+    }
+    if (!queued) {
+      // queueAndSend returns null only when cross-role suppression fired (not expected here)
+      return { ok: false, error: "suppressed by cross-role guard", suppressed: true };
+    }
+    return { ok: true, id: queued.id };
+  } catch (e: any) {
+    return { ok: false, error: e?.message ?? String(e), suppressed: false };
+  }
+}
+
+/**
+ * Wait for THIS recipient's ledger row to settle (SENT / FAILED), mutating
+ * the report row in place. Returns the resulting status (also kept in
+ * row.status). On ack timeout the row stays QUEUED — the final courtesy pass
+ * re-checks it before the report is written.
+ */
+async function ackOne(
+  row: ResultRow,
+  prisma: PrismaService,
+  ackSeconds: number
+): Promise<ResultRow["status"]> {
+  const deadline = Date.now() + ackSeconds * 1000;
+  while (row.status === "QUEUED" && Date.now() < deadline) {
+    await new Promise((res) => setTimeout(res, 2000));
+    const ev = await prisma.notificationEvent.findUnique({
+      where: { id: row.notificationEventId! },
+      select: { status: true, errorMessage: true },
+    });
+    if (!ev) continue;
+    if (ev.status === EnumNotificationEventStatus.SENT) {
+      row.status = "SENT";
+    } else if (ev.status === EnumNotificationEventStatus.FAILED) {
+      row.status = "FAILED";
+      row.errorMessage = ev.errorMessage ?? "unknown SMTP error";
+    }
+  }
+  return row.status;
+}
+
 function writeReport(
   scoped: Recipient[],
   results: ResultRow[],
   extra: Record<string, unknown>
-) {
+): string | null {
+  let jsonPath: string | null = null;
   try {
     fs.mkdirSync(REPORT_DIR, { recursive: true });
     const stamp = new Date().toISOString().replace(/[:.]/g, "-");
-    const jsonPath = path.join(REPORT_DIR, `email-campaign-report-${stamp}.json`);
+    jsonPath = path.join(REPORT_DIR, `email-campaign-report-${stamp}.json`);
     const mdPath = path.join(REPORT_DIR, `email-campaign-report-${stamp}.md`);
 
     const payload = {
@@ -545,6 +776,8 @@ function writeReport(
       mode: extra.dryRun ? "DRY_RUN" : "LIVE",
       smtpConfigured: extra.smtpConfigured,
       aborted: extra.aborted,
+      resumedFrom: (extra.resumedFrom as string | null) ?? null,
+      pausesUsed: (extra.pausesUsed as number | undefined) ?? 0,
       summary: extra.summary ?? { totalInScope: scoped.length },
       results,
     };
@@ -578,6 +811,7 @@ function writeReport(
   } catch (e: any) {
     console.warn(`(report file write failed: ${e?.message})`);
   }
+  return jsonPath;
 }
 
 main().catch(async (e) => {

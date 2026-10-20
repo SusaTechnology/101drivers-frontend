@@ -25,6 +25,7 @@ import { ResetPasswordDto } from "./dto/ResetPassword.dto";
 import { NotificationEventEngine } from "../domain/notificationEvent/notificationEvent.engine";
 import { MailService } from "src/common/mail/mail.service";
 import { AppEventsService, APP_EVENT } from "../common/appEvents/appEvents.service";
+import { clientIpFromRequest } from "../common/rate-limit/rate-limit.service";
 import { AnalyticsService } from "../analytics/analytics.service";
 import { ReferralService } from "../referral/referral.service";
 import {
@@ -314,6 +315,7 @@ export class AuthService {
       role: Array.isArray(user.roles) && user.roles.length
         ? String(user.roles[0])
         : null,
+      ip: clientIpFromRequest(request),
     });
 
     return {
@@ -691,6 +693,7 @@ export class AuthService {
       type: "SIGNUP",
       userId,
       role: "DRIVER",
+      ip: clientIpFromRequest(request),
     });
 
     return this.issueToken(
@@ -1005,6 +1008,7 @@ export class AuthService {
         type: "SIGNUP",
         userId,
         role: "PRIVATE_CUSTOMER",
+        ip: clientIpFromRequest(request),
       });
 
       return this.issueToken(
@@ -1111,6 +1115,7 @@ export class AuthService {
       type: "SIGNUP",
       userId,
       role: "PRIVATE_CUSTOMER",
+      ip: clientIpFromRequest(request),
     });
 
     return this.issueToken(
@@ -1338,6 +1343,7 @@ export class AuthService {
       type: "SIGNUP",
       userId,
       role: "BUSINESS_CUSTOMER",
+      ip: clientIpFromRequest(request),
     });
 
     return this.issueToken(

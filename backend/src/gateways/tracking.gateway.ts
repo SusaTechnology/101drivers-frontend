@@ -96,6 +96,9 @@ export class TrackingGateway
         if (event === APP_EVENT.USER_STATS_CHANGED) {
           this.emitUserStatsChanged();
         }
+        if (event === APP_EVENT.ANALYTICS_CHANGED) {
+          this.emitMetricsChanged();
+        }
       });
     }
   }
@@ -736,6 +739,23 @@ export class TrackingGateway
       return;
     }
     this.server.to(STAFF_OPS_ROOM).emit("users:stats-changed", {
+      at: new Date().toISOString(),
+    });
+  }
+
+  /**
+   * Contentless ping to every ADMIN socket when the analytics ledger or
+   * the blocked-signups ledger gains a row (throttled upstream in
+   * AnalyticsService). The admin metrics page listens for
+   * "metrics:changed" and re-reads server truth between its 15s
+   * safety-net polls — the numbers move within a second or two of a
+   * visit / sign-up / blocked attempt, not a minute later.
+   */
+  emitMetricsChanged() {
+    if (!this.server) {
+      return;
+    }
+    this.server.to(STAFF_OPS_ROOM).emit("metrics:changed", {
       at: new Date().toISOString(),
     });
   }

@@ -438,14 +438,34 @@ async adminUsersV2(
   action: "read",
   possession: "any",
 })
-async adminUserStatusStats(): Promise<{
+async adminUserStatusStats(
+  @common.Req() request: Request
+): Promise<{
   drivers: Record<string, number>;
   businessCustomers: Record<string, number>;
   privateCustomers: Record<string, number>;
   admins: Record<string, number>;
   adminsTotal: number;
+  viewerIsSuperAdmin: boolean;
 }> {
-  return this.service.getAdminUserStatusStats();
+  const stats = await this.service.getAdminUserStatusStats();
+  // Server-truth viewer elevation, stamped from the JWT on every request
+  // (jwt.strategy mirrors User.isSuperAdmin into request.user). The Users
+  // page uses this to decide — ONCE, on page load, regardless of which
+  // table page/filter is showing — whether the admin-lifecycle card
+  // breakdown and the super-admin-only row actions render. The old
+  // login-snapshot + own-row-in-current-page inference flickered until
+  // the viewer happened to filter the table to Admins.
+  const viewerIsSuperAdmin = (request as any)?.user?.isSuperAdmin === true;
+  return {
+    ...stats,
+    viewerIsSuperAdmin,
+    // Defense in depth: the per-status admin lifecycle counts are a
+    // super-admin-only detail (same permission model as the admin row
+    // actions). A regular admin still gets adminsTotal (the card's big
+    // number) but never the breakdown map — not even over the wire.
+    admins: viewerIsSuperAdmin ? stats.admins : {},
+  };
 }
 
 @common.Get(":id/admin-detail")
@@ -459,6 +479,31 @@ async adminUserDetail(
   @common.Param("id") id: string
 ): Promise<any> {
   return this.service.getAdminUserDetail(id);
+}
+
+/**
+ * Admin "reveal full SSN" — the single decryption path for
+ * Driver.ssnEncrypted (AES-256-GCM at rest). Same role gate as the admin
+ * detail endpoint (an admin who can open the profile may complete the
+ * manual background check), but unlike the detail payload this endpoint
+ * DECRYPTS on demand and writes an AdminAuditLog row attributing the
+ * reveal (actor, target user + driver, timestamp) on every success.
+ * The actor id comes from the verified JWT — never from the client body.
+ */
+@common.Get(":id/driver-ssn")
+@swagger.ApiOkResponse({ type: Object })
+@nestAccessControl.UseRoles({
+  resource: "User",
+  action: "read",
+  possession: "any",
+})
+async adminDriverSsn(
+  @common.Param("id") id: string,
+  @common.Req() request: Request
+): Promise<any> {
+  const actorUserId =
+    (request as any)?.user?.id ?? null;
+  return this.service.revealDriverSsn(id, actorUserId);
 }
 
 @common.Post(":id/suspend")

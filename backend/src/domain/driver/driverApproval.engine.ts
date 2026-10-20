@@ -110,7 +110,7 @@ export class DriverApprovalEngine {
           "Good news! You\u2019ve been selected to move forward with your driver application.",
           "Please complete your application by visiting the link below:",
           "",
-          `https://${(process.env.APP_DOMAIN || "101drivers.techbee.et").replace(/^https?:\/\//, "")}/driver-onboarding-complete?token=${onboardingToken}`,
+          `https://${(process.env.APP_DOMAIN || "101drivers.com").replace(/^https?:\/\//, "")}/driver-onboarding-complete?token=${onboardingToken}`,
           "",
           "You will need to provide the following:",
           "",
@@ -228,7 +228,7 @@ export class DriverApprovalEngine {
           "You now have access to the 101 Drivers platform.",
           "Log in to your account to start viewing available deliveries:",
           "",
-          `https://${(process.env.APP_DOMAIN || "101drivers.techbee.et").replace(/^https?:\/\//, "")}/driver-signin`,
+          `https://${(process.env.APP_DOMAIN || "101drivers.com").replace(/^https?:\/\//, "")}/driver-signin`,
           "",
           input.note ? `Note from our team: ${input.note}` : "",
         ]

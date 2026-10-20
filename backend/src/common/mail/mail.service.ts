@@ -34,7 +34,7 @@ export class MailService {
     // the From header (see .env.example).
     this.from =
       this.configService.get<string>("SMTP_FROM") ??
-      "101 Drivers <noreply@101drivers.com>";
+      "101 Drivers <info@101drivers.com>";
 
     this.appDomain =
       this.normalizeBaseUrl(

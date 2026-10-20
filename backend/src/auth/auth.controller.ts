@@ -18,6 +18,7 @@ import { UserInfo } from "./UserInfo";
 import { SignupDriverDto } from "./dto/SignupDriver.dto";
 import { SignupCustomerDto } from "./dto/SignupCustomer.dto";
 import { JwtAuthGuard } from "./jwt/jwtAuth.guard";
+import { MobileOnlySignupGuard } from "./guards/mobile-only-signup.guard";
 import { ForgotPasswordDto } from "./dto/ForgotPassword.dto";
 import { ResetPasswordDto } from "./dto/ResetPassword.dto";
 import { VerifyOtpDto } from "./dto/VerifyOtp.dto";
@@ -70,6 +71,10 @@ export class AuthController {
 
   @Post("signup/driver")
   @HttpCode(HttpStatus.OK)
+  // Mobile-only gate: the USER AGENT is the signal — desktop patterns get a
+  // 403 { message, storeUrl } and a BlockedSignup audit/spam-radar row.
+  // iPad and Android tablets pass (OS-based rule, never screen size).
+  @UseGuards(MobileOnlySignupGuard)
   async signupDriver(
     @Body() body: SignupDriverDto,
     @Req() request: Request,

@@ -59,9 +59,14 @@ WHERE u.roles IN ('BUSINESS_CUSTOMER', 'PRIVATE_CUSTOMER')
   -- Mirror UserPolicyService.beforeDelete's hasDependencies check — only
   -- delete users with ZERO related records of any kind.
   AND NOT EXISTS (SELECT 1 FROM "DeliveryRequest" dr WHERE dr."createdByUserId" = u.id)
-  AND NOT EXISTS (SELECT 1 FROM "DeliveryAssignment" da WHERE da."driverUserId" = u.id)
+  AND NOT EXISTS (
+  SELECT 1
+  FROM "DeliveryAssignment" da
+  JOIN "Driver" d ON d.id = da."driverId"
+  WHERE d."userId" = u.id
+)
   AND NOT EXISTS (SELECT 1 FROM "AdminAuditLog" aal WHERE aal."actorUserId" = u.id)
-  AND NOT EXISTS (SELECT 1 FROM "NotificationEvent" ne WHERE ne."userId" = u.id)
+  AND NOT EXISTS (SELECT 1 FROM "NotificationEvent" ne WHERE ne."actorUserId" = u.id)
   AND NOT EXISTS (SELECT 1 FROM "DeliveryStatusHistory" dsh WHERE dsh."actorUserId" = u.id)
   AND NOT EXISTS (SELECT 1 FROM "ScheduleChangeRequest" scr WHERE scr."requestedByUserId" = u.id)
   AND NOT EXISTS (SELECT 1 FROM "ScheduleChangeRequest" scr WHERE scr."decidedByUserId" = u.id)

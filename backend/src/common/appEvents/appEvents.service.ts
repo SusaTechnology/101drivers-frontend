@@ -34,6 +34,10 @@ export const APP_EVENT = {
   /** A user/role row was created or its status changed — admin Users-page
    *  stat cards and admin list caches should re-read server truth. */
   USER_STATS_CHANGED: "users:stats-changed",
+  /** A new analytics ledger row landed (PAGE_VIEW/SIGNUP/LOGIN/...)
+   *  or a signup attempt was blocked — the admin metrics page should
+   *  re-read server truth (throttled at the emit sites, not here). */
+  ANALYTICS_CHANGED: "analytics:changed",
 } as const;
 
 export type AppEventName = (typeof APP_EVENT)[keyof typeof APP_EVENT];

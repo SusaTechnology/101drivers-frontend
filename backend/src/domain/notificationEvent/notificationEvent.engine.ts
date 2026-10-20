@@ -733,11 +733,11 @@ export class NotificationEventEngine {
       type: EnumNotificationEventType.DELIVERY_BOOKED,
       templateCode: "delivery-booked",
       toEmail,
-      subject: "A driver booked your delivery",
+      subject: "Your delivery is booked — Driver assigned",
       body: [
         `Hi ${displayName},`,
         "",
-        `${driverName} has booked your delivery request.`,
+        `${driverName} has accepted your delivery request.`,
         `Pickup: ${delivery.pickupAddress}`,
         `Drop-off: ${delivery.dropoffAddress}`,
         `Status: ${delivery.status}`,
@@ -960,7 +960,7 @@ private buildTripStartedTrackingLines(input: {
     `Drop-off: ${input.dropoffAddress}`,
     "",
     "About this tracking link:",
-    "- It stays live for as long as the delivery is on the road — it will not expire mid-trip.",
+    "- It stays live for as long as the delivery is on the road.",
     "- Tracking closes automatically once the delivery is completed or cancelled.",
     "- If the page ever stops working while the delivery is still in progress, just reach out and we'll send you a fresh link right away.",
     "",
@@ -1365,7 +1365,7 @@ async notifyTripCompleted(input: {
               <p style="font-size: 16px;">Your delivery was completed yesterday. We'd love to hear how it went!</p>
               <p style="font-size: 16px;">Your feedback helps us maintain quality and helps drivers improve.</p>
               <div style="text-align: center; margin: 32px 0;">
-                <a href="https://101drivers.techbee.et"
+                <a href="https://101drivers.com"
                    style="display: inline-block; padding: 14px 32px; background: #111; color: #fff; text-decoration: none; border-radius: 12px; font-size: 16px; font-weight: 700;">
                   Go to 101 Drivers to Rate
                 </a>
