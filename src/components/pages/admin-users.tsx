@@ -809,12 +809,14 @@ export default function AdminUsersPage() {
   const { actionItems, signOut } = useAdminActions();
   const actorUserId = getActorUserId();
   // Super-admin gate for the elevated row actions (Disable / Enable /
-  // Make Super Admin / Downgrade) — source 1 of 2: the login payload.
-  // It is a SNAPSHOT from sign-in time, so it is stale/absent when the
-  // user signed in before the super-admin flag existed. Combined with
-  // the freshly fetched users list below (source 2), which the server
-  // stamps with isSuperAdmin on every row. The server re-verifies on
-  // every request regardless — this only decides which buttons render.
+  // Make Super Admin / Downgrade) — FALLBACK 1 of 2 (the primary gate is
+  // the server-truth viewerIsSuperAdmin on the status-stats response):
+  // the login payload. It is a SNAPSHOT from sign-in time, so it is
+  // stale/absent when the user signed in before the super-admin flag
+  // existed. Combined with the freshly fetched users list (fallback 2),
+  // which the server stamps with isSuperAdmin on every row. The server
+  // re-verifies on every request regardless — this only decides which
+  // buttons render.
   const loginSnapshotSuperAdmin = getUser()?.isSuperAdmin === true;
   const navigate = useNavigate();
 
@@ -1171,13 +1173,20 @@ export default function AdminUsersPage() {
 
   // Derived values from the V2 response
   const users = v2Data?.rows ?? [];
-  // Super-admin gate, source 2 of 2 (see loginSnapshotSuperAdmin): the
-  // current user's own row in the freshly fetched list is server truth,
-  // so the elevated buttons appear even when the stored login snapshot
-  // predates the flag — no sign-out/in required.
+  // Super-admin gate — PRIMARY SOURCE: server truth. The status-stats
+  // response carries viewerIsSuperAdmin, stamped by the backend from the
+  // JWT on EVERY request, so the admin card breakdown (Pending invite /
+  // Invite expired / Disabled / Super Admin chips) and the SA-only row
+  // actions (Invite Admin, Disable/Enable, Make Super Admin, Demote) are
+  // correct the moment the page loads — no matter which table page or
+  // role filter is active — and a regular admin can never talk the UI
+  // into revealing them ("no matter what they click"). The login
+  // snapshot and the viewer's own row in the fetched list remain only as
+  // fallbacks for an older backend that predates the flag.
   const isCurrentUserSuperAdmin =
-    loginSnapshotSuperAdmin ||
-    (actorUserId ? users.some((u) => u.id === actorUserId && u.isSuperAdmin) : false);
+    statusStats?.viewerIsSuperAdmin ??
+    (loginSnapshotSuperAdmin ||
+      (actorUserId ? users.some((u) => u.id === actorUserId && u.isSuperAdmin) : false));
   const totalUsers = v2Data?.pagination?.totalRows ?? 0;
   const totalPages = v2Data?.pagination?.totalPages ?? 1;
   const roleAutoForced = v2Data?.filtersApplied?.roleAutoForced ?? false;

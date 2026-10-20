@@ -155,11 +155,18 @@ export interface AdminUserStatusStats {
   businessCustomers: Record<string, number>;
   privateCustomers: Record<string, number>;
   /** Admin lifecycle counts (ACTIVE / PENDING_INVITE / INVITE_EXPIRED /
-   *  DISABLED + the SUPER_ADMIN flag count, which overlaps lifecycle). */
+   *  DISABLED + the SUPER_ADMIN flag count, which overlaps lifecycle).
+   *  SUPER-ADMIN-ONLY: the server returns an empty map to regular admins. */
   admins?: Record<string, number>;
   /** True admin row count — the row's total (Super Admin overlaps the
    *  lifecycle statuses, so the map cannot simply be summed). */
   adminsTotal?: number;
+  /** Server truth for the VIEWER, stamped from the JWT on every request.
+   *  Primary gate for the admin card breakdown + the SA-only row actions
+   *  (Invite Admin / Disable / Enable / Make Super Admin / Demote) —
+   *  correct on page load regardless of which page or filter is showing;
+   *  the login snapshot and own-row inference are fallbacks only. */
+  viewerIsSuperAdmin?: boolean;
 }
 
 export function useAdminUserStatusStats() {
