@@ -7,7 +7,7 @@
 // "track of records" table. Data comes from the ADMIN-only
 // /api/analytics/* endpoints; all numbers are server-authoritative.
 
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Activity,
   BarChart3,
@@ -15,11 +15,13 @@ import {
   Eye,
   Package,
   RefreshCw,
+  ShieldAlert,
   TrendingDown,
   TrendingUp,
   UserPlus,
   LogIn,
 } from 'lucide-react'
+import { useQueryClient } from '@tanstack/react-query'
 import {
   Area,
   AreaChart,
@@ -42,9 +44,12 @@ import { Navbar } from '@/components/shared/layout/testNavbar'
 import { navItems } from '@/lib/items/navItems'
 import { Brand } from '@/lib/items/brand'
 import { useAdminActions } from '@/hooks/useAdminActions'
+import { useSocketEvent } from '@/hooks/useSocket'
+import { socketJoinStaffOps, socketLeaveStaffOps } from '@/lib/socket'
 import {
   LIVE_REFRESH_MS,
   metricsWindow,
+  useAnalyticsBlockedSignups,
   useAnalyticsHourly,
   useAnalyticsOverview,
   useAnalyticsRecords,
@@ -139,6 +144,7 @@ export default function AdminMetricsPage() {
   const [customTo, setCustomTo] = useState('')
   const [recordsType, setRecordsType] = useState('ALL')
   const [recordsPage, setRecordsPage] = useState(1)
+  const [blockedPage, setBlockedPage] = useState(1)
 
   const win = useMemo(
     () => metricsWindow(range, customFrom, customTo),
@@ -148,6 +154,7 @@ export default function AdminMetricsPage() {
   const overview = useAnalyticsOverview(win)
   const hourly = useAnalyticsHourly(win, range === '24H')
   const records = useAnalyticsRecords(win, recordsType, recordsPage)
+  const blocked = useAnalyticsBlockedSignups(win, blockedPage)
 
   // Ticking clock so the "Updated Ns ago" readout stays honest between polls.
   const [nowTick, setNowTick] = useState(() => Date.now())
@@ -193,7 +200,38 @@ export default function AdminMetricsPage() {
   const changeRange = (next: MetricsRange) => {
     setRange(next)
     setRecordsPage(1)
+    setBlockedPage(1)
   }
+
+  // ── Socket live updates (real-time, not just the 15s poll) ────────────
+  // The backend emits a contentless "metrics:changed" ping to the
+  // staff:ops room whenever the analytics ledger (visits / signups /
+  // logins / deliveries) or the blocked-signups ledger gains a row
+  // (throttled server-side to one per few seconds). We join the room
+  // while this page is mounted and debounce invalidations so a burst is
+  // ONE refetch. The 15s refetchInterval stays as the safety net for a
+  // dropped socket.
+  const queryClient = useQueryClient()
+  const invalidateTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const handleMetricsChanged = useCallback(() => {
+    if (invalidateTimer.current) clearTimeout(invalidateTimer.current)
+    invalidateTimer.current = setTimeout(() => {
+      invalidateTimer.current = null
+      queryClient.invalidateQueries({ queryKey: ['analytics'] })
+    }, 1500)
+  }, [queryClient])
+
+  useEffect(() => {
+    socketJoinStaffOps()
+    return () => {
+      socketLeaveStaffOps()
+      if (invalidateTimer.current) {
+        clearTimeout(invalidateTimer.current)
+        invalidateTimer.current = null
+      }
+    }
+  }, [])
+  useSocketEvent('metrics:changed', handleMetricsChanged)
 
   return (
     <div className="min-h-screen bg-background">
@@ -491,18 +529,20 @@ export default function AdminMetricsPage() {
                   <th className="px-3.5 py-2 font-medium">Detail</th>
                   <th className="px-3.5 py-2 font-medium">User</th>
                   <th className="px-3.5 py-2 font-medium">Session</th>
+                  <th className="px-3.5 py-2 font-medium">IP</th>
+                  <th className="px-3.5 py-2 font-medium">User agent</th>
                 </tr>
               </thead>
               <tbody>
                 {records.isLoading ? (
                   <tr>
-                    <td colSpan={5} className="px-3.5 py-8 text-center text-muted-foreground">
+                    <td colSpan={7} className="px-3.5 py-8 text-center text-muted-foreground">
                       <RefreshCw className="h-4 w-4 animate-spin mx-auto" />
                     </td>
                   </tr>
                 ) : (records.data?.rows ?? []).length === 0 ? (
                   <tr>
-                    <td colSpan={5} className="px-3.5 py-8 text-center text-muted-foreground">
+                    <td colSpan={7} className="px-3.5 py-8 text-center text-muted-foreground">
                       No events recorded in this window yet — records appear as
                       people visit, sign up, log in and create deliveries.
                     </td>
@@ -532,6 +572,12 @@ export default function AdminMetricsPage() {
                       </td>
                       <td className="px-3.5 py-2 font-mono text-[10px] text-muted-foreground">
                         {row.sessionId ? shortId(row.sessionId) : '—'}
+                      </td>
+                      <td className="px-3.5 py-2 font-mono text-[10px] text-muted-foreground whitespace-nowrap">
+                        {row.ip || '—'}
+                      </td>
+                      <td className="px-3.5 py-2 max-w-[200px] truncate text-[10px] text-muted-foreground" title={row.userAgent || undefined}>
+                        {row.userAgent || '—'}
                       </td>
                     </tr>
                   ))
@@ -563,6 +609,115 @@ export default function AdminMetricsPage() {
                   recordsPage * 20 >= records.data.total
                 }
                 onClick={() => setRecordsPage((p) => p + 1)}
+              >
+                Next
+              </Button>
+            </div>
+          </div>
+        </div>
+
+        {/* Blocked signups — the spam radar */}
+        <div className="rounded-xl border bg-card">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b px-3.5 py-2.5">
+            <div>
+              <h2 className="text-sm font-semibold flex items-center gap-1.5">
+                <ShieldAlert className="h-4 w-4 text-red-500" />
+                Blocked signups
+              </h2>
+              <p className="text-[11px] text-muted-foreground">
+                Driver-registration attempts rejected because they came from
+                a desktop browser (signup is mobile only). {numFmt.format(blocked.data?.total ?? 0)}{' '}
+                in window — repeated IPs with rotating emails are your spam
+                radar.
+              </p>
+            </div>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="border-b text-left text-muted-foreground">
+                  <th className="px-3.5 py-2 font-medium">When</th>
+                  <th className="px-3.5 py-2 font-medium">IP</th>
+                  <th className="px-3.5 py-2 font-medium">Attempted email</th>
+                  <th className="px-3.5 py-2 font-medium">Reason</th>
+                  <th className="px-3.5 py-2 font-medium">User agent</th>
+                </tr>
+              </thead>
+              <tbody>
+                {blocked.isLoading ? (
+                  <tr>
+                    <td colSpan={5} className="px-3.5 py-8 text-center text-muted-foreground">
+                      <RefreshCw className="h-4 w-4 animate-spin mx-auto" />
+                    </td>
+                  </tr>
+                ) : (blocked.data?.rows ?? []).length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="px-3.5 py-8 text-center text-muted-foreground">
+                      No blocked attempts in this window — desktop visitors
+                      see the &ldquo;Signup is mobile only&rdquo; card and
+                      never reach the form.
+                    </td>
+                  </tr>
+                ) : (
+                  (blocked.data?.rows ?? []).map((row) => (
+                    <tr key={row.id} className="border-b last:border-0 hover:bg-muted/30">
+                      <td className="px-3.5 py-2 whitespace-nowrap tabular-nums">
+                        {fmtDateTime(row.createdAt)}
+                      </td>
+                      <td className="px-3.5 py-2 font-mono text-[10px] text-muted-foreground whitespace-nowrap">
+                        {row.ip || '—'}
+                      </td>
+                      <td className="px-3.5 py-2 max-w-[220px] truncate text-muted-foreground">
+                        {row.email || '—'}
+                      </td>
+                      <td className="px-3.5 py-2">
+                        <span
+                          className={`inline-block rounded-full border px-2 py-0.5 text-[10px] font-semibold ${
+                            row.reason === 'DESKTOP_UA'
+                              ? 'bg-red-500/10 text-red-600 border-red-500/30'
+                              : 'bg-amber-500/10 text-amber-600 border-amber-500/30'
+                          }`}
+                        >
+                          {row.reason || 'UNKNOWN'}
+                        </span>
+                      </td>
+                      <td
+                        className="px-3.5 py-2 max-w-[260px] truncate text-[10px] text-muted-foreground"
+                        title={row.userAgent || undefined}
+                      >
+                        {row.userAgent || '—'}
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Pagination */}
+          <div className="flex items-center justify-between border-t px-3.5 py-2 text-xs">
+            <span className="text-muted-foreground">
+              Page {blockedPage}
+              {blocked.data ? ` · ${numFmt.format(blocked.data.total)} total` : ''}
+            </span>
+            <div className="flex gap-1.5">
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={blockedPage <= 1}
+                onClick={() => setBlockedPage((p) => Math.max(1, p - 1))}
+              >
+                Previous
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={
+                  !blocked.data ||
+                  blockedPage * 20 >= blocked.data.total
+                }
+                onClick={() => setBlockedPage((p) => p + 1)}
               >
                 Next
               </Button>

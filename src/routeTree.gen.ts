@@ -46,6 +46,7 @@ import { Route as DriverCompletedIndexRouteImport } from './routes/driver-comple
 import { Route as DriverBookedLaterIndexRouteImport } from './routes/driver-booked-later/index'
 import { Route as DriverApplicationSubmittedIndexRouteImport } from './routes/driver-application-submitted/index'
 import { Route as DriverActiveIndexRouteImport } from './routes/driver-active/index'
+import { Route as DownloadIndexRouteImport } from './routes/download/index'
 import { Route as DealerSupportRequestIndexRouteImport } from './routes/dealer-support-request/index'
 import { Route as DealerSupportListIndexRouteImport } from './routes/dealer-support-list/index'
 import { Route as DealerSupportDetailIndexRouteImport } from './routes/dealer-support-detail/index'
@@ -326,6 +327,11 @@ const DriverApplicationSubmittedIndexRoute =
 const DriverActiveIndexRoute = DriverActiveIndexRouteImport.update({
   id: '/driver-active/',
   path: '/driver-active/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DownloadIndexRoute = DownloadIndexRouteImport.update({
+  id: '/download/',
+  path: '/download/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const DealerSupportRequestIndexRoute =
@@ -881,6 +887,7 @@ export interface FileRoutesByFullPath {
   '/dealer-support-detail/': typeof DealerSupportDetailIndexRoute
   '/dealer-support-list/': typeof DealerSupportListIndexRoute
   '/dealer-support-request/': typeof DealerSupportRequestIndexRoute
+  '/download/': typeof DownloadIndexRoute
   '/driver-active/': typeof DriverActiveIndexRoute
   '/driver-application-submitted/': typeof DriverApplicationSubmittedIndexRoute
   '/driver-booked-later/': typeof DriverBookedLaterIndexRoute
@@ -1008,6 +1015,7 @@ export interface FileRoutesByTo {
   '/dealer-support-detail': typeof DealerSupportDetailIndexRoute
   '/dealer-support-list': typeof DealerSupportListIndexRoute
   '/dealer-support-request': typeof DealerSupportRequestIndexRoute
+  '/download': typeof DownloadIndexRoute
   '/driver-active': typeof DriverActiveIndexRoute
   '/driver-application-submitted': typeof DriverApplicationSubmittedIndexRoute
   '/driver-booked-later': typeof DriverBookedLaterIndexRoute
@@ -1137,6 +1145,7 @@ export interface FileRoutesById {
   '/dealer-support-detail/': typeof DealerSupportDetailIndexRoute
   '/dealer-support-list/': typeof DealerSupportListIndexRoute
   '/dealer-support-request/': typeof DealerSupportRequestIndexRoute
+  '/download/': typeof DownloadIndexRoute
   '/driver-active/': typeof DriverActiveIndexRoute
   '/driver-application-submitted/': typeof DriverApplicationSubmittedIndexRoute
   '/driver-booked-later/': typeof DriverBookedLaterIndexRoute
@@ -1267,6 +1276,7 @@ export interface FileRouteTypes {
     | '/dealer-support-detail/'
     | '/dealer-support-list/'
     | '/dealer-support-request/'
+    | '/download/'
     | '/driver-active/'
     | '/driver-application-submitted/'
     | '/driver-booked-later/'
@@ -1394,6 +1404,7 @@ export interface FileRouteTypes {
     | '/dealer-support-detail'
     | '/dealer-support-list'
     | '/dealer-support-request'
+    | '/download'
     | '/driver-active'
     | '/driver-application-submitted'
     | '/driver-booked-later'
@@ -1522,6 +1533,7 @@ export interface FileRouteTypes {
     | '/dealer-support-detail/'
     | '/dealer-support-list/'
     | '/dealer-support-request/'
+    | '/download/'
     | '/driver-active/'
     | '/driver-application-submitted/'
     | '/driver-booked-later/'
@@ -1630,6 +1642,7 @@ export interface RootRouteChildren {
   DealerSupportDetailIndexRoute: typeof DealerSupportDetailIndexRoute
   DealerSupportListIndexRoute: typeof DealerSupportListIndexRoute
   DealerSupportRequestIndexRoute: typeof DealerSupportRequestIndexRoute
+  DownloadIndexRoute: typeof DownloadIndexRoute
   DriverActiveIndexRoute: typeof DriverActiveIndexRoute
   DriverApplicationSubmittedIndexRoute: typeof DriverApplicationSubmittedIndexRoute
   DriverBookedLaterIndexRoute: typeof DriverBookedLaterIndexRoute
@@ -1932,6 +1945,13 @@ declare module '@tanstack/react-router' {
       path: '/driver-active'
       fullPath: '/driver-active/'
       preLoaderRoute: typeof DriverActiveIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/download/': {
+      id: '/download/'
+      path: '/download'
+      fullPath: '/download/'
+      preLoaderRoute: typeof DownloadIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/dealer-support-request/': {
@@ -2677,6 +2697,7 @@ const rootRouteChildren: RootRouteChildren = {
   DealerSupportDetailIndexRoute: DealerSupportDetailIndexRoute,
   DealerSupportListIndexRoute: DealerSupportListIndexRoute,
   DealerSupportRequestIndexRoute: DealerSupportRequestIndexRoute,
+  DownloadIndexRoute: DownloadIndexRoute,
   DriverActiveIndexRoute: DriverActiveIndexRoute,
   DriverApplicationSubmittedIndexRoute: DriverApplicationSubmittedIndexRoute,
   DriverBookedLaterIndexRoute: DriverBookedLaterIndexRoute,

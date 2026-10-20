@@ -140,6 +140,8 @@ export interface AnalyticsRecordRow {
   path: string | null;
   referrer: string | null;
   userAgent: string | null;
+  /** Server-captured client IP (new rows only — historical rows are null). */
+  ip?: string | null;
   metadata: Record<string, unknown> | null;
 }
 
@@ -161,6 +163,43 @@ export function useAnalyticsRecords(
     apiEndPoint: `${API_BASE_URL}/api/analytics/records?${params.toString()}`,
     noFilter: true,
     queryKey: ['analytics', 'records', type, win.from, win.to, String(page)],
+    staleTime: LIVE_REFRESH_MS,
+    refetchInterval: LIVE_REFRESH_MS,
+  });
+}
+
+// ── Spam radar: blocked signup attempts ─────────────────────────────
+
+export interface BlockedSignupRow {
+  id: string;
+  createdAt: string;
+  ip: string | null;
+  userAgent: string | null;
+  email: string | null;
+  reason: string | null;
+}
+
+/**
+ * Driver-registration attempts the mobile-only UA guard rejected
+ * (GET /api/analytics/blocked-signups, ADMIN-only) — the audit trail
+ * for the desktop-blocking rule and the spam radar panel.
+ */
+export function useAnalyticsBlockedSignups(
+  win: MetricsWindow,
+  page: number,
+  pageSize = 20
+) {
+  const params = new URLSearchParams({
+    from: win.from,
+    to: win.to,
+    page: String(page),
+    pageSize: String(pageSize),
+  });
+
+  return useDataQuery<{ rows: BlockedSignupRow[]; total: number }>({
+    apiEndPoint: `${API_BASE_URL}/api/analytics/blocked-signups?${params.toString()}`,
+    noFilter: true,
+    queryKey: ['analytics', 'blocked-signups', win.from, win.to, String(page)],
     staleTime: LIVE_REFRESH_MS,
     refetchInterval: LIVE_REFRESH_MS,
   });

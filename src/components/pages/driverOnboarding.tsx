@@ -10,6 +10,8 @@ import {
 } from "@/components/ui/sheet";
 import { Handshake, AlertTriangle } from "lucide-react";
 import { SEOHead } from "../shared/SEOHead";
+import { MobileOnlySignupCard } from "../shared/MobileOnlySignupCard";
+import { shouldShowMobileOnlySignup } from "../../lib/device";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -227,7 +229,22 @@ const formatDateToStr = (date: Date): string => {
   return `${m}/${d}/${y}`;
 };
 
+// ── Mobile-only gate (client half of the server's signup UA rule) ──────
+// The backend rejects desktop user agents on POST /auth/signup/driver;
+// this wrapper makes the experience match: on a desktop UA the signup
+// form NEVER MOUNTS — the visitor gets the full-screen "Signup is
+// mobile only" card with a QR code instead. The check is synchronous
+// (localStorage-cached for 30 days), so a returning desktop visitor
+// never sees the form flash. The rule is OS-based, never screen size:
+// iPads and Android tablets report mobile OSes in their UA and pass.
 export default function DriverOnboardingPage() {
+  if (shouldShowMobileOnlySignup()) {
+    return <MobileOnlySignupCard />;
+  }
+  return <DriverOnboardingForm />;
+}
+
+function DriverOnboardingForm() {
   const DRIVER_PENDING_PAYLOAD_KEY = 'driverPendingPayload';
 
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
