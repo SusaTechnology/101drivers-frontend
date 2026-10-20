@@ -42,10 +42,9 @@
 //   npx ts-node scripts/restore-driver-identity-original.ts
 //   npx ts-node scripts/restore-driver-identity-original.ts --apply --cutoff "2026-10-21T00:00:00Z"
 
+import * as dotenv from "dotenv";
 import { PrismaClient } from "@prisma/client";
 import { createHmac } from "crypto";
-
-const prisma = new PrismaClient();
 
 // The old migration used this LITERAL pepper (it could not read env vars).
 const MIGRATION_PEPPER = "101drivers-identity-hash-v1";
@@ -76,6 +75,12 @@ function maskSsn(full: string): string {
 }
 
 async function main() {
+  // Load backend/.env BEFORE the Prisma client is constructed — same pattern
+  // as every other script in this folder (seed.ts, backfill-*), otherwise the
+  // client cannot see DATABASE_URL when run via plain ts-node.
+  dotenv.config();
+  const prisma = new PrismaClient();
+
   const args = process.argv.slice(2);
   const apply = args.includes("--apply");
   const cutoffIdx = args.indexOf("--cutoff");
@@ -92,8 +97,11 @@ async function main() {
   const rows = await prisma.driver.findMany({
     where: { ssnHash: { not: null } },
     select: {
-      id: true, email: true, ssnLastFour: true, ssnHash: true,
+      id: true, ssnLastFour: true, ssnHash: true,
       licenseNumberHash: true, createdAt: true, updatedAt: true,
+      // Driver has NO email column of its own — identity comes through the
+      // required User relation (Driver.user, DriverOnUser).
+      user: { select: { email: true } },
     },
     orderBy: { createdAt: "asc" },
   });
@@ -106,7 +114,7 @@ async function main() {
   let restored = 0, skippedPostDeploy = 0, failed = 0, anomalous = 0;
 
   for (const r of rows) {
-    const tag = `${r.id} ${r.email ?? "(no email)"} (updated ${r.updatedAt.toISOString()})`;
+    const tag = `${r.id} ${r.user?.email ?? "(no email)"} (updated ${r.updatedAt.toISOString()})`;
 
     // Post-deploy app-written row: ssnLastFour was never truncated — leave it.
     if (cutoff && r.updatedAt >= cutoff) {
@@ -150,8 +158,7 @@ async function main() {
   if (!apply && restored > 0) {
     console.log("Re-run with --apply (and --cutoff if any driver signed up since your deploy) to write the restoration.");
   }
+  await prisma.$disconnect();
 }
 
-main()
-  .catch((e) => { console.error(e); process.exit(1); })
-  .finally(() => prisma.$disconnect());
+main().catch((e) => { console.error(e); process.exit(1); });
