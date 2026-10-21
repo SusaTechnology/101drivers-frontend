@@ -357,6 +357,25 @@ export default function IndividualVerifyEmailPage() {
                 </span>
               )}
             </p>
+            {/* Deliverability helper — spam filtering is the #1 cause of
+                "no code arrived" frustration. The address is a real mailto:
+                styled like the surrounding plain text (Tailwind preflight
+                makes anchors inherit color/no underline); tapping it opens
+                the mail client so users can save the sender to contacts and
+                stop future codes from landing in spam. Sender address must
+                match the backend MailService FROM (SMTP_FROM ?? "101 Drivers
+                <info@101drivers.com>") — keep them in sync. */}
+            <p className="text-xs leading-relaxed text-slate-400 dark:text-slate-500">
+              Didn't get it? The code was sent from{' '}
+              <a
+                href="mailto:info@101drivers.com"
+                className="hover:underline underline-offset-2"
+              >
+                info@101drivers.com
+              </a>
+              . Check your spam folder, or tap that address to save it to your
+              contacts.
+            </p>
           </div>
 
           {/* OTP Input */}
