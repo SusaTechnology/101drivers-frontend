@@ -1766,6 +1766,24 @@ export function DealerSignupForm({ isLoaded: isLoadedProp, embedded = false }: D
                 . Enter it below to verify and submit your sign-up.
               </DialogDescription>
             </DialogHeader>
+            {/* Same deliverability helper as the driver verify screen — spam
+                filtering is the #1 "no code arrived" cause. The address is a
+                real mailto: styled like the surrounding plain text (Tailwind
+                preflight makes anchors inherit color/no underline; hover
+                underline only). Sender address must match the backend
+                MailService FROM (SMTP_FROM ?? "101 Drivers
+                <info@101drivers.com>") — keep them in sync. */}
+            <p className="text-xs leading-relaxed text-slate-400 dark:text-slate-500">
+              Didn't get it? The code was sent from{' '}
+              <a
+                href="mailto:info@101drivers.com"
+                className="hover:underline underline-offset-2"
+              >
+                info@101drivers.com
+              </a>
+              . Check your spam folder, or tap that address to save it to your
+              contacts.
+            </p>
 
             <div className="space-y-3">
               <div className="relative">
