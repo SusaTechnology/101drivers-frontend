@@ -8,6 +8,12 @@ import { useJsApiLoader } from "@react-google-maps/api";
 import { safeLocalStorage } from "@/lib/safeStorage";
 import { GOOGLE_MAPS_LIBRARIES, GOOGLE_MAPS_SCRIPT_ID } from '@/lib/google-maps-config';
 import {
+  isKnownOutOfServiceState,
+  outOfServiceStateBlockMessage,
+  outOfServiceStateHelper,
+  serviceStateListLabel,
+} from "@/lib/serviceStates";
+import {
   Store,
   Verified,
   MapPin,
@@ -178,6 +184,8 @@ interface Business {
   website: string;
   city?: string;
   state?: string;
+  /** Full state name from Google (long_name), e.g. "California" — for human-readable messages. */
+  stateName?: string;
   type?: string;
   placeId: string;
 }
@@ -235,6 +243,16 @@ export function DealerSignupForm({ isLoaded: isLoadedProp, embedded = false }: D
   // Phone display states for formatting
   const [businessPhoneDisplay, setBusinessPhoneDisplay] = useState("");
   const [contactPhoneDisplay, setContactPhoneDisplay] = useState("");
+
+  // ── Service-area guard (src/lib/serviceStates.ts) ────────────────────────
+  // When the selected business sits outside the service area: red border on
+  // the business-search field until the dealer focuses it again (product
+  // spec), while the address helper + submit block stay until a valid
+  // business is picked. The warning itself is DERIVED from selectedBusiness,
+  // so picking/clearing a business updates every surface at once.
+  const [searchFieldFlagged, setSearchFieldFlagged] = useState(false);
+  const outOfStateBusiness =
+    !!selectedBusiness && isKnownOutOfServiceState(selectedBusiness.state);
 
   const searchRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -604,9 +622,13 @@ export function DealerSignupForm({ isLoaded: isLoadedProp, embedded = false }: D
           if (draft.formData && draft.selectedBusiness) {
             // Restore form data
             resetSignupForm(draft.formData, { keepDefaultValues: false });
-            // Restore selected business
+            // Restore selected business (re-arm the service-area red border
+            // when the restored business is outside the service area)
             setSelectedBusiness(draft.selectedBusiness);
             setSearchQuery(draft.selectedBusiness.name);
+            setSearchFieldFlagged(
+              isKnownOutOfServiceState(draft.selectedBusiness.state)
+            );
             // Set OTP and show verification step
             // Digits only, hard-capped at 6 — the URL value must obey the
             // same rules as typed input.
@@ -651,16 +673,24 @@ export function DealerSignupForm({ isLoaded: isLoadedProp, embedded = false }: D
     placesService.getDetails(
       {
         placeId: prediction.place_id,
-        fields: ['name', 'formatted_address', 'formatted_phone_number', 'international_phone_number', 'website'],
+        fields: ['name', 'formatted_address', 'formatted_phone_number', 'international_phone_number', 'website', 'address_components'],
       },
       (place, status) => {
         if (status === google.maps.places.PlacesServiceStatus.OK && place) {
+          // Extract the state (administrative_area_level_1) so the
+          // service-area guard (src/lib/serviceStates.ts) can warn/block
+          // businesses outside the service area.
+          const stateComponent = (place.address_components || []).find(
+            (c) => c.types.includes("administrative_area_level_1")
+          );
           const business: Business = {
             name: place.name || prediction.structured_formatting.main_text || '',
             address: place.formatted_address || '',
             phone: place.formatted_phone_number || place.international_phone_number || '',
             website: place.website || '',
             placeId: prediction.place_id,
+            state: stateComponent?.short_name || undefined,
+            stateName: stateComponent?.long_name || undefined,
           };
 
           setSelectedBusiness(business);
@@ -677,6 +707,11 @@ export function DealerSignupForm({ isLoaded: isLoadedProp, embedded = false }: D
           setBusinessPhoneDisplay(formattedPhone);
           setSignupValue("businessPhone", business.phone.replace(/\D/g, ''));
           
+          // Service-area guard: flag the search field when the picked
+          // business is outside the service area (red border until focus;
+          // the address helper + submit block derive from the state).
+          setSearchFieldFlagged(isKnownOutOfServiceState(business.state));
+
           toast.success(`Selected: ${business.name}`, {
             description: "Business details auto-filled",
           });
@@ -689,6 +724,7 @@ export function DealerSignupForm({ isLoaded: isLoadedProp, embedded = false }: D
 
   const clearBusinessSelection = () => {
     setSelectedBusiness(null);
+    setSearchFieldFlagged(false);
     setSearchQuery("");
     setSignupValue("placeId", "");
     setSignupValue("fullName", "");
@@ -701,6 +737,15 @@ export function DealerSignupForm({ isLoaded: isLoadedProp, embedded = false }: D
   const onSignupSubmit = async (data: DealerSignupFormData) => {
     if (!selectedBusiness) {
       toast.error("Please select your business from the directory first");
+      return;
+    }
+
+    // Service-area guard — hard block outside the service area. The submit
+    // button is disabled for this case; this check is the safety net for
+    // implicit submissions (e.g. pressing Enter inside a form field).
+    if (isKnownOutOfServiceState(selectedBusiness.state)) {
+      toast.error(outOfServiceStateBlockMessage());
+      setSearchFieldFlagged(true);
       return;
     }
 
@@ -886,11 +931,20 @@ export function DealerSignupForm({ isLoaded: isLoadedProp, embedded = false }: D
                         }
                       }}
                       onFocus={() => {
+                        // Product spec: the service-area red border clears on
+                        // focus — the address helper + submit block stay
+                        // until a valid business is picked.
+                        setSearchFieldFlagged(false);
                         if (predictions.length > 0) {
                           setShowSearchResults(true);
                         }
                       }}
-                      className="w-full h-14 pl-12 pr-4 rounded-2xl border border-slate-200 dark:border-slate-700 dark:bg-slate-800/40 input-focus-ring text-sm"
+                      className={cn(
+                        "w-full h-14 pl-12 pr-4 rounded-2xl border dark:bg-slate-800/40 input-focus-ring text-sm",
+                        searchFieldFlagged
+                          ? "border-red-500 dark:border-red-500"
+                          : "border-slate-200 dark:border-slate-700"
+                      )}
                       placeholder="Search: Your company name here…"
                       autoComplete="off"
                       disabled={!isLoaded}
@@ -1041,10 +1095,24 @@ export function DealerSignupForm({ isLoaded: isLoadedProp, embedded = false }: D
                         />
                         {selectedBusiness && (
                           <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                            <CheckCircle className="w-5 h-5 text-green-500" />
+                            {outOfStateBusiness ? (
+                              <AlertCircle className="w-5 h-5 text-red-500" />
+                            ) : (
+                              <CheckCircle className="w-5 h-5 text-green-500" />
+                            )}
                           </div>
                         )}
                       </div>
+                      {/* Service-area helper (src/lib/serviceStates.ts) —
+                          non-blocking: the dealer may keep browsing, but the
+                          warning stays while the selected business is
+                          outside the service area. */}
+                      {outOfStateBusiness && (
+                        <p className="flex items-start gap-1.5 text-sm font-medium text-red-500 dark:text-red-400">
+                          <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
+                          <span>{outOfServiceStateHelper(selectedBusiness?.stateName)}</span>
+                        </p>
+                      )}
                     </div>
 
                     <div className="space-y-2">
@@ -1560,6 +1628,19 @@ export function DealerSignupForm({ isLoaded: isLoadedProp, embedded = false }: D
                       referralTargetRole="BUSINESS"
                     />
 
+                    {/* Service-area guard: persistent block message right
+                        above the final button — impossible to miss when the
+                        dealer tries to continue with an outside-the-service-
+                        area business. */}
+                    {outOfStateBusiness && (
+                      <div className="flex items-start gap-2.5 rounded-2xl border border-red-200 dark:border-red-500/30 bg-red-50 dark:bg-red-500/10 px-4 py-3">
+                        <AlertCircle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
+                        <p className="text-sm font-bold text-red-600 dark:text-red-400 leading-relaxed">
+                          {outOfServiceStateBlockMessage()}
+                        </p>
+                      </div>
+                    )}
+
                     <Button
                       type={otpSent && !otpVerified ? "button" : "submit"}
                       onClick={
@@ -1567,10 +1648,10 @@ export function DealerSignupForm({ isLoaded: isLoadedProp, embedded = false }: D
                           ? () => setOtpDialogOpen(true)
                           : undefined
                       }
-                      disabled={isPending || !selectedBusiness || !acceptTerms}
+                      disabled={isPending || !selectedBusiness || !acceptTerms || outOfStateBusiness}
                       className={cn(
                         "w-full py-4 rounded-2xl transition flex items-center justify-center gap-2 text-lg font-extrabold",
-                        !selectedBusiness || !acceptTerms
+                        !selectedBusiness || !acceptTerms || outOfStateBusiness
                           ? "bg-slate-300 dark:bg-slate-700 text-slate-500 dark:text-slate-400 cursor-not-allowed"
                           : "bg-primary text-slate-950 hover:shadow-xl hover:shadow-primary/20 hover:brightness-95",
                       )}
@@ -1584,6 +1665,8 @@ export function DealerSignupForm({ isLoaded: isLoadedProp, embedded = false }: D
                         "Select Business First"
                       ) : !acceptTerms ? (
                         "Accept Terms & Conditions"
+                      ) : outOfStateBusiness ? (
+                        `${serviceStateListLabel()} Businesses Only`
                       ) : otpSent && !otpVerified ? (
                         <>
                           Enter Verification Code
@@ -1609,7 +1692,7 @@ export function DealerSignupForm({ isLoaded: isLoadedProp, embedded = false }: D
                     </p>
 
                     <p className="text-xs text-slate-500 dark:text-slate-400 text-center">
-                      Service is available in California only.
+                      Service is available in {serviceStateListLabel()} only.
                     </p>
                   </form>
                 </CardContent>
