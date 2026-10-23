@@ -136,6 +136,9 @@ const RANGE_CHIPS: { value: MetricsRange; label: string }[] = [
   { value: 'CUSTOM', label: 'Custom' },
 ]
 
+/** Records table rows per page. */
+const RECORDS_PAGE_SIZE = 10
+
 export default function AdminMetricsPage() {
   const { actionItems, signOut } = useAdminActions()
 
@@ -153,7 +156,7 @@ export default function AdminMetricsPage() {
 
   const overview = useAnalyticsOverview(win)
   const hourly = useAnalyticsHourly(win, range === '24H')
-  const records = useAnalyticsRecords(win, recordsType, recordsPage)
+  const records = useAnalyticsRecords(win, recordsType, recordsPage, RECORDS_PAGE_SIZE)
   const blocked = useAnalyticsBlockedSignups(win, blockedPage)
 
   // Ticking clock so the "Updated Ns ago" readout stays honest between polls.
@@ -564,11 +567,14 @@ export default function AdminMetricsPage() {
                       </td>
                       <td className="px-3.5 py-2 max-w-[280px] truncate text-muted-foreground">
                         {row.path ||
-                          describeMetadata(row.type, row.metadata)}
+                          describeMetadata(row.type, row.metadata, row.role)}
                       </td>
-                      <td className="px-3.5 py-2 font-mono text-[10px] text-muted-foreground">
-                        {row.userId ? shortId(row.userId) : '—'}
-                        {row.role ? ` · ${row.role}` : ''}
+                      <td className="px-3.5 py-2 whitespace-nowrap">
+                        <UserNameCell
+                          userName={row.userName}
+                          userId={row.userId}
+                          role={row.role}
+                        />
                       </td>
                       <td className="px-3.5 py-2 font-mono text-[10px] text-muted-foreground">
                         {row.sessionId ? shortId(row.sessionId) : '—'}
@@ -590,7 +596,9 @@ export default function AdminMetricsPage() {
           <div className="flex items-center justify-between border-t px-3.5 py-2 text-xs">
             <span className="text-muted-foreground">
               Page {recordsPage}
-              {records.data ? ` · ${numFmt.format(records.data.total)} total` : ''}
+              {records.data
+                ? ` of ${Math.max(1, Math.ceil(records.data.total / RECORDS_PAGE_SIZE))} · ${numFmt.format(records.data.total)} total`
+                : ''}
             </span>
             <div className="flex gap-1.5">
               <Button
@@ -606,7 +614,7 @@ export default function AdminMetricsPage() {
                 size="sm"
                 disabled={
                   !records.data ||
-                  recordsPage * 20 >= records.data.total
+                  recordsPage * RECORDS_PAGE_SIZE >= records.data.total
                 }
                 onClick={() => setRecordsPage((p) => p + 1)}
               >
@@ -799,10 +807,53 @@ function shortId(id: string): string {
   return id.length > 10 ? `${id.slice(0, 6)}…${id.slice(-4)}` : id
 }
 
+/**
+ * Records table "User" cell — full name (+ role at event time) resolved
+ * server-side from the ledger's userId. Falls back to the short id for
+ * rows whose user no longer resolves, and to "Visitor" for anonymous
+ * traffic (e.g. logged-out PAGE_VIEW rows). Hover shows the raw id.
+ */
+function UserNameCell({
+  userName,
+  userId,
+  role,
+}: {
+  userName?: string | null
+  userId?: string | null
+  role?: string | null
+}) {
+  const name = userName ?? (userId ? shortId(userId) : null)
+  if (!name) {
+    return <span className="text-muted-foreground">Visitor</span>
+  }
+  return (
+    <div
+      className="flex items-center gap-1.5 whitespace-nowrap"
+      title={userId ?? undefined}
+    >
+      <span className="font-medium text-foreground">{name}</span>
+      {role ? (
+        <span className="rounded-full border border-border px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-muted-foreground">
+          {role}
+        </span>
+      ) : null}
+    </div>
+  )
+}
+
 function describeMetadata(
   type: string,
-  metadata: Record<string, unknown> | null
+  metadata: Record<string, unknown> | null,
+  role?: string | null
 ): string {
+  // Server-side auth events carry no metadata — describe them from the
+  // event type + role so the Detail column never reads as a bare "—".
+  if (type === 'SIGNUP') {
+    return role ? `New ${role} account created` : 'New account created'
+  }
+  if (type === 'LOGIN') {
+    return role ? `Signed in as ${role}` : 'Signed in'
+  }
   if (!metadata) return '—'
   if (type === 'DELIVERY_CREATED') {
     const source = typeof metadata.source === 'string' ? metadata.source : 'unknown'

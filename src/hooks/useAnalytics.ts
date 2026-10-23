@@ -135,6 +135,8 @@ export interface AnalyticsRecordRow {
   type: string;
   occurredAt: string;
   userId: string | null;
+  /** Resolved server-side from userId (User.fullName) — null when unknown. */
+  userName?: string | null;
   role: string | null;
   sessionId: string | null;
   path: string | null;
@@ -162,7 +164,15 @@ export function useAnalyticsRecords(
   return useDataQuery<{ rows: AnalyticsRecordRow[]; total: number }>({
     apiEndPoint: `${API_BASE_URL}/api/analytics/records?${params.toString()}`,
     noFilter: true,
-    queryKey: ['analytics', 'records', type, win.from, win.to, String(page)],
+    queryKey: [
+      'analytics',
+      'records',
+      type,
+      win.from,
+      win.to,
+      String(page),
+      String(pageSize),
+    ],
     staleTime: LIVE_REFRESH_MS,
     refetchInterval: LIVE_REFRESH_MS,
   });

@@ -306,7 +306,35 @@ export class AnalyticsService {
       this.prisma.analyticsEvent.count({ where }),
     ]);
 
-    return { rows, total, page, pageSize };
+    // Resolve the humans behind the rows — the ledger stores only userId;
+    // the admin records table shows the full name (role is already stored
+    // at event time). One batched query per page, never per row.
+    const userIds = Array.from(
+      new Set(
+        rows
+          .map((row) => row.userId)
+          .filter((id): id is string => typeof id === "string" && id.length > 0)
+      )
+    );
+    const users =
+      userIds.length > 0
+        ? await this.prisma.user.findMany({
+            where: { id: { in: userIds } },
+            select: { id: true, fullName: true },
+          })
+        : [];
+    const nameById = new Map(users.map((u) => [u.id, u.fullName]));
+
+    return {
+      rows: rows.map((row) => ({
+        ...row,
+        userName:
+          (row.userId ? nameById.get(row.userId) : null) ?? null,
+      })),
+      total,
+      page,
+      pageSize,
+    };
   }
 
   /**

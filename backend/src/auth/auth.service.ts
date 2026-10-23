@@ -316,6 +316,7 @@ export class AuthService {
         ? String(user.roles[0])
         : null,
       ip: clientIpFromRequest(request),
+      userAgent: request.headers["user-agent"] ?? null,
     });
 
     return {
@@ -694,6 +695,7 @@ export class AuthService {
       userId,
       role: "DRIVER",
       ip: clientIpFromRequest(request),
+      userAgent: request.headers["user-agent"] ?? null,
     });
 
     return this.issueToken(
@@ -1009,6 +1011,7 @@ export class AuthService {
         userId,
         role: "PRIVATE_CUSTOMER",
         ip: clientIpFromRequest(request),
+        userAgent: request.headers["user-agent"] ?? null,
       });
 
       return this.issueToken(
@@ -1116,6 +1119,7 @@ export class AuthService {
       userId,
       role: "PRIVATE_CUSTOMER",
       ip: clientIpFromRequest(request),
+      userAgent: request.headers["user-agent"] ?? null,
     });
 
     return this.issueToken(
@@ -1344,6 +1348,7 @@ export class AuthService {
       userId,
       role: "BUSINESS_CUSTOMER",
       ip: clientIpFromRequest(request),
+      userAgent: request.headers["user-agent"] ?? null,
     });
 
     return this.issueToken(
