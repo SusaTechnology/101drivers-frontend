@@ -1074,9 +1074,10 @@ function DriverOnboardingForm() {
                           />
                         </PopoverContent>
                       </Popover>
-                      {/* Spelled-out echo of the chosen date. The numeric
+                      {/* Spelled-out echo of the chosen date (no day name —
+                          the weekday is noise for a birth date). The numeric
                           field is the single source of truth — it is sent
-                          and stored exactly as displayed — so any wrong
+                          and stored exactly as displayed — so a wrong
                           tap in the calendar (month/year dropdowns sit
                           right above the day grid) becomes visible here
                           BEFORE the driver submits. */}
@@ -1088,7 +1089,7 @@ function DriverOnboardingForm() {
                             <span className="font-semibold text-slate-700 dark:text-slate-300">
                               {parseDOBtoDate(watchDateOfBirth)!.toLocaleDateString(
                                 "en-US",
-                                { weekday: "long", month: "long", day: "numeric", year: "numeric" }
+                                { month: "long", day: "numeric", year: "numeric" }
                               )}
                             </span>
                           </p>
