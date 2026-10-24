@@ -1074,6 +1074,25 @@ function DriverOnboardingForm() {
                           />
                         </PopoverContent>
                       </Popover>
+                      {/* Spelled-out echo of the chosen date. The numeric
+                          field is the single source of truth — it is sent
+                          and stored exactly as displayed — so any wrong
+                          tap in the calendar (month/year dropdowns sit
+                          right above the day grid) becomes visible here
+                          BEFORE the driver submits. */}
+                      {watchDateOfBirth?.trim() &&
+                        /^\d{2}\/\d{2}\/\d{4}$/.test(watchDateOfBirth) &&
+                        parseDOBtoDate(watchDateOfBirth) && (
+                          <p className="text-[11px] text-slate-500 dark:text-slate-400 -mt-1">
+                            That is{" "}
+                            <span className="font-semibold text-slate-700 dark:text-slate-300">
+                              {parseDOBtoDate(watchDateOfBirth)!.toLocaleDateString(
+                                "en-US",
+                                { weekday: "long", month: "long", day: "numeric", year: "numeric" }
+                              )}
+                            </span>
+                          </p>
+                        )}
                       {isUnder25 ? (
                         <div className="flex items-start gap-2 mt-1">
                           <AlertCircle className="w-4 h-4 text-red-500 mt-0.5 flex-shrink-0" />
