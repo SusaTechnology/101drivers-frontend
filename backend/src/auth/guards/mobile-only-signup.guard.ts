@@ -3,12 +3,13 @@
 // Mobile-only gate for driver registration (POST /auth/signup/driver).
 //
 // The USER AGENT is the gate — never screen size, never touch detection.
-// A desktop-pattern UA gets a 403 whose JSON body carries `message` and
+// A non-phone UA gets a 403 whose JSON body carries `message` and
 // `storeUrl` (see user-agent.util.ts), and every rejection is written to
 // the BlockedSignup table (timestamp, IP, user agent, attempted email)
 // — the audit trail for this rule and the spam radar surfaced on the
-// admin metrics page. iPad / Android tablets pass: the rule is
-// OS-based (see classifySignupUserAgent), not screen-based.
+// admin metrics page. PHONES ONLY: iPads, Android tablets and every
+// other tablet get the same 403 as desktops
+// (see classifySignupUserAgent for the exact UA rule).
 //
 // The BlockedSignup write is fire-and-forget: a ledger hiccup can never
 // stop the 403 from going out, and the guard itself can never throw

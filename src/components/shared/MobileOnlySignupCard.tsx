@@ -1,8 +1,9 @@
 // components/shared/MobileOnlySignupCard.tsx
 //
 // Full-screen card replacing the driver signup form on desktop. The
-// signup itself is mobile-only (server enforces it too — this card is
-// the client half of the same rule), so a desktop visitor gets a QR
+// signup itself is phones-only (server enforces it too — this card is
+// the client half of the same rule; tablets are blocked just like
+// desktops), so a non-phone visitor gets a QR
 // code that a phone camera resolves to 101drivers.com/download, where
 // the phone is sent to the right store for its OS.
 
@@ -30,7 +31,7 @@ export function MobileOnlySignupCard() {
 
         <div className="space-y-2">
           <h1 className="text-xl font-semibold tracking-tight">
-            Signup is mobile only
+            Signup is phone only
           </h1>
           <p className="text-sm text-muted-foreground">
             Driver signup happens on your phone — scan this QR code with

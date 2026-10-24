@@ -2210,7 +2210,7 @@ model BlockedSignup {
   // Attempted email — captured only when the body actually carried one
   // (early UA rejects may fire before any parsing), truncated to 255.
   email     String?
-  // DESKTOP_UA | EMPTY_UA — why the gate closed.
+  // DESKTOP_UA | EMPTY_UA | TABLET_UA — why the gate closed.
   reason    String?
 
   @@index([ip, createdAt])
