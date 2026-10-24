@@ -534,8 +534,17 @@ export class AuthService {
 
     // Parse date of birth from MM/DD/YYYY (do this before the transaction
     // so a bad date format throws BEFORE we create any rows).
+    // DOB is a DATE-ONLY value: store it as UTC MIDNIGHT so the stored
+    // instant never depends on the server's system timezone. Every reader
+    // already treats it as UTC (Stripe uses getUTC* getters, the API
+    // serializes via toISOString, and the admin panel formats it
+    // UTC-pinned) — server-local midnight here would drift a calendar
+    // day whenever the server clock and the display timezone disagree
+    // (e.g. a UTC server viewed on California-pinned surfaces).
     const [dobMonth, dobDay, dobYear] = dto.dateOfBirth.split("/");
-    const parsedDob = new Date(parseInt(dobYear), parseInt(dobMonth) - 1, parseInt(dobDay));
+    const parsedDob = new Date(
+      Date.UTC(parseInt(dobYear), parseInt(dobMonth) - 1, parseInt(dobDay))
+    );
 
     // ─── Atomic User+Driver creation ───────────────────────────────────
     // Wrap both writes in a $transaction so a failure in the Driver create

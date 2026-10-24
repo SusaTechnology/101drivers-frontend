@@ -127,6 +127,7 @@ import {
   getCustomerApprovalStatusColor,
   getDriverStatusColor,
   formatDate,
+  formatDateUTC,
   formatDateTime,
   getInitials,
 } from '@/types/users';
@@ -2323,7 +2324,7 @@ export default function AdminUserDetailPage({ userId }: AdminUserDetailPageProps
                               <Label className="text-xs font-bold text-slate-500">Date of Birth</Label>
                               <div className="text-sm flex items-center gap-2 mt-1">
                                 <CalendarDays className="w-4 h-4 text-slate-400" />
-                                {formatDate(user.driver.dateOfBirth)}
+                                {formatDateUTC(user.driver.dateOfBirth)}
                               </div>
                             </div>
                           )}

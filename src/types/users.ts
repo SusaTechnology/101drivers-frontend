@@ -760,6 +760,26 @@ export function formatDate(dateString: string | null | undefined): string {
   });
 }
 
+/**
+ * Date-only formatter for values that carry no time-of-day semantics
+ * (a driver's date of birth is stored as UTC midnight). Pinned to UTC —
+ * deliberately NOT the viewer's local timezone and deliberately NOT the
+ * business timezone: a UTC-midnight date rendered in any timezone west
+ * of UTC (e.g. America/Los_Angeles) lands at 4-5 PM the PREVIOUS day,
+ * which would show every birthdate one day early to California staff.
+ * Business timestamps keep using formatDate/formatDateTime above;
+ * date-only fields (DOB) use this.
+ */
+export function formatDateUTC(dateString: string | null | undefined): string {
+  if (!dateString) return '—';
+  return new Date(dateString).toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    timeZone: 'UTC',
+  });
+}
+
 export function formatDateTime(dateString: string | null | undefined): string {
   if (!dateString) return '—';
   return new Date(dateString).toLocaleString('en-US', {
