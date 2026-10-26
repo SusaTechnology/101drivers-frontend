@@ -13,8 +13,14 @@ import { useEffect, useState } from 'react';
 export function useIsDesktop(): boolean {
   const [isDesktop, setIsDesktop] = useState(false);
   useEffect(() => {
+    // maxTouchPoints is the trusted signal — desktop Chrome DECLARES the
+    // `ontouchstart` property on window even with zero touch hardware, so
+    // a bare `'ontouchstart' in window` check misclassifies every Chrome
+    // desktop as a camera device. See lib/device.ts hasTouchCapability.
     const hasTouchScreen =
-      'ontouchstart' in window || navigator.maxTouchPoints > 0;
+      (navigator.maxTouchPoints ?? 0) > 0 ||
+      typeof (window as unknown as Record<string, unknown>).ontouchstart ===
+        "function";
     const isSmallScreen = window.innerWidth < 1024;
     setIsDesktop(!hasTouchScreen && !isSmallScreen);
   }, []);

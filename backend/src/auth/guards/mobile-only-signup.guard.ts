@@ -1,15 +1,21 @@
 // src/auth/guards/mobile-only-signup.guard.ts
 //
-// Mobile-only gate for driver registration (POST /auth/signup/driver).
+// Desktop-blocking gate for driver registration (POST /auth/signup/driver).
 //
-// The USER AGENT is the gate — never screen size, never touch detection.
-// A non-phone UA gets a 403 whose JSON body carries `message` and
-// `storeUrl` (see user-agent.util.ts), and every rejection is written to
-// the BlockedSignup table (timestamp, IP, user agent, attempted email)
-// — the audit trail for this rule and the spam radar surfaced on the
-// admin metrics page. PHONES ONLY: iPads, Android tablets and every
-// other tablet get the same 403 as desktops
-// (see classifySignupUserAgent for the exact UA rule).
+// Phones AND tablets are welcome; only desktops and laptops are turned
+// away. A blocked attempt gets a 403 whose JSON body carries `message`
+// and `storeUrl` (see user-agent.util.ts), and every rejection is
+// written to the BlockedSignup table (timestamp, IP, user agent,
+// attempted email) — the audit trail for this rule and the spam radar
+// surfaced on the admin metrics page.
+//
+// Two signals decide (see classifySignupUserAgent):
+//   • x-device-touch: 1 — sent by our FE when the browser is
+//     touch-capable. This is what lets the iPadOS desktop-mode iPad
+//     (UA byte-for-byte a real Mac's, "Request Desktop Website" is the
+//     iPadOS default) in while a real Mac stays out.
+//   • the user agent — phones/tablet tokens pass, desktop-OS tokens
+//     without the touch hint are blocked.
 //
 // The BlockedSignup write is fire-and-forget: a ledger hiccup can never
 // stop the 403 from going out, and the guard itself can never throw
@@ -34,7 +40,10 @@ export class MobileOnlySignupGuard implements CanActivate {
 
   canActivate(context: ExecutionContext): boolean {
     const request = context.switchToHttp().getRequest<Request>();
-    const verdict = classifySignupUserAgent(request?.headers?.["user-agent"]);
+    const verdict = classifySignupUserAgent(
+      request?.headers?.["user-agent"],
+      request?.headers?.["x-device-touch"]
+    );
 
     if (!verdict.blocked) {
       return true;

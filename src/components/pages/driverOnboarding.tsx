@@ -229,16 +229,18 @@ const formatDateToStr = (date: Date): string => {
   return `${m}/${d}/${y}`;
 };
 
-// ── Mobile-only gate (client half of the server's signup UA rule) ──────
-// The backend rejects desktop user agents on POST /auth/signup/driver;
-// this wrapper makes the experience match: on a desktop UA the signup
-// form NEVER MOUNTS — the visitor gets the full-screen "Signup is
-// mobile only" card with a QR code instead. The check is synchronous
-// inside this component body, so the FIRST render already branches —
-// the form can never flash before the card, and the verdict is always
-// computed fresh from the live user agent (no stale cache).
-// The rule is OS-based, never screen size:
-// iPads and Android tablets report mobile OSes in their UA and pass.
+// ── Desktop-block gate (client half of the server's signup rule) ──────
+// The backend rejects desktop/laptop user agents (without a touch hint)
+// on POST /auth/signup/driver; this wrapper makes the experience match:
+// on a desktop the signup form NEVER MOUNTS — the visitor gets the
+// full-screen "Signup is mobile only" card with a QR code instead. The
+// check is synchronous inside this component body, so the FIRST render
+// already branches — the form can never flash before the card, and the
+// verdict is always computed fresh (no stale cache).
+// Phones AND tablets pass — including the iPadOS desktop-mode iPad,
+// whose "Macintosh" UA would kill any user-agent-only rule; the client
+// gate keys off touch capability + screen class (see lib/device.ts), and
+// the server gets the same touch signal via the x-device-touch header.
 export default function DriverOnboardingPage() {
   if (shouldShowMobileOnlySignup()) {
     return <MobileOnlySignupCard />;

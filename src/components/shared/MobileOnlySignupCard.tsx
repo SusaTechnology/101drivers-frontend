@@ -1,11 +1,10 @@
 // components/shared/MobileOnlySignupCard.tsx
 //
-// Full-screen card replacing the driver signup form on desktop. The
-// signup itself is phones-only (server enforces it too — this card is
-// the client half of the same rule; tablets are blocked just like
-// desktops), so a non-phone visitor gets a QR
-// code that a phone camera resolves to 101drivers.com/download, where
-// the phone is sent to the right store for its OS.
+// Full-screen card replacing the driver signup form on DESKTOPS ONLY —
+// phones and tablets always get the form (the server enforces the same
+// rule; this card is the client half of it). A desktop visitor gets a
+// QR code that a phone camera resolves to 101drivers.com/download,
+// where the phone is sent to the right store for its OS.
 
 import { QRCodeSVG } from 'qrcode.react'
 import { Smartphone, RefreshCw } from 'lucide-react'
@@ -31,11 +30,11 @@ export function MobileOnlySignupCard() {
 
         <div className="space-y-2">
           <h1 className="text-xl font-semibold tracking-tight">
-            Signup is phone only
+            Signup is mobile only
           </h1>
           <p className="text-sm text-muted-foreground">
-            Driver signup happens on your phone — scan this QR code with
-            your camera to continue on your mobile device.
+            Driver signup happens on phones and tablets — scan this QR code
+            with your phone or tablet camera to continue on a mobile device.
           </p>
         </div>
 
@@ -57,8 +56,8 @@ export function MobileOnlySignupCard() {
 
         <p className="text-[11px] text-muted-foreground flex items-center justify-center gap-1.5">
           <RefreshCw className="h-3 w-3" />
-          Already on your phone? The signup form should have loaded — try
-          refreshing.
+          Already on a phone or tablet? The signup form should have loaded —
+          try refreshing.
         </p>
       </div>
     </div>

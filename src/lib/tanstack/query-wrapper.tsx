@@ -9,6 +9,8 @@ import type {
   UseMutationResult,
 } from "@tanstack/react-query";
 
+import { deviceTouchHint } from "@/lib/device";
+
 // import { sessionActions } from "@/lib/store/global-state/auth/auth-slice";
 let accessToken: string | null = null;
 let refreshPromise: Promise<string> | null = null;
@@ -56,6 +58,12 @@ async function baseFetch(
     credentials: "include",
     headers: {
       // "x-tenant-code": tenantCode,
+      // Touch-capability hint for the signup device gate — lets the server
+      // tell an iPadOS desktop-mode iPad (touch, UA says "Macintosh",
+      // allowed) apart from a real Mac (no touch, blocked). See
+      // src/lib/device.ts; mirrors the client gate. Per-request headers
+      // can still override.
+      "x-device-touch": deviceTouchHint(),
       ...(token && { Authorization: `Bearer ${token}` }),
       ...request.headers,
     },

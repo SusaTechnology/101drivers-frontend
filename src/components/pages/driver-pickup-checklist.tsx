@@ -138,8 +138,12 @@ function clearPersistedState(deliveryId: string) {
 function useIsDesktop(): boolean {
   const [isDesktop, setIsDesktop] = useState(false)
   useEffect(() => {
-    // 'ontouchstart' missing + no small screen = likely desktop
-    const hasTouchScreen = 'ontouchstart' in window || navigator.maxTouchPoints > 0
+    // maxTouchPoints first — desktop Chrome DECLARES `ontouchstart` on
+    // window even with zero touch hardware ('in' is true, value
+    // undefined), so a bare `'in'` check misclassifies Chrome desktops.
+    const hasTouchScreen =
+      (navigator.maxTouchPoints ?? 0) > 0 ||
+      typeof (window as unknown as Record<string, unknown>).ontouchstart === 'function'
     const isSmallScreen = window.innerWidth < 1024
     setIsDesktop(!hasTouchScreen && !isSmallScreen)
   }, [])
