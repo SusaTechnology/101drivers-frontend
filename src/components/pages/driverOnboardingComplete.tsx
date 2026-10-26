@@ -50,10 +50,9 @@ import {
   AlertCircle,
   FileCheck,
   Clock,
-  Camera,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useIsDesktop } from "@/lib/useIsDesktop";
+import { LivePhotoCapture } from "@/components/shared/LivePhotoCapture";
 import {
   useDataQuery,
   useDataMutation,
@@ -215,10 +214,15 @@ interface DriverOnboardingCompleteProps {
 }
 
 export function DriverOnboardingComplete({ token }: DriverOnboardingCompleteProps) {
-  // Camera-only photo policy: license + selfie must be captured live with a
-  // phone camera — desktop file-picker uploads are blocked (desktop browsers
-  // silently ignore the `capture` attribute, so the guard is UI-level).
-  const isDesktop = useIsDesktop();
+  // Live-camera-only photo policy: license + selfie can ONLY come from a
+  // live getUserMedia() stream via LivePhotoCapture — there is no file
+  // input anywhere on this page, so picking a photo from the gallery or
+  // the machine's disk is impossible on ANY device. (The old <input
+  // capture> approach relied on the OS honoring the attribute — desktop
+  // browsers silently ignore it and offer the whole file picker, which
+  // was the loophole on touchscreen laptops.) Which DEVICES may start
+  // signup at all is the separate device gate (src/lib/device.ts + the
+  // backend guard in user-agent.util.ts).
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [ssnDisplay, setSsnDisplay] = useState("");
   const [ssnVisible, setSsnVisible] = useState(false);
@@ -237,14 +241,11 @@ export function DriverOnboardingComplete({ token }: DriverOnboardingCompleteProp
   const [statusError, setStatusError] = useState<string | null>(null);
   const [selfiePreview, setSelfiePreview] = useState<string | null>(null);
   const [selfieUploading, setSelfieUploading] = useState(false);
-  const selfieInputRef = useRef<HTMLInputElement>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [licenseFrontPreview, setLicenseFrontPreview] = useState<string | null>(null);
   const [licenseBackPreview, setLicenseBackPreview] = useState<string | null>(null);
   const [licenseFrontUploading, setLicenseFrontUploading] = useState(false);
   const [licenseBackUploading, setLicenseBackUploading] = useState(false);
-  const licenseFrontInputRef = useRef<HTMLInputElement>(null);
-  const licenseBackInputRef = useRef<HTMLInputElement>(null);
   // Agreement was accepted during driver signup — no step needed here
   const [agreementAcceptedAt] = useState<string | null>(null);
   // Determine if we're using token-based (from email) or auth-based (from login) flow
@@ -317,23 +318,10 @@ export function DriverOnboardingComplete({ token }: DriverOnboardingCompleteProp
     },
   });
 
-  // Selfie photo upload handler
-  const handleSelfieChange = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
-      toast.error("Invalid file type", { description: "Only JPEG, PNG, and WebP images are allowed." });
-      return;
-    }
-    if (file.size > 5 * 1024 * 1024) {
-      toast.error("File too large", { description: "Please select an image under 5MB." });
-      return;
-    }
-
-    const reader = new FileReader();
-    reader.onload = () => setSelfiePreview(reader.result as string);
-    reader.readAsDataURL(file);
+  // Selfie photo upload — the file ALWAYS arrives from the live camera
+  // (LivePhotoCapture); there is no file input on this page to abuse.
+  const handleSelfieCapture = useCallback(async (file: File, previewDataUrl: string) => {
+    setSelfiePreview(previewDataUrl);
 
     setSelfieUploading(true);
     try {
@@ -354,7 +342,6 @@ export function DriverOnboardingComplete({ token }: DriverOnboardingCompleteProp
       setValue("selfiePhotoUrl", "");
     } finally {
       setSelfieUploading(false);
-      e.target.value = "";
     }
   }, [setValue]);
 
@@ -469,23 +456,9 @@ export function DriverOnboardingComplete({ token }: DriverOnboardingCompleteProp
     [setValue]
   );
 
-  // License front photo upload handler
-  const handleLicenseFrontChange = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
-      toast.error("Invalid file type", { description: "Only JPEG, PNG, and WebP images are allowed." });
-      return;
-    }
-    if (file.size > 5 * 1024 * 1024) {
-      toast.error("File too large", { description: "Please select an image under 5MB." });
-      return;
-    }
-
-    const reader = new FileReader();
-    reader.onload = () => setLicenseFrontPreview(reader.result as string);
-    reader.readAsDataURL(file);
+  // License front photo upload — live camera only (see handleSelfieCapture).
+  const handleLicenseFrontCapture = useCallback(async (file: File, previewDataUrl: string) => {
+    setLicenseFrontPreview(previewDataUrl);
 
     setLicenseFrontUploading(true);
     try {
@@ -506,27 +479,12 @@ export function DriverOnboardingComplete({ token }: DriverOnboardingCompleteProp
       setValue("licenseFrontUrl", "");
     } finally {
       setLicenseFrontUploading(false);
-      e.target.value = "";
     }
   }, [setValue]);
 
-  // License back photo upload handler
-  const handleLicenseBackChange = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
-      toast.error("Invalid file type", { description: "Only JPEG, PNG, and WebP images are allowed." });
-      return;
-    }
-    if (file.size > 5 * 1024 * 1024) {
-      toast.error("File too large", { description: "Please select an image under 5MB." });
-      return;
-    }
-
-    const reader = new FileReader();
-    reader.onload = () => setLicenseBackPreview(reader.result as string);
-    reader.readAsDataURL(file);
+  // License back photo upload — live camera only (see handleSelfieCapture).
+  const handleLicenseBackCapture = useCallback(async (file: File, previewDataUrl: string) => {
+    setLicenseBackPreview(previewDataUrl);
 
     setLicenseBackUploading(true);
     try {
@@ -547,7 +505,6 @@ export function DriverOnboardingComplete({ token }: DriverOnboardingCompleteProp
       setValue("licenseBackUrl", "");
     } finally {
       setLicenseBackUploading(false);
-      e.target.value = "";
     }
   }, [setValue]);
 
@@ -938,22 +895,6 @@ export function DriverOnboardingComplete({ token }: DriverOnboardingCompleteProp
               </div>
 
               {/* License Photos - Front and Back */}
-              {isDesktop && (
-                <div className="p-4 rounded-2xl bg-amber-50 dark:bg-amber-900/10 border-2 border-amber-300 dark:border-amber-800 flex items-start gap-3">
-                  <div className="w-9 h-9 rounded-xl bg-amber-500/15 flex items-center justify-center shrink-0">
-                    <AlertCircle className="w-5 h-5 text-amber-600 dark:text-amber-400" />
-                  </div>
-                  <div>
-                    <p className="text-sm font-extrabold text-amber-900 dark:text-amber-200">
-                      Use Your Phone to Take These Photos
-                    </p>
-                    <p className="text-[12px] text-amber-700 dark:text-amber-300 mt-1">
-                      License and selfie photos must be captured live with your phone's camera — desktop
-                      file uploads are disabled. Please open this page on your mobile device to continue.
-                    </p>
-                  </div>
-                </div>
-              )}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 {/* License Front */}
                 <div
@@ -970,47 +911,28 @@ export function DriverOnboardingComplete({ token }: DriverOnboardingCompleteProp
                   <p className="text-[10px] text-slate-500 dark:text-slate-400">
                     Take a clear photo of the front of your license
                   </p>
-                  <input
-                    ref={licenseFrontInputRef}
-                    type="file"
-                    accept="image/jpeg,image/png,image/webp"
-                    capture="environment"
-                    onChange={handleLicenseFrontChange}
-                    className="hidden"
-                  />
                   {licenseFrontPreview ? (
                     <>
                       <img
                         src={licenseFrontPreview}
                         alt="License front"
-                        className={cn(
-                          "w-full h-32 object-cover rounded-xl border border-slate-200 dark:border-slate-700",
-                          !isDesktop && "cursor-pointer hover:opacity-80 transition-opacity"
-                        )}
-                        onClick={isDesktop ? undefined : () => licenseFrontInputRef.current?.click()}
+                        className="w-full h-32 object-cover rounded-xl border-2 border-green-400 cursor-pointer hover:opacity-80 transition-opacity"
+                        onClick={() => setLicenseFrontPreview(null)}
                       />
                       {licenseFrontUploading && (
                         <p className="text-[10px] text-sky-500 mt-1">Uploading...</p>
                       )}
-                      <p className="text-[10px] text-slate-400 mt-1">
-                        {isDesktop ? "Photos can only be taken on your phone." : "Tap the photo to retake or change"}
-                      </p>
+                      <p className="text-[10px] text-slate-400 mt-1">Tap the photo to retake</p>
                     </>
-                  ) : isDesktop ? (
-                    <div className="w-full h-32 rounded-xl border-2 border-dashed border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-800/40 flex flex-col items-center justify-center gap-1.5 text-center px-3">
-                      <Camera className="w-6 h-6 text-slate-400" />
-                      <span className="text-xs font-bold text-slate-600 dark:text-slate-300">Camera only — use your phone</span>
-                      <span className="text-[10px] text-slate-400 leading-snug">Open this page on your phone to take this photo with your camera.</span>
-                    </div>
                   ) : (
-                    <button
-                      type="button"
-                      onClick={() => licenseFrontInputRef.current?.click()}
-                      className="w-full h-32 rounded-xl border-2 border-dashed border-slate-300 dark:border-slate-600 flex flex-col items-center justify-center gap-2 hover:border-lime-500 dark:hover:border-lime-500 transition-colors"
-                    >
-                      <Camera className="w-6 h-6 text-slate-400" />
-                      <span className="text-xs text-slate-500">{licenseFrontUploading ? "Uploading..." : "Tap to take photo"}</span>
-                    </button>
+                    <LivePhotoCapture
+                      kind="license-front"
+                      facing="environment"
+                      hint="Fit the FRONT of your license inside the frame"
+                      uploading={licenseFrontUploading}
+                      disabled={isSubmitting}
+                      onCapture={handleLicenseFrontCapture}
+                    />
                   )}
                   {errors.licenseFrontUrl && (
                     <p className="text-xs text-red-500 font-medium">{errors.licenseFrontUrl.message}</p>
@@ -1032,47 +954,28 @@ export function DriverOnboardingComplete({ token }: DriverOnboardingCompleteProp
                   <p className="text-[10px] text-slate-500 dark:text-slate-400">
                     Take a clear photo of the back of your license
                   </p>
-                  <input
-                    ref={licenseBackInputRef}
-                    type="file"
-                    accept="image/jpeg,image/png,image/webp"
-                    capture="environment"
-                    onChange={handleLicenseBackChange}
-                    className="hidden"
-                  />
                   {licenseBackPreview ? (
                     <>
                       <img
                         src={licenseBackPreview}
                         alt="License back"
-                        className={cn(
-                          "w-full h-32 object-cover rounded-xl border border-slate-200 dark:border-slate-700",
-                          !isDesktop && "cursor-pointer hover:opacity-80 transition-opacity"
-                        )}
-                        onClick={isDesktop ? undefined : () => licenseBackInputRef.current?.click()}
+                        className="w-full h-32 object-cover rounded-xl border-2 border-green-400 cursor-pointer hover:opacity-80 transition-opacity"
+                        onClick={() => setLicenseBackPreview(null)}
                       />
                       {licenseBackUploading && (
                         <p className="text-[10px] text-sky-500 mt-1">Uploading...</p>
                       )}
-                      <p className="text-[10px] text-slate-400 mt-1">
-                        {isDesktop ? "Photos can only be taken on your phone." : "Tap the photo to retake or change"}
-                      </p>
+                      <p className="text-[10px] text-slate-400 mt-1">Tap the photo to retake</p>
                     </>
-                  ) : isDesktop ? (
-                    <div className="w-full h-32 rounded-xl border-2 border-dashed border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-800/40 flex flex-col items-center justify-center gap-1.5 text-center px-3">
-                      <Camera className="w-6 h-6 text-slate-400" />
-                      <span className="text-xs font-bold text-slate-600 dark:text-slate-300">Camera only — use your phone</span>
-                      <span className="text-[10px] text-slate-400 leading-snug">Open this page on your phone to take this photo with your camera.</span>
-                    </div>
                   ) : (
-                    <button
-                      type="button"
-                      onClick={() => licenseBackInputRef.current?.click()}
-                      className="w-full h-32 rounded-xl border-2 border-dashed border-slate-300 dark:border-slate-600 flex flex-col items-center justify-center gap-2 hover:border-lime-500 dark:hover:border-lime-500 transition-colors"
-                    >
-                      <Camera className="w-6 h-6 text-slate-400" />
-                      <span className="text-xs text-slate-500">{licenseBackUploading ? "Uploading..." : "Tap to take photo"}</span>
-                    </button>
+                    <LivePhotoCapture
+                      kind="license-back"
+                      facing="environment"
+                      hint="Fit the BACK of your license inside the frame"
+                      uploading={licenseBackUploading}
+                      disabled={isSubmitting}
+                      onCapture={handleLicenseBackCapture}
+                    />
                   )}
                   {errors.licenseBackUrl && (
                     <p className="text-xs text-red-500 font-medium">{errors.licenseBackUrl.message}</p>
@@ -1308,77 +1211,33 @@ export function DriverOnboardingComplete({ token }: DriverOnboardingCompleteProp
                   Take a clear selfie so the admin can verify your identity before approval.
                 </p>
                 <div className="flex items-center gap-4">
-                  <input
-                    ref={selfieInputRef}
-                    type="file"
-                    accept="image/jpeg,image/png,image/webp"
-                    capture="user"
-                    onChange={handleSelfieChange}
-                    className="hidden"
+                  <LivePhotoCapture
+                    kind="selfie"
+                    facing="user"
+                    hint="Center your face in the frame"
+                    variant="square"
+                    previewUrl={selfiePreview}
+                    uploading={selfieUploading}
+                    disabled={isSubmitting}
+                    onCapture={handleSelfieCapture}
+                    onRetake={() => setSelfiePreview(null)}
                   />
-                  {isDesktop ? (
-                    <>
-                      <div className="w-20 h-20 rounded-2xl border-2 border-dashed border-slate-300 dark:border-slate-600 flex items-center justify-center shrink-0">
-                        {selfieUploading ? (
-                          <div className="animate-spin w-6 h-6 border-2 border-slate-400 border-t-transparent rounded-full" />
-                        ) : selfiePreview ? (
-                          <img src={selfiePreview} alt="Selfie" className="w-full h-full object-cover rounded-2xl" />
-                        ) : (
-                          <Camera className="w-8 h-8 text-slate-400" />
-                        )}
-                      </div>
-                      <div className="flex-1">
-                        <div className="w-full rounded-xl border border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/10 px-3 py-2.5">
-                          <p className="text-xs font-extrabold text-amber-900 dark:text-amber-200">Camera only — use your phone</p>
-                          <p className="text-[10px] text-amber-700 dark:text-amber-300 mt-0.5">
-                            Open this page on your phone to take your selfie with the camera. Desktop file uploads are disabled.
-                          </p>
-                        </div>
-                      </div>
-                    </>
-                  ) : (
-                    <>
-                      <button
-                        type="button"
-                        onClick={() => selfieInputRef.current?.click()}
-                        disabled={isSubmitting || selfieUploading}
-                        className={cn(
-                          "w-20 h-20 rounded-2xl border-2 border-dashed flex items-center justify-center transition-all",
-                          "hover:border-lime-500 hover:bg-lime-50 dark:hover:bg-lime-900/10",
-                          errors.selfiePhotoUrl
-                            ? "border-red-400 text-red-400"
-                            : selfiePreview
-                              ? "border-green-400 text-green-500"
-                              : "border-slate-300 dark:border-slate-600 text-slate-400"
-                        )}
-                      >
-                        {selfieUploading ? (
-                          <div className="animate-spin w-6 h-6 border-2 border-current border-t-transparent rounded-full" />
-                        ) : selfiePreview ? (
-                          <img src={selfiePreview} alt="Selfie" className="w-full h-full object-cover rounded-2xl" />
-                        ) : (
-                          <Camera className="w-8 h-8" />
-                        )}
-                      </button>
-                      <div className="flex-1">
-                        <Button
-                          type="button"
-                          variant="outline"
-                          onClick={() => selfieInputRef.current?.click()}
-                          disabled={isSubmitting || selfieUploading}
-                          className="w-full h-10 rounded-xl"
-                        >
-                          <Camera className="w-4 h-4 mr-2" />
-                          {selfieUploading ? "Uploading..." : selfiePreview ? "Change Photo" : "Take / Upload Selfie"}
-                        </Button>
-                        {selfiePreview && (
-                          <p className="text-[10px] text-green-600 dark:text-green-400 mt-1 font-medium">
-                            Photo uploaded successfully
-                          </p>
-                        )}
-                      </div>
-                    </>
-                  )}
+                  <div className="flex-1">
+                    <LivePhotoCapture
+                      kind="selfie"
+                      facing="user"
+                      hint="Center your face in the frame"
+                      variant="button"
+                      buttonLabel={selfieUploading ? "Uploading..." : selfiePreview ? "Change Photo" : "Take Selfie"}
+                      disabled={isSubmitting || selfieUploading}
+                      onCapture={handleSelfieCapture}
+                    />
+                    {selfiePreview && (
+                      <p className="text-[10px] text-green-600 dark:text-green-400 mt-1 font-medium">
+                        Photo uploaded successfully
+                      </p>
+                    )}
+                  </div>
                 </div>
                 {errors.selfiePhotoUrl && (
                   <p className="text-xs text-red-500 font-medium">

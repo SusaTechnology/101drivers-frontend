@@ -9,8 +9,7 @@
 // agree, or a mobile visitor would see a card for a form that would
 // actually pass, or vice versa.
 //
-// The PRIMARY rule is TOUCH CAPABILITY + SCREEN CLASS — deliberately NOT
-// user-agent parsing:
+// The PRIMARY rule is TOUCH CAPABILITY, with one UA refinement:
 //   • Every phone and every tablet is touch-capable, so hasTouch() is
 //     an immediate pass. This is what fixes the iPadOS desktop-UA trap:
 //     an iPad with "Request Desktop Website" enabled (the iPadOS 13+
@@ -18,6 +17,11 @@
 //     rule that blocks the "Mac" token kills every such iPad. Touch
 //     capability never lies about that — a real Mac has
 //     navigator.maxTouchPoints === 0, an iPad reports 5.
+//   • Touch + an Apple-tablet UA (iPad, or Macintosh = the desktop-mode
+//     iPad) passes — a real Mac never has touch, so Macintosh + touch
+//     can only be an iPad.
+//   • Touch + any other desktop OS (Windows NT, Linux x86_64, CrOS) is
+//     a TOUCHSCREEN LAPTOP → blocked, same class as a no-touch desktop.
 //   • A no-touch viewer on a desktop-class screen (viewport >= 1024px)
 //     is a desktop/laptop → blocked.
 //   • A no-touch viewer with a desktop-OS user agent (Windows NT,
@@ -76,13 +80,21 @@ export function deviceTouchHint(): "1" | "0" {
 /**
  * True only when this browser looks like a DESKTOP/LAPTOP — the only
  * class the signup gate blocks. Mirrors the server's
- * classifySignupUserAgent contract: phones and tablets (touch) always
- * pass; a no-touch viewer passes only when it shows neither a
- * desktop-class screen nor a desktop-OS user agent.
+ * classifySignupUserAgent contract: phones and tablets always pass; a
+ * touch-capable viewer passes only with an Apple-tablet signature
+ * (iPad UA, or the Macintosh UA the iPadOS desktop-mode default sends —
+ * a real Mac has no touch, so Macintosh + touch can only be an iPad);
+ * touch + any other desktop OS (Windows, Linux, ChromeOS) is a
+ * touchscreen laptop → blocked, same class as a no-touch desktop.
  */
 export function isDesktopDevice(): boolean {
-  if (hasTouchCapability()) return false; // phones + tablets (incl. iPads in every mode)
   const ua = (navigator.userAgent ?? "").toString().trim();
+  if (hasTouchCapability()) {
+    // Touch + Apple tablet signature → an iPad in any UA mode → allowed.
+    if (/(iPad|Macintosh|Mac OS X)/i.test(ua)) return false;
+    // Touch + any other desktop OS = touchscreen laptop → blocked.
+    return DESKTOP_OS_RE.test(ua);
+  }
   if (DESKTOP_OS_RE.test(ua)) return true; // no touch + desktop OS = laptop/desktop
   return window.innerWidth >= 1024; // no touch + desktop-class screen
 }

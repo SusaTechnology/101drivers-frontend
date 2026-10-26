@@ -682,7 +682,7 @@ export default function AdminMetricsPage() {
                       <td className="px-3.5 py-2">
                         <span
                           className={`inline-block rounded-full border px-2 py-0.5 text-[10px] font-semibold ${
-                            row.reason === 'DESKTOP_UA' || row.reason === 'TABLET_UA'
+                            row.reason === 'DESKTOP_UA' || row.reason === 'DESKTOP_TOUCH_UA' || row.reason === 'TABLET_UA'
                               ? 'bg-red-500/10 text-red-600 border-red-500/30'
                               : 'bg-amber-500/10 text-amber-600 border-amber-500/30'
                           }`}

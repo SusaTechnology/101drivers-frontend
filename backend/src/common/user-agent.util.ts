@@ -5,13 +5,17 @@
 // Kindle/Silk); only desktops and laptops are turned away.
 //
 //   PASS  = phone or tablet UA (mobile OS tokens, tablet tokens)
-//   PASS  = a desktop-OS UA carrying the client's x-device-touch: 1 hint
-//           — the iPadOS 13+ desktop-mode iPad ("Request Desktop Website"
-//           is the DEFAULT on iPadOS) reports a macOS Safari UA
-//           ("Macintosh; ...") that is byte-for-byte a real Mac's UA.
-//           Touch capability is the only honest discriminator: a Mac has
-//           navigator.maxTouchPoints === 0, an iPad reports 5. The FE
-//           (src/lib/device.ts) sends the hint with every API call.
+//   PASS  = an Apple-tablet touch client: Macintosh/macOS UA + the
+//           client's x-device-touch: 1 hint — the iPadOS 13+ desktop-mode
+//           iPad ("Request Desktop Website" is the DEFAULT on iPadOS)
+//           reports a macOS Safari UA ("Macintosh; ...") that is
+//           byte-for-byte a real Mac's UA. Touch capability is the only
+//           honest discriminator: a Mac has navigator.maxTouchPoints ===
+//           0, an iPad reports 5. The FE (src/lib/device.ts) sends the
+//           hint with every API call.
+//   BLOCK = a desktop-OS UA carrying the touch hint EXCEPT the
+//           Apple-tablet signature — Windows/Linux/ChromeOS + touch is a
+//           TOUCHSCREEN LAPTOP (reason DESKTOP_TOUCH_UA)
 //   BLOCK = clear desktop-OS UA without the touch hint, or empty UA
 //   OPEN  = unrecognized UA (curl, exotic viewers) — same contract as
 //           before: the gate never guesses, normal validation handles
@@ -25,8 +29,10 @@
 //   • Other tablets (Kindle/Fire "Silk", generic "Tablet" token): PASS.
 //   • Real desktop Mac / Windows / Linux / ChromeOS, no touch hint:
 //     DESKTOP_UA → BLOCK.
+//   • Touchscreen laptop (Windows/Linux/ChromeOS UA + touch hint):
+//     DESKTOP_TOUCH_UA → BLOCK — same class, now caught even with touch.
 //   • iPadOS 13+ desktop-mode iPad: "Macintosh" UA + x-device-touch: 1
-//     → PASS. A laptop that spoofs the hint was always able to spoof the
+//     → PASS. A laptop that spoofs a Mac UA was always able to spoof the
 //     whole UA — no header rule can beat a liar; every blocked attempt is
 //     audited to the BlockedSignup table so abuse stays visible.
 //
@@ -51,6 +57,14 @@ const DESKTOP_OS_RE =
 
 const ANDROID_RE = /Android/i;
 
+/** Apple-tablet signature inside a touch-capable client. An iPad sends
+ *  "iPad" (ordinary mode) or a Macintosh/macOS UA (desktop mode — the
+ *  iPadOS default). A real Mac never has touch points, so Macintosh +
+ *  touch hint can only be an iPad. Any OTHER desktop OS token on a
+ *  touch-capable client (Windows NT, Linux x86_64, CrOS) is a
+ *  touchscreen laptop — the class this gate turns away. */
+const APPLE_TABLET_UA_RE = /(iPad|Macintosh|Mac OS X)/i;
+
 /** The FE sends x-device-touch: 1 from touch-capable browsers (see
  *  src/lib/device.ts deviceTouchHint). Header values arrive as
  *  string | string[] | undefined — normalize defensively. */
@@ -65,8 +79,8 @@ export function touchHintFromHeader(
 
 export type SignupUaVerdict = {
   blocked: boolean;
-  /** DESKTOP_UA | EMPTY_UA | MOBILE_UA (tablets pass as MOBILE_UA) */
-  reason: "DESKTOP_UA" | "EMPTY_UA" | "MOBILE_UA";
+  /** DESKTOP_UA | DESKTOP_TOUCH_UA | EMPTY_UA | MOBILE_UA (tablets pass as MOBILE_UA) */
+  reason: "DESKTOP_UA" | "DESKTOP_TOUCH_UA" | "EMPTY_UA" | "MOBILE_UA";
 };
 
 export function classifySignupUserAgent(
@@ -84,10 +98,16 @@ export function classifySignupUserAgent(
     return { blocked: true, reason: "EMPTY_UA" };
   }
 
-  // Touch-capable client → never a desktop. This is the iPadOS
-  // desktop-mode iPad's only way in: its UA is a real Mac's UA, its
-  // fingers are not. Covers phones and every tablet in every UA mode.
+  // Touch-capable client. An iPad (any UA mode — including the
+  // desktop-mode iPad whose UA is a real Mac's) passes; touch + any
+  // other desktop OS (Windows NT, Linux x86_64, CrOS) is a touchscreen
+  // laptop → blocked (DESKTOP_TOUCH_UA), the same class the gate exists
+  // to turn away. This closes the old loophole where ANY desktop UA
+  // passed just by sending the touch hint.
   if (touchHintFromHeader(touchCapableHint)) {
+    if (DESKTOP_OS_RE.test(ua) && !APPLE_TABLET_UA_RE.test(ua)) {
+      return { blocked: true, reason: "DESKTOP_TOUCH_UA" };
+    }
     return { blocked: false, reason: "MOBILE_UA" };
   }
 

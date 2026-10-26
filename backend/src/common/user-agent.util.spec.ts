@@ -12,6 +12,7 @@
  *           Chrome, iPad Safari (old UA), iPadOS desktop-mode iPad + hint,
  *           Kindle/Silk, generic "Tablet", curl/exotic (open door)
  *   BLOCK   Windows desktop, real Mac Safari, Linux x86_64, ChromeOS,
+ *           TOUCHSCREEN LAPTOP (Windows/Linux/CrOS UA + touch hint),
  *           iPadOS desktop-mode iPad WITHOUT the hint (old cached bundle),
  *           empty UA
  */
@@ -106,11 +107,19 @@ describe("classifySignupUserAgent — the iPadOS desktop-mode trap", () => {
     expect(verdict.reason).toBe("MOBILE_UA");
   });
 
-  it("lets ANY desktop UA through when the touch hint says touch-capable", () => {
-    // The touch signal is the primary rule — a touch-capable client is
-    // never a desktop, whatever its UA claims.
-    expect(classifySignupUserAgent(UAS.windowsChrome, "1").blocked).toBe(false);
-    expect(classifySignupUserAgent(UAS.linuxFirefox, "1").blocked).toBe(false);
+  it("blocks a touchscreen laptop even when it sends the touch hint", () => {
+    // Windows/Linux/ChromeOS + touch = a touchscreen laptop — the exact
+    // class the gate exists to turn away. Only the Apple-tablet
+    // signature (a desktop-mode iPad's Macintosh UA) is let through by
+    // the hint.
+    expect(classifySignupUserAgent(UAS.windowsChrome, "1")).toEqual({
+      blocked: true,
+      reason: "DESKTOP_TOUCH_UA",
+    });
+    expect(classifySignupUserAgent(UAS.linuxFirefox, "1")).toEqual({
+      blocked: true,
+      reason: "DESKTOP_TOUCH_UA",
+    });
   });
 
   it("still blocks a desktop-mode iPad whose old bundle sends no hint", () => {
