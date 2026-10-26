@@ -70,6 +70,11 @@ export class DriverApprovalEngine {
       data: {
         status: EnumDriverStatus.INVITED,
         onboardingToken,
+        // The admin-invite date, shown on the admin user detail page.
+        // inviteDriver only runs from WAITLISTED (the guard above), so
+        // this stamps the FIRST invite; resendInviteDriver rotates the
+        // token without touching it. Never overwritten afterwards.
+        invitedAt: new Date(),
       },
     });
 

@@ -1455,6 +1455,12 @@ async getAdminUserDetail(id: string): Promise<any> {
           profilePhotoUrl: true,
           selfiePhotoUrl: true,
           status: true,
+          // When the ADMIN sent the signup invite (null = self-signup —
+          // the date his information arrived is then the signup date).
+          invitedAt: true,
+          // When the driver submitted his information (documents, license,
+          // selfie, SSN) — through an invite link or the signup form.
+          onboardingCompletedAt: true,
           // Hold context — the detail page shows when the hold was placed
           // and which funnel stage "Release Hold" restores.
           heldFromStatus: true,

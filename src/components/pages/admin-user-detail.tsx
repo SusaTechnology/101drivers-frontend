@@ -2478,6 +2478,33 @@ export default function AdminUserDetailPage({ userId }: AdminUserDetailPageProps
                               {pendingPhotoUrl && !photoUpload.isPending && <p className="text-xs text-green-500 mt-1">New photo ready to save</p>}
                             </div>
                           </div>
+                          {/* ── Funnel dates — how this driver entered ──
+                              Exactly one of the first two tells the admin
+                              when he arrived: Invited = the date an admin
+                              sent the signup invite (waitlist → invite);
+                              Signed up = the date he uploaded his own
+                              information at self-signup (never invited).
+                              Info uploaded = the date he submitted the full
+                              onboarding (license, selfie, SSN, address) —
+                              for invited drivers that is when his real
+                              information arrived. */}
+                          {user.driver.invitedAt ? (
+                            <div>
+                              <Label className="text-xs font-bold text-slate-500">Invited</Label>
+                              <div className="text-sm">{formatDate(user.driver.invitedAt)}</div>
+                            </div>
+                          ) : (
+                            <div>
+                              <Label className="text-xs font-bold text-slate-500">Signed up</Label>
+                              <div className="text-sm">{formatDate(user.createdAt)}</div>
+                            </div>
+                          )}
+                          {user.driver.onboardingCompletedAt && (
+                            <div>
+                              <Label className="text-xs font-bold text-slate-500">Info uploaded</Label>
+                              <div className="text-sm">{formatDate(user.driver.onboardingCompletedAt)}</div>
+                            </div>
+                          )}
                           {user.driver.approvedAt && (
                             <div>
                               <Label className="text-xs font-bold text-slate-500">Approved</Label>

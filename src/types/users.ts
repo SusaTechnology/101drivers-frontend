@@ -400,6 +400,13 @@ export interface AdminUserDriverDetail {
   profilePhotoUrl: string | null;
   selfiePhotoUrl: string | null;
   status: DriverStatus;
+  // When the ADMIN sent the signup invite (null = never invited —
+  // self-signup driver; the date his information arrived is then the
+  // signup date or the onboarding submit date below).
+  invitedAt: string | null;
+  // When the driver submitted his information (license, selfie, SSN,
+  // address) — through an invite link or the signup form.
+  onboardingCompletedAt: string | null;
   // Hold context — when the hold was placed and which funnel stage
   // "Release Hold" restores (null when the driver is not on hold).
   heldFromStatus: DriverStatus | null;

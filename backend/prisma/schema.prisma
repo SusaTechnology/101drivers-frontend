@@ -181,6 +181,15 @@ model Driver {
   stripeConnectAccountId String?
   stripeConnectOnboardingComplete Boolean @default(false)
   status           EnumDriverStatus           @default(WAITLISTED)
+  // Date the ADMIN sent the signup invite (DriverApprovalEngine.inviteDriver
+  // stamps it once, on the first WAITLISTED → INVITED transition; a resend
+  // only rotates the onboarding token). NULL = never invited: the driver
+  // self-signed up to the waitlist, so the date his information arrived is
+  // his signup date (User.createdAt) — or onboardingCompletedAt once he
+  // submits through an invite link. NULL also for drivers invited before
+  // this column existed (no backfill — same policy as ssnEncrypted); the
+  // full invite history lives in AdminAuditLog.
+  invitedAt        DateTime?
   // Hold state — admins can park a pre-activation applicant (WAITLISTED /
   // INVITED / PENDING_APPROVAL) as ON_HOLD without rejecting them (e.g.
   // driver oversupply in a region, or the region is not launching yet).
@@ -2210,7 +2219,9 @@ model BlockedSignup {
   // Attempted email — captured only when the body actually carried one
   // (early UA rejects may fire before any parsing), truncated to 255.
   email     String?
-  // DESKTOP_UA | EMPTY_UA | TABLET_UA — why the gate closed.
+  // DESKTOP_UA | EMPTY_UA | MOBILE_UA — why the gate closed. (Tablets
+  // were blocked under the old phones-only rule with TABLET_UA; since the
+  // tablets-allowed change they pass, so new rows never carry it.)
   reason    String?
 
   @@index([ip, createdAt])
