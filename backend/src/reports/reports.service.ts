@@ -18,6 +18,27 @@ import {
 
 type ReportFormat = "json" | "csv" | "xlsx" | "pdf";
 
+/**
+ * Columns that must NEVER appear in an EXPORT of a given report, no matter
+ * what the client requests. Internal row IDs mean nothing to an underwriter
+ * and leak system identifiers — insurance exports carry human-readable rows
+ * only. Applied to csv/xlsx/pdf AFTER the client's column selection, so a
+ * stale dialog, old bookmark, or crafted `columns=deliveryId,...` request
+ * still cannot reintroduce them. JSON (the on-screen table data) is NOT
+ * filtered — ops keeps IDs for cross-referencing on screen.
+ */
+const EXPORT_EXCLUDED_COLUMNS: Partial<
+  Record<EnterpriseReportKey, ReadonlySet<string>>
+> = {
+  "insurance-mileage": new Set([
+    "deliveryId", // delivery / ride ID
+    "trackingSessionId", // underlying tracking-session ID
+    "driverId", // driver ID
+    "customerId", // dealer/customer ID (customer IS the dealer here)
+    "dealerId", // defensive alias
+  ]),
+};
+
 @Injectable()
 export class ReportsService {
   constructor(
@@ -108,6 +129,13 @@ export class ReportsService {
           columns = filtered;
         }
       }
+    }
+
+    // Hard exclusion (exports only — see EXPORT_EXCLUDED_COLUMNS). Runs
+    // after selection filtering so internal IDs can never be exported.
+    const excludedKeys = EXPORT_EXCLUDED_COLUMNS[reportKey];
+    if (format !== "json" && excludedKeys) {
+      columns = columns.filter((col: any) => !excludedKeys.has(col.key));
     }
 
     const payload = {

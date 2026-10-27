@@ -100,8 +100,10 @@ export const REPORT_COLUMNS: Record<
     { key: "paidAt", label: "Paid At", type: "datetime", width: 22 },
   ],
   "insurance-mileage": [
-    { key: "deliveryId", label: "Ride ID", width: 30 },
-    { key: "driverId", label: "Driver ID", width: 30 },
+    // NO internal IDs here (delivery/ride, driver, dealer/customer, tracking
+    // session) — insurance exports carry human-readable rows only, and
+    // reports.service.ts additionally hard-excludes ID keys at export time
+    // so a crafted `columns=` request cannot reintroduce them.
     { key: "driverName", label: "Driver Name", width: 28 },
     { key: "status", label: "Status", type: "status", width: 18 },
     { key: "pickupAddress", label: "Pickup Address (Start)", width: 36 },
