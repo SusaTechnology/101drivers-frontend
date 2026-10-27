@@ -76,6 +76,18 @@ export class AnalyticsService {
   private lastLivePublishAt = 0;
   private static LIVE_PUBLISH_THROTTLE_MS = 3000;
 
+  /**
+   * Tiny TTL result cache for the overview payload. The dashboard polls
+   * every 15s AND websocket "metrics changed" pings trigger extra
+   * refetches; recomputing ~10 aggregations per request — including the
+   * 12-month sessionization windows — is wasted work when one or several
+   * admins watch the same windows. 10s keeps the live readout honest
+   * (well under the poll cadence) while collapsing bursts to ONE query
+   * round. Instance-level (per pod) on purpose: no external cache to run.
+   */
+  private overviewCache = new Map<string, { at: number; value: any }>();
+  private static OVERVIEW_CACHE_TTL_MS = 10_000;
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly appEvents?: AppEventsService
@@ -227,6 +239,15 @@ export class AnalyticsService {
   async overview(params?: { from?: Date; to?: Date }): Promise<any> {
     const to = params?.to ?? new Date();
     const from = params?.from ?? new Date(to.getTime() - 30 * MS_PER_DAY);
+
+    // TTL cache: identical windows within 10s return the same payload
+    // without touching the database (see overviewCache doc above).
+    const cacheKey = `${from.toISOString()}|${to.toISOString()}`;
+    const cached = this.overviewCache.get(cacheKey);
+    if (cached && Date.now() - cached.at < AnalyticsService.OVERVIEW_CACHE_TTL_MS) {
+      return cached.value;
+    }
+
     const spanMs = Math.max(to.getTime() - from.getTime(), MS_PER_HOUR);
     const prevFrom = new Date(from.getTime() - spanMs);
     const prevTo = from;
@@ -304,7 +325,7 @@ export class AnalyticsService {
       cumulative.push(entry);
     }
 
-    return {
+    return this.cacheOverview(cacheKey, {
       range: { from: from.toISOString(), to: to.toISOString() },
       totals: {
         VISITS: visits,
@@ -316,7 +337,20 @@ export class AnalyticsService {
       daily,
       monthly,
       cumulative,
-    };
+    });
+  }
+
+  /** Store an overview result in the TTL cache, pruning stale entries. */
+  private cacheOverview(cacheKey: string, payload: any): any {
+    const now = Date.now();
+    this.overviewCache.set(cacheKey, { at: now, value: payload });
+    if (this.overviewCache.size > 16) {
+      const cutoff = now - AnalyticsService.OVERVIEW_CACHE_TTL_MS;
+      for (const [key, entry] of this.overviewCache) {
+        if (entry.at < cutoff) this.overviewCache.delete(key);
+      }
+    }
+    return payload;
   }
 
   /**

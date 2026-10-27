@@ -2198,6 +2198,10 @@ model AnalyticsEvent {
   createdAt  DateTime  @default(now())
 
   @@index([type, occurredAt])
+  // Cover index for the VISITS sessionization queries: type equality +
+  // occurredAt range + sessionId read straight from the index (index-only
+  // scan — no heap fetch for the LAG window over page views).
+  @@index([type, occurredAt, sessionId])
   @@index([occurredAt])
   @@index([userId])
 }
