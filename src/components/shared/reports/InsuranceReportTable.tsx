@@ -4,9 +4,11 @@
 //   - src/components/pages/insurance-portal.tsx (carrier portal)
 //   - src/components/pages/admin-insurance-reporting.tsx (admin internal)
 //
-// Wraps the generic DataTable with the canonical 7-column insurance spec
-// (Driver ID, Ride ID, Start Time, End Time, Start Location, End Location,
-// Miles) plus server-side pagination + sorting.
+// Wraps the generic DataTable with the ID-free insurance column set
+// (Status, Customer, Driver, Route, Start/End Location, Started, Stopped,
+// Miles, Hours, Payment, Payout — see insuranceReportColumns.tsx) plus
+// server-side pagination + sorting. No internal ID columns: both pages
+// show human-readable rows only, matching the CSV/XLSX/PDF export rule.
 
 import React from 'react';
 import { Card, CardContent } from '@/components/ui/card';

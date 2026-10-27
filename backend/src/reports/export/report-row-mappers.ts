@@ -113,16 +113,19 @@ export function mapReportRows(
       }));
 
     case "insurance-mileage":
+      // NO internal ID keys in the display rows (delivery/ride, driver,
+      // dealer/customer, tracking-session) — the insurance surfaces render
+      // exactly these rows on both the carrier portal and the admin
+      // reporting page, so the JSON itself must already be ID-free. The
+      // export path additionally filters its column set (see
+      // reports.service.ts EXPORT_EXCLUDED_COLUMNS), and emails are kept
+      // purely as human-readable name fallbacks.
       return rows.map((r) => ({
-        trackingSessionId: r.id ?? null,
-        deliveryId: r.deliveryId ?? r.delivery?.id ?? r.id ?? null,
-        driverId: r.assignedDriver?.id ?? r.delivery?.assignments?.[0]?.driver?.id ?? null,
         driverName: nameOfUser(r.assignedDriver ?? r.delivery?.assignments?.[0]?.driver),
         driverEmail:
           r.assignedDriver?.user?.email ??
           r.delivery?.assignments?.[0]?.driver?.user?.email ??
           "",
-        customerId: r.delivery?.customer?.id ?? null,
         customerName: nameOfBusiness(r.delivery?.customer),
         customerEmail: r.delivery?.customer?.user?.email ?? "",
         customerType: r.delivery?.customer?.customerType ?? "",

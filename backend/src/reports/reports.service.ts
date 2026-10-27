@@ -24,8 +24,13 @@ type ReportFormat = "json" | "csv" | "xlsx" | "pdf";
  * and leak system identifiers — insurance exports carry human-readable rows
  * only. Applied to csv/xlsx/pdf AFTER the client's column selection, so a
  * stale dialog, old bookmark, or crafted `columns=deliveryId,...` request
- * still cannot reintroduce them. JSON (the on-screen table data) is NOT
- * filtered — ops keeps IDs for cross-referencing on screen.
+ * still cannot reintroduce them.
+ *
+ * The on-screen tables (insurance-portal + admin-insurance-reporting) are
+ * ID-free as well: the insurance-mileage display rows produced by
+ * mapReportRows carry no ID keys at all, so neither page can show one.
+ * The raw `rows` array in the JSON payload keeps DB-level fields for
+ * API-level ops tooling — nothing renders it in the insurance UI.
  */
 const EXPORT_EXCLUDED_COLUMNS: Partial<
   Record<EnterpriseReportKey, ReadonlySet<string>>

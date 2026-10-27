@@ -6,16 +6,19 @@
 //   - src/components/pages/admin-insurance-reporting.tsx (admin internal view)
 //
 // Column set = the original insurance-portal table that the dealer side already
-// trusted (Status, Customer, Driver, Route, Started, Stopped, Miles, Hours,
-// Payment, Payout) PLUS the per-ride insurance-compliance spec columns
-// (Driver ID, Ride ID, Start Location, End Location). Start Time, End Time,
-// and Miles are already covered by the original Started / Stopped / Miles
-// columns so they are not duplicated.
+// trusted (Status, Customer, Driver, Route, Start/End Location, Started,
+// Stopped, Miles, Hours, Payment, Payout).
+//
+// NO internal ID columns anywhere (delivery/ride ID, driver ID, dealer/
+// customer ID, tracking-session ID) — matching the export rule: insurance
+// surfaces (this table on BOTH pages, and every CSV/XLSX/PDF export) carry
+// human-readable rows only. The backend mirrors this by stripping ID keys
+// from the insurance-mileage display rows.
 //
 // Every cell uses a fallback chain so a field never shows "—" when there is
 // any usable underlying data. Example: if `customerName` is empty, the
-// Customer cell falls back to `customerEmail`; if `driverId` is null, the
-// Driver ID cell falls back to `driverEmail`, then to "Unassigned".
+// Customer cell falls back to `customerEmail`; the Driver cell falls back to
+// `driverEmail`.
 //
 // Any change here automatically flows to both pages so a carrier sees exactly
 // the same report an admin sees.
@@ -97,39 +100,6 @@ export const INSURANCE_REPORT_COLUMNS: ColumnDef<any>[] = [
         row.original.driverEmail,
       );
       return <span>{value || '—'}</span>;
-    },
-  },
-
-  // ── Per-ride insurance-compliance spec: Driver ID ────────────────────────
-  // Falls back to driver email (truncated) when the driver row exists but the
-  // ID column is somehow null, then to "Unassigned" when no driver at all.
-  {
-    accessorKey: 'driverId',
-    header: 'Driver ID',
-    size: 150,
-    meta: { label: 'Driver ID', sortable: false },
-    cell: ({ row }) => {
-      const id = firstNonEmpty(row.original.driverId);
-      if (id) return <span className="font-mono">{id}</span>;
-      const email = firstNonEmpty(row.original.driverEmail);
-      if (email) return <span className="font-mono text-slate-500">{email}</span>;
-      return <span className="text-slate-400 italic">Unassigned</span>;
-    },
-  },
-
-  // ── Per-ride insurance-compliance spec: Ride ID (delivery ID) ────────────
-  // Falls back to trackingSessionId if deliveryId is missing.
-  {
-    accessorKey: 'deliveryId',
-    header: 'Ride ID',
-    size: 150,
-    meta: { label: 'Ride ID', sortable: false },
-    cell: ({ row }) => {
-      const id = firstNonEmpty(
-        row.original.deliveryId,
-        row.original.trackingSessionId,
-      );
-      return <span className="font-mono">{id || '—'}</span>;
     },
   },
 
