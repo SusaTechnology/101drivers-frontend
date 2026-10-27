@@ -5,10 +5,9 @@ import {
   isAuthenticated,
   getUser,
 } from "@/lib/tanstack/dataQuery";
-import { Loader2, Clock, AlertTriangle, CheckCircle, PauseCircle } from "lucide-react";
+import { Clock, AlertTriangle, CheckCircle, PauseCircle } from "lucide-react";
 
 type GuardState =
-  | "loading"
   | "authenticated"
   | "needs_signin"
   | "needs_onboarding"
@@ -17,6 +16,69 @@ type GuardState =
   | "on_hold"
   | "invited"
   | "rejected";
+
+/**
+ * Pure synchronous access check — the exact checks the guard always ran,
+ * executed during the FIRST render instead of after it (isAuthenticated/
+ * getUser are synchronous localStorage reads). The old after-mount flip
+ * ("loading" → real state) guaranteed a full-screen spinner paint on
+ * EVERY navigation to every guarded driver page — that was the page-change
+ * flicker. Authorized navigations now render the page on the first paint.
+ */
+function computeDriverGuardAccess(): { state: GuardState; message: string } {
+  // Step 1: Check authentication
+  if (!isAuthenticated()) {
+    return { state: "needs_signin", message: "" };
+  }
+
+  const user = getUser();
+
+  // Step 2: Check driver role
+  if (!user?.roles?.includes("DRIVER")) {
+    return {
+      state: "needs_signin",
+      message: "You don't have driver access.",
+    };
+  }
+
+  // Step 3: Check driver status
+  const driverStatus = user.driverStatus;
+  if (driverStatus === 'WAITLISTED') {
+    return { state: "waitlisted", message: "" };
+  }
+  if (driverStatus === 'ON_HOLD') {
+    // Parked without rejection (driver oversupply / region not launched
+    // yet). Show a calm hold screen — NOT the waitlist screen (their
+    // application was received and is deliberately paused) and NOT a
+    // redirect loop (previously ON_HOLD fell through every status check
+    // and bounced between onboarding and sign-in).
+    return { state: "on_hold", message: "" };
+  }
+  if (driverStatus === 'INVITED') {
+    return { state: "invited", message: "" };
+  }
+  if (driverStatus === 'PENDING_APPROVAL' || driverStatus === 'PENDING') {
+    return { state: "pending_approval", message: "" };
+  }
+  if (driverStatus === 'SUSPENDED') {
+    return {
+      state: "needs_signin",
+      message:
+        "Your driver account has been suspended. Please contact support for assistance.",
+    };
+  }
+  if (driverStatus === 'REJECTED') {
+    return { state: "rejected", message: "" };
+  }
+
+  // Step 4: Check onboarding using stored login data (no API call)
+  if (!user.onboardingCompleted) {
+    return { state: "needs_onboarding", message: "" };
+  }
+
+  // All checks passed
+  return { state: "authenticated", message: "" };
+}
 
 /**
  * DriverRouteGuard wraps protected driver pages.
@@ -30,72 +92,15 @@ type GuardState =
  */
 export function DriverRouteGuard({ children }: { children: React.ReactNode }) {
   const navigate = useNavigate();
-  const [guardState, setGuardState] = useState<GuardState>("loading");
-  const [statusMessage, setStatusMessage] = useState("");
-
-  useEffect(() => {
-    checkAccess();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  function checkAccess() {
-    // Step 1: Check authentication
-    if (!isAuthenticated()) {
-      setGuardState("needs_signin");
-      return;
-    }
-
-    const user = getUser();
-
-    // Step 2: Check driver role
-    if (!user?.roles?.includes("DRIVER")) {
-      setStatusMessage("You don't have driver access.");
-      setGuardState("needs_signin");
-      return;
-    }
-
-    // Step 3: Check driver status
-    const driverStatus = user.driverStatus;
-    if (driverStatus === 'WAITLISTED') {
-      setGuardState("waitlisted");
-      return;
-    }
-    if (driverStatus === 'ON_HOLD') {
-      // Parked without rejection (driver oversupply / region not launched
-      // yet). Show a calm hold screen — NOT the waitlist screen (their
-      // application was received and is deliberately paused) and NOT a
-      // redirect loop (previously ON_HOLD fell through every status check
-      // and bounced between onboarding and sign-in).
-      setGuardState("on_hold");
-      return;
-    }
-    if (driverStatus === 'INVITED') {
-      setGuardState("invited");
-      return;
-    }
-    if (driverStatus === 'PENDING_APPROVAL' || driverStatus === 'PENDING') {
-      setGuardState("pending_approval");
-      return;
-    }
-    if (driverStatus === 'SUSPENDED') {
-      setStatusMessage("Your driver account has been suspended. Please contact support for assistance.");
-      setGuardState("needs_signin");
-      return;
-    }
-    if (driverStatus === 'REJECTED') {
-      setGuardState("rejected");
-      return;
-    }
-
-    // Step 4: Check onboarding using stored login data (no API call)
-    if (!user.onboardingCompleted) {
-      setGuardState("needs_onboarding");
-      return;
-    }
-
-    // All checks passed
-    setGuardState("authenticated");
-  }
+  // Resolved synchronously in the useState initializer — same cadence as
+  // the old useEffect check (once per guard mount = once per navigation),
+  // just during the first render so no spinner frame ever paints between
+  // pages. No setter is needed: the state is final for this mount.
+  const [guard] = useState<ReturnType<typeof computeDriverGuardAccess>>(
+    computeDriverGuardAccess
+  );
+  const guardState = guard.state;
+  const statusMessage = guard.message;
 
   // Redirect states
   useEffect(() => {
@@ -113,18 +118,6 @@ export function DriverRouteGuard({ children }: { children: React.ReactNode }) {
       }
     }
   }, [guardState, navigate]);
-
-  // Loading spinner
-  if (guardState === "loading") {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-background-light dark:bg-background-dark">
-        <div className="flex flex-col items-center gap-4">
-          <Loader2 className="w-8 h-8 animate-spin text-primary" />
-          <p className="text-sm text-slate-500 font-medium">Checking access...</p>
-        </div>
-      </div>
-    );
-  }
 
   // Pending approval screen
   if (guardState === "pending_approval") {

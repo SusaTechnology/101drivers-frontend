@@ -4,7 +4,31 @@ import { useNavigate } from "@tanstack/react-router";
 import { isAuthenticated, getUser } from "@/lib/tanstack/dataQuery";
 import { Loader2, ShieldAlert } from "lucide-react";
 
-type AdminGuardState = "checking" | "authorized" | "needs_signin" | "forbidden";
+type AdminGuardState = "authorized" | "needs_signin" | "forbidden";
+
+/**
+ * Pure synchronous access check — same checks the guard always did, just
+ * executed during the FIRST render instead of after it. Both inputs are
+ * synchronous localStorage reads (isAuthenticated/getUser), so there is no
+ * reason to paint a "checking" spinner frame between pages: that
+ * after-mount state flip was the page-change flicker (old page unmounts →
+ * full-screen spinner paints ≥1 frame → page appears). Authorized
+ * navigations now swap straight to the page with no intermediate frame.
+ */
+function computeAdminGuardState(): AdminGuardState {
+  // Step 1: Check authentication
+  if (!isAuthenticated()) {
+    return "needs_signin";
+  }
+
+  // Step 2: Check ADMIN role — authentication alone is NOT enough.
+  const user = getUser();
+  if (!user?.roles?.includes("ADMIN")) {
+    return "forbidden";
+  }
+
+  return "authorized";
+}
 
 /**
  * AdminRouteGuard wraps protected admin pages.
@@ -17,36 +41,18 @@ type AdminGuardState = "checking" | "authorized" | "needs_signin" | "forbidden";
  * The backend remains the real authorization authority (API calls carry
  * role guards); this guard only stops the UI from rendering admin pages
  * for non-admin accounts. Uses login response data stored in
- * localStorage — no extra API calls, no loading flash beyond the check.
+ * localStorage — no extra API calls, no loading flash.
  *
  * Mirrors DriverRouteGuard's house pattern (component guard, no router
  * beforeLoad), so admin pages behave exactly like driver pages today.
  */
 export function AdminRouteGuard({ children }: { children: React.ReactNode }) {
   const navigate = useNavigate();
-  const [guardState, setGuardState] = useState<AdminGuardState>("checking");
-
-  useEffect(() => {
-    checkAccess();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  function checkAccess() {
-    // Step 1: Check authentication
-    if (!isAuthenticated()) {
-      setGuardState("needs_signin");
-      return;
-    }
-
-    // Step 2: Check ADMIN role — authentication alone is NOT enough.
-    const user = getUser();
-    if (!user?.roles?.includes("ADMIN")) {
-      setGuardState("forbidden");
-      return;
-    }
-
-    setGuardState("authorized");
-  }
+  // Resolved synchronously in the useState initializer — runs during the
+  // first render, one per guard mount (= one per navigation), exactly the
+  // cadence the old useEffect check ran at. Same states, same outcomes,
+  // just without the guaranteed spinner paint in between.
+  const [guardState] = useState<AdminGuardState>(computeAdminGuardState);
 
   // Redirect states
   useEffect(() => {
