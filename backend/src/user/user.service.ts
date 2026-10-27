@@ -1576,6 +1576,7 @@ async getAdminUserDetail(id: string): Promise<any> {
     recentDeliveriesCreated,
     recentScheduleChangesRequested,
     recentScheduleChangesDecided,
+    driverInternalNote,
   ] = await Promise.all([
     this.prisma.adminAuditLog.findMany({
       where: {
@@ -1652,6 +1653,15 @@ async getAdminUserDetail(id: string): Promise<any> {
         createdAt: true,
       },
     }),
+    // Admin-only scratchpad for the Driver Profile page ("Internal Notes").
+    // Standalone DriverInternalNote table — never a Driver column — so no
+    // driver-facing query can ever return it.
+    user.driver
+      ? this.prisma.driverInternalNote.findUnique({
+          where: { driverId: user.driver.id },
+          select: { notes: true, updatedAt: true },
+        })
+      : Promise.resolve(null),
   ]);
 
   // Admin lifecycle status for the detail header badge (null for
@@ -1677,6 +1687,18 @@ async getAdminUserDetail(id: string): Promise<any> {
 
   return {
     ...user,
+    // Attach the admin-only internal notes (if any) to the driver object —
+    // the admin detail payload is the only place a driver's note travels.
+    ...(user.driver
+      ? {
+          driver: {
+            ...user.driver,
+            internalNotes: driverInternalNote?.notes ?? null,
+            internalNotesUpdatedAt:
+              driverInternalNote?.updatedAt?.toISOString() ?? null,
+          },
+        }
+      : {}),
     adminStatus,
     recentAdminActions,
     recentNotifications,
@@ -1752,6 +1774,49 @@ async revealDriverSsn(userId: string, actorUserId: string | null): Promise<any> 
     ssn: formatSsnForDisplay(decrypted),
     lastFour: driver.ssnLastFour ?? null,
   };
+}
+
+/**
+ * Admin-only "Internal Notes" for the Driver Profile page.
+ *
+ * Stored in the standalone DriverInternalNote table — deliberately NOT a
+ * Driver column — so every whole-model Driver return (onboarding flows,
+ * waitlist/pending listings) stays clean and the note can only ever
+ * travel through the admin endpoints that query this model explicitly.
+ * Empty/whitespace notes clear the scratchpad.
+ */
+async updateDriverInternalNotes(input: {
+  userId: string;
+  notes: string | null;
+  actorUserId?: string | null;
+}): Promise<any> {
+  const driver = await this.prisma.driver.findFirst({
+    where: { userId: input.userId },
+    select: { id: true },
+  });
+
+  if (!driver) {
+    throw new BadRequestException("No driver profile exists for this user");
+  }
+
+  const trimmed = (input.notes ?? "").trim();
+  const notes = trimmed ? trimmed.slice(0, 10000) : null;
+
+  const row = await this.prisma.driverInternalNote.upsert({
+    where: { driverId: driver.id },
+    create: {
+      driverId: driver.id,
+      notes,
+      updatedByUserId: input.actorUserId ?? null,
+    },
+    update: {
+      notes,
+      updatedByUserId: input.actorUserId ?? null,
+    },
+    select: { notes: true, updatedAt: true },
+  });
+
+  return { notes: row.notes, updatedAt: row.updatedAt.toISOString() };
 }
 
 async adminUpdateUser(input: {

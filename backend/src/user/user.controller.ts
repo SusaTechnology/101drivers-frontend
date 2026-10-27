@@ -56,6 +56,7 @@ import {
   UserAdminCreateBodyDto,
   UserAdminListQueryDto,
   UserAdminUpdateBodyDto,
+  UserInternalNotesBodyDto,
 } from "./dto/userAdmin.dto";
 @swagger.ApiTags("users")
 @common.Controller("users")
@@ -504,6 +505,40 @@ async adminDriverSsn(
   const actorUserId =
     (request as any)?.user?.id ?? null;
   return this.service.revealDriverSsn(id, actorUserId);
+}
+
+/**
+ * Admin-only "Internal Notes" for the Driver Profile page.
+ * PATCH /api/users/:id/internal-notes
+ *
+ * The note lives in the standalone DriverInternalNote table — never a
+ * Driver column — so no driver-facing query (own profile, onboarding
+ * returns, waitlist listings) can ever return it; the ONLY read/write
+ * paths are the admin detail payload and this endpoint. AdminGuard on
+ * top of the ACL grant mirrors admin-create: notes about a driver are
+ * admin business by definition. The actor id comes from the verified
+ * JWT — never from the client body.
+ */
+@common.Patch(":id/internal-notes")
+@swagger.ApiOkResponse({ type: Object })
+@common.UseGuards(AdminGuard)
+@nestAccessControl.UseRoles({
+  resource: "User",
+  action: "update",
+  possession: "any",
+})
+async updateDriverInternalNotes(
+  @common.Param("id") id: string,
+  @common.Body() body: UserInternalNotesBodyDto,
+  @common.Req() request: Request
+): Promise<any> {
+  const actorUserId =
+    (request as any)?.user?.id ?? null;
+  return this.service.updateDriverInternalNotes({
+    userId: id,
+    notes: body.notes ?? null,
+    actorUserId,
+  });
 }
 
 @common.Post(":id/suspend")

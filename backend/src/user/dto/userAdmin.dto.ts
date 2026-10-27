@@ -10,6 +10,7 @@ import {
   IsString,
   Matches,
   Max,
+  MaxLength,
   Min,
 } from "class-validator";
 
@@ -350,4 +351,21 @@ export class UserAdminDemoteBodyDto {
   @IsOptional()
   @IsString()
   actorUserId?: string | null;
+}
+
+/**
+ * Body for PATCH /api/users/:id/internal-notes.
+ * Admin-only scratchpad attached to a driver's profile ("Internal Notes"
+ * card on the admin Driver Profile page). Stored in the standalone
+ * DriverInternalNote table — never on Driver — so no driver-facing query
+ * can ever return it. An empty string clears the note.
+ */
+export class UserInternalNotesBodyDto {
+  @swagger.ApiPropertyOptional({
+    description: "Note text (max 10000 chars); an empty string clears the note",
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(10000)
+  notes?: string | null;
 }

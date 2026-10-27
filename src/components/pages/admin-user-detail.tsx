@@ -115,6 +115,7 @@ import {
   useResendInviteDriver,
   useAdminUpdateUser,
   useDeleteUser,
+  useSaveDriverInternalNotes,
   getActorUserId,
 } from '@/hooks/useAdminUsers';
 import { useDataQuery, useDataMutation } from '@/lib/tanstack/dataQuery';
@@ -304,6 +305,89 @@ function KpiCard({
         <div className="mt-1 text-xs text-slate-600 dark:text-slate-400">{subtitle}</div>
       )}
     </div>
+  );
+}
+
+/**
+ * Internal Notes — admin-only scratchpad on the Driver Profile page.
+ * Backed by the standalone DriverInternalNote table (never a Driver
+ * column), so no driver-facing endpoint can ever return it. Saves on
+ * blur or via the small Save button; the driver never sees this card.
+ */
+function DriverInternalNotesCard({
+  userId,
+  initialNotes,
+}: {
+  userId: string;
+  initialNotes: string | null;
+}) {
+  const [draft, setDraft] = useState<string>(initialNotes ?? '');
+  const [savedValue, setSavedValue] = useState<string>(initialNotes ?? '');
+  const saveNotes = useSaveDriverInternalNotes();
+
+  const dirty = draft !== savedValue;
+
+  // Server value wins after any refetch that brings different notes
+  // (lifecycle actions elsewhere on the page refetch the detail payload).
+  useEffect(() => {
+    setDraft(initialNotes ?? '');
+    setSavedValue(initialNotes ?? '');
+  }, [initialNotes]);
+
+  const persist = () => {
+    if (!dirty || saveNotes.isPending) return;
+    saveNotes.mutate(
+      { pathParams: { id: userId }, notes: draft },
+      {
+        onSuccess: () => setSavedValue(draft),
+        onError: () => toast.error('Could not save internal notes'),
+      }
+    );
+  };
+
+  const statusText = saveNotes.isPending
+    ? 'Saving…'
+    : dirty
+      ? 'Unsaved changes'
+      : 'Saved';
+
+  return (
+    <Card className="border-slate-200 dark:border-slate-800 shadow-lg overflow-hidden">
+      <CardHeader className="border-b border-slate-100 dark:border-slate-800">
+        <div className="flex items-center gap-3">
+          <FileText className="w-5 h-5 text-slate-400" />
+          <div>
+            <CardTitle className="text-xl font-black">Internal Notes</CardTitle>
+            <CardDescription className="text-sm mt-1">
+              Admin-only — never visible to the driver
+            </CardDescription>
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent className="p-6 sm:p-7 space-y-3">
+        <Textarea
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onBlur={persist}
+          rows={6}
+          placeholder="Private context for the admin team — call notes, decisions, follow-ups…"
+          className="rounded-xl min-h-[140px]"
+        />
+        <div className="flex items-center justify-between">
+          <span className="text-xs text-slate-400">{statusText}</span>
+          <Button
+            size="sm"
+            variant="outline"
+            className="rounded-xl"
+            disabled={!dirty || saveNotes.isPending}
+            onClick={persist}
+          >
+            <Save className="w-4 h-4 mr-1" />
+            Save
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -1466,8 +1550,11 @@ export default function AdminUserDetailPage({ userId }: AdminUserDetailPageProps
 
             {/* Summary */}
             <section className="mt-8 grid grid-cols-1 lg:grid-cols-12 gap-6">
-              {/* Left column - Account summary */}
-              <Card className="lg:col-span-7 border-slate-200 dark:border-slate-800 shadow-lg overflow-hidden">
+              {/* Left column - Account summary + admin-only Internal Notes.
+                  The Notes card fills the previously empty space under the
+                  summary card, level with the Driver Profile card's fields. */}
+              <div className="lg:col-span-7 space-y-6">
+              <Card className="border-slate-200 dark:border-slate-800 shadow-lg overflow-hidden">
                 <CardHeader className="border-b border-slate-100 dark:border-slate-800">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-4">
@@ -1723,6 +1810,17 @@ export default function AdminUserDetailPage({ userId }: AdminUserDetailPageProps
                   )}
                 </CardContent>
               </Card>
+
+              {/* Admin-only Internal Notes — saved on blur or via the Save
+                  button; stored server-side in DriverInternalNote (never on
+                  Driver), so the driver can never see it. */}
+              {user.driver && (
+                <DriverInternalNotesCard
+                  userId={user.id}
+                  initialNotes={user.driver.internalNotes ?? null}
+                />
+              )}
+              </div>
 
               {/* Right column */}
               <div className="lg:col-span-5 space-y-6">

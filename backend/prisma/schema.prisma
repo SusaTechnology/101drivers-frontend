@@ -116,6 +116,10 @@ model Customer {
 model Driver {
   alerts           DriverAlertPreference?
   bankAccount      DriverBankAccount?
+  // Admin-only scratchpad ("Internal Notes" card on the admin Driver
+  // Profile page). Standalone table on purpose — whole-model Driver
+  // returns (onboarding flows, waitlist listings) can never leak it.
+  internalNote     DriverInternalNote?        @relation(name: "DriverInternalNote")
   approvedAt       DateTime?
   approvedBy       User?                      @relation(name: "driversApproved", fields: [approvedByUserId], references: [id])
   approvedByUserId String?
@@ -218,6 +222,24 @@ model Driver {
   userId           String                     @unique
 
   @@index([status])
+}
+
+// ── Admin-only internal notes ──────────────────────────────────────────
+// Scratchpad shown on the admin Driver Profile page ("Internal Notes"
+// card). Deliberately its OWN table, never a Driver column: whole-model
+// Driver queries (onboarding returns, waitlist/pending listings) can
+// never leak it — only the admin endpoints in user.controller that
+// explicitly query this model can read or write it.
+model DriverInternalNote {
+  id              String   @id @default(cuid())
+  // One scratchpad per driver; the note dies with the driver row.
+  driverId        String   @unique
+  driver          Driver   @relation(name: "DriverInternalNote", fields: [driverId], references: [id], onDelete: Cascade)
+  notes           String?  @db.Text
+  // Last admin who saved (resolved from the JWT — never client-supplied).
+  updatedByUserId String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 }
 
 model DriverLocation {

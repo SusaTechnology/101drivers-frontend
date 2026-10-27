@@ -444,6 +444,19 @@ export interface AdminUserDriverDetail {
     ratingsReceived: number;
     districts: number;
   };
+  // Admin-only internal notes ("Internal Notes" card on the admin Driver
+  // Profile page). Lives in the standalone DriverInternalNote table —
+  // never a Driver column — so no driver-facing endpoint can return it.
+  internalNotes?: string | null;
+  internalNotesUpdatedAt?: string | null;
+}
+
+/**
+ * Body for PATCH /api/users/:id/internal-notes (admin-only scratchpad).
+ * An empty string clears the note.
+ */
+export interface SaveDriverInternalNotesRequest {
+  notes: string;
 }
 
 export interface DriverLocationDetail {

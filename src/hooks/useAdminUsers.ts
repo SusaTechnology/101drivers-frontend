@@ -27,6 +27,7 @@ import type {
   EnableAdminRequest,
   PromoteAdminRequest,
   DemoteAdminRequest,
+  SaveDriverInternalNotesRequest,
 } from '@/types/users';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || '';
@@ -390,6 +391,27 @@ export function useAdminUpdateUser() {
     apiEndPoint: `${API_BASE_URL}/api/users/:id/admin-update`,
     method: 'PATCH',
     invalidateQueryKey: [['admin-users'], ['admin-users-v2'], ['admin-users-summary'], ['admin-users-status-stats'], ['admin-user-detail']],
+  });
+}
+
+// ==================== DRIVER INTERNAL NOTES ====================
+
+/**
+ * Admin-only scratchpad for the Driver Profile page ("Internal Notes" card).
+ * PATCH /api/users/:id/internal-notes — stored in the standalone
+ * DriverInternalNote table (never a Driver column), so no driver-facing
+ * endpoint can ever return it. No query invalidation on purpose: the card
+ * keeps its own local state, and any refetch of the detail payload already
+ * carries the latest notes.
+ */
+export function useSaveDriverInternalNotes() {
+  return useDataMutation<
+    { notes: string | null; updatedAt: string },
+    SaveDriverInternalNotesRequest
+  >({
+    apiEndPoint: `${API_BASE_URL}/api/users/:id/internal-notes`,
+    method: 'PATCH',
+    onSuccessInvalidate: false,
   });
 }
 
