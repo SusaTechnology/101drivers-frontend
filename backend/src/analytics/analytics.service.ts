@@ -54,6 +54,13 @@ function clampText(value: unknown, max: number): string | null {
 const MS_PER_HOUR = 60 * 60 * 1000;
 const MS_PER_DAY = 24 * MS_PER_HOUR;
 
+/** Session gap for VISITS — a visitor idle longer than this starts a NEW
+ *  visit. This is the Google-Analytics standard 30-minute inactivity rule;
+ *  it is a derived metric computed at read time, NEVER a recorded type
+ *  (the ingest endpoint still rejects anything but PAGE_VIEW, so a client
+ *  cannot forge visit counts). */
+const SESSION_GAP_SECONDS = 30 * 60;
+
 export interface TimeseriesBucket {
   /** ISO timestamp of the bucket start (UTC). */
   bucket: string;
@@ -139,9 +146,17 @@ export class AnalyticsService {
     const { interval, from, to } = params;
     const type = params.type ?? null;
 
-    const rows = await this.prisma.$queryRaw<
-      { bucket: Date; type: string; count: bigint }[]
-    >`
+    // VISITS (sessionized page views) ride along with every unfiltered
+    // series — and with a PAGE_VIEW-filtered one — so the dashboard can
+    // chart one-visit-per-person next to the raw page-view counts. When
+    // the caller filters to any other type, no VISITS key is emitted
+    // (sessions are derived from page views; nothing else produces them).
+    const includeVisits = type === null || type === "PAGE_VIEW";
+
+    const [rows, visits] = await Promise.all([
+      this.prisma.$queryRaw<
+        { bucket: Date; type: string; count: bigint }[]
+      >`
       SELECT date_trunc(${interval}::text, "occurredAt") AS bucket,
              "type",
              COUNT(*)::bigint AS count
@@ -151,7 +166,11 @@ export class AnalyticsService {
         AND (${type}::text IS NULL OR "type" = ${type})
       GROUP BY 1, 2
       ORDER BY 1 ASC
-    `;
+    `,
+      includeVisits
+        ? this.visitsByBucket(from, to, interval)
+        : Promise.resolve(new Map<string, number>()),
+    ]);
 
     // Sparse SQL rows -> dense lookup: bucket -> type -> count
     const counts = new Map<string, Map<string, number>>();
@@ -160,6 +179,7 @@ export class AnalyticsService {
       if (!counts.has(key)) counts.set(key, new Map());
       counts.get(key)!.set(row.type, Number(row.count));
     }
+    const visitCounts = visits instanceof Map ? visits : new Map<string, number>();
 
     // Walk the bucket sequence so charts never see gaps.
     const buckets: TimeseriesBucket[] = [];
@@ -180,6 +200,9 @@ export class AnalyticsService {
       for (const t of ANALYTICS_EVENT_TYPES) {
         if (type && t !== type) continue;
         entry[t] = perType?.get(t) ?? 0;
+      }
+      if (includeVisits) {
+        entry.VISITS = visitCounts.get(key) ?? 0;
       }
       buckets.push(entry);
       if (stepMs > 0) {
@@ -220,6 +243,10 @@ export class AnalyticsService {
       previousCounts,
       todayCounts,
       yesterdayCounts,
+      visitsCurrent,
+      visitsPrevious,
+      visitsToday,
+      visitsYesterday,
       daily,
       monthly,
     ] = await Promise.all([
@@ -227,9 +254,20 @@ export class AnalyticsService {
       this.countByType(prevFrom, prevTo),
       this.countByType(dayStart, to),
       this.countByType(yesterdayStart, dayStart),
+      this.countVisits(from, to),
+      this.countVisits(prevFrom, prevTo),
+      this.countVisits(dayStart, to),
+      this.countVisits(yesterdayStart, dayStart),
       this.timeseries({ interval: "day", from, to }),
       this.timeseries({ interval: "month", from: monthlyFrom, to }),
     ]);
+
+    const deltaPctOf = (current: number, previous: number): number | null =>
+      previous === 0
+        ? current === 0
+          ? 0
+          : null // infinite growth — dashboards show "new"
+        : Math.round(((current - previous) / previous) * 1000) / 10;
 
     const metric = (type: AnalyticsEventType) => {
       const current = currentCounts[type] ?? 0;
@@ -237,15 +275,21 @@ export class AnalyticsService {
       return {
         current,
         previous,
-        deltaPct:
-          previous === 0
-            ? current === 0
-              ? 0
-              : null // infinite growth — dashboards show "new"
-            : Math.round(((current - previous) / previous) * 1000) / 10,
+        deltaPct: deltaPctOf(current, previous),
         today: todayCounts[type] ?? 0,
         yesterday: yesterdayCounts[type] ?? 0,
       };
+    };
+
+    // VISITS — one visit per person per 30-minute activity window (see
+    // SESSION_GAP_SECONDS). Same tile shape as the recorded event metrics;
+    // values come from the sessionization queries, not the type counter.
+    const visits = {
+      current: visitsCurrent,
+      previous: visitsPrevious,
+      deltaPct: deltaPctOf(visitsCurrent, visitsPrevious),
+      today: visitsToday,
+      yesterday: visitsYesterday,
     };
 
     // Cumulative running totals across the daily window (growth curves).
@@ -263,6 +307,7 @@ export class AnalyticsService {
     return {
       range: { from: from.toISOString(), to: to.toISOString() },
       totals: {
+        VISITS: visits,
         PAGE_VIEW: metric("PAGE_VIEW"),
         SIGNUP: metric("SIGNUP"),
         LOGIN: metric("LOGIN"),
@@ -390,6 +435,98 @@ export class AnalyticsService {
     const out: Record<string, number> = {};
     for (const row of rows) out[row.type] = Number(row._count._all);
     return out;
+  }
+
+  /**
+   * VISITS in [from, to) — sessionized page views.
+   *
+   * A visit = a run of PAGE_VIEWs from one sessionId with gaps of at most
+   * 30 minutes (LAG window function marks the first event after every
+   * inactivity gap). Edge cases, deliberately:
+   *   • A session straddling the window boundary can be counted in BOTH
+   *     windows — the same day-attribution compromise Google Analytics
+   *     makes; it cannot inflate a single window.
+   *   • Rows with a NULL sessionId (storage-blocked browsers that skipped
+   *     the client fallback) cannot be grouped — each counts as its own
+   *     visit rather than silently merging into one giant session.
+   */
+  private async countVisits(from: Date, to: Date): Promise<number> {
+    const rows = await this.prisma.$queryRaw<{ count: bigint }[]>`
+      WITH pv AS (
+        SELECT "sessionId", "occurredAt",
+               LAG("occurredAt") OVER (
+                 PARTITION BY "sessionId" ORDER BY "occurredAt"
+               ) AS "prevAt"
+        FROM "AnalyticsEvent"
+        WHERE "type" = 'PAGE_VIEW'
+          AND "occurredAt" >= ${from}
+          AND "occurredAt" < ${to}
+          AND "sessionId" IS NOT NULL
+      )
+      SELECT (
+        (SELECT COUNT(*)::bigint FROM pv
+          WHERE "prevAt" IS NULL
+             OR EXTRACT(EPOCH FROM ("occurredAt" - "prevAt")) > ${SESSION_GAP_SECONDS}::int)
+        +
+        (SELECT COUNT(*)::bigint FROM "AnalyticsEvent"
+          WHERE "type" = 'PAGE_VIEW'
+            AND "occurredAt" >= ${from}
+            AND "occurredAt" < ${to}
+            AND "sessionId" IS NULL)
+      )::bigint AS count
+    `;
+    return Number(rows[0]?.count ?? 0);
+  }
+
+  /**
+   * VISITS per date_trunc bucket in [from, to) — sessions STARTING in
+   * each bucket (the same attribution the raw per-bucket counts use),
+   * returned as bucketKey -> count for merging into the dense series.
+   */
+  private async visitsByBucket(
+    from: Date,
+    to: Date,
+    interval: AnalyticsInterval
+  ): Promise<Map<string, number>> {
+    const rows = await this.prisma.$queryRaw<{ bucket: Date; count: bigint }[]>`
+      WITH pv AS (
+        SELECT "sessionId", "occurredAt",
+               LAG("occurredAt") OVER (
+                 PARTITION BY "sessionId" ORDER BY "occurredAt"
+               ) AS "prevAt"
+        FROM "AnalyticsEvent"
+        WHERE "type" = 'PAGE_VIEW'
+          AND "occurredAt" >= ${from}
+          AND "occurredAt" < ${to}
+          AND "sessionId" IS NOT NULL
+      ),
+      started AS (
+        SELECT date_trunc(${interval}::text, "occurredAt") AS bucket,
+               COUNT(*)::bigint AS count
+        FROM pv
+        WHERE "prevAt" IS NULL
+           OR EXTRACT(EPOCH FROM ("occurredAt" - "prevAt")) > ${SESSION_GAP_SECONDS}::int
+        GROUP BY 1
+      ),
+      anon AS (
+        SELECT date_trunc(${interval}::text, "occurredAt") AS bucket,
+               COUNT(*)::bigint AS count
+        FROM "AnalyticsEvent"
+        WHERE "type" = 'PAGE_VIEW'
+          AND "occurredAt" >= ${from}
+          AND "occurredAt" < ${to}
+          AND "sessionId" IS NULL
+        GROUP BY 1
+      )
+      SELECT bucket, SUM(count)::bigint AS count
+      FROM (SELECT bucket, count FROM started UNION ALL SELECT bucket, count FROM anon) s
+      GROUP BY bucket
+    `;
+    const map = new Map<string, number>();
+    for (const row of rows) {
+      map.set(new Date(row.bucket).toISOString(), Number(row.count));
+    }
+    return map;
   }
 }
 

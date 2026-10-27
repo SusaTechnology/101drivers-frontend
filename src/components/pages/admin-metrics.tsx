@@ -20,6 +20,7 @@ import {
   TrendingUp,
   UserPlus,
   LogIn,
+  Users,
 } from 'lucide-react'
 import { useQueryClient } from '@tanstack/react-query'
 import {
@@ -60,11 +61,20 @@ import {
 
 const METRICS = [
   {
+    // Derived server-side (30-min sessionization) — NOT a recorded event
+    // type, so it never appears in the records ledger or its filter.
+    key: 'VISITS' as const,
+    label: 'Visits',
+    color: '#14b8a6',
+    icon: Users,
+    blurb: 'One per person per 30-min activity window',
+  },
+  {
     key: 'PAGE_VIEW' as const,
-    label: 'Web Visits',
+    label: 'Page Views',
     color: '#3b82f6',
     icon: Eye,
-    blurb: 'Page views across the whole app',
+    blurb: 'Every route change + refresh, raw',
   },
   {
     key: 'SIGNUP' as const,
@@ -90,7 +100,8 @@ const METRICS = [
 ] as const
 
 const chartConfig = {
-  PAGE_VIEW: { label: 'Visits', color: '#3b82f6' },
+  VISITS: { label: 'Visits', color: '#14b8a6' },
+  PAGE_VIEW: { label: 'Page views', color: '#3b82f6' },
   SIGNUP: { label: 'Sign-ups', color: '#8b5cf6' },
   LOGIN: { label: 'Log-ins', color: '#f59e0b' },
   DELIVERY_CREATED: { label: 'Deliveries', color: '#22c55e' },
@@ -182,7 +193,10 @@ export default function AdminMetricsPage() {
       const running: Record<string, number> = {}
       return rows.map((row) => {
         const entry: Record<string, number | string> = { bucket: row.bucket }
+        // VISITS excluded: a session spanning multiple hourly buckets would
+        // be re-counted in every bucket — summing visits is meaningless.
         for (const m of METRICS) {
+          if (m.key === 'VISITS') continue
           running[m.key] = (running[m.key] ?? 0) + (Number(row[m.key] ?? 0) as number)
           entry[m.key] = running[m.key]
         }
@@ -328,7 +342,7 @@ export default function AdminMetricsPage() {
         </div>
 
         {/* KPI cards */}
-        <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 xl:grid-cols-5 gap-3">
           {METRICS.map((m) => {
             const totals = data?.totals?.[m.key]
             return (
@@ -436,7 +450,10 @@ export default function AdminMetricsPage() {
                     />
                   }
                 />
-                {METRICS.map((m) => (
+                {/* VISITS excluded — the backend never cumulates sessions
+                    (same visitor would count once per day) and the 24H
+                    client-side build skips it for the same reason. */}
+                {METRICS.filter((m) => m.key !== 'VISITS').map((m) => (
                   <Area
                     key={m.key}
                     dataKey={m.key}

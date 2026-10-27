@@ -6,6 +6,9 @@ import { AnalyticsService } from "./analytics.service";
 //      (analytics can never fail a signup/login/delivery creation).
 //   2. Timeseries buckets are gap-free, whitelisted and correctly shaped.
 //   3. Records pagination is clamped (no unbounded takes).
+//   4. VISITS is a DERIVED metric (30-min sessionization, computed at
+//      read time) — never a recorded type; merged into unfiltered
+//      series only.
 // ═══════════════════════════════════════════════════════════════════════
 
 describe("AnalyticsService", () => {
@@ -88,9 +91,14 @@ describe("AnalyticsService", () => {
   describe("timeseries", () => {
     it("returns gap-free daily buckets with zeros where nothing happened", async () => {
       // Only ONE event in the whole window: day 2, one PAGE_VIEW.
-      prisma.$queryRaw.mockResolvedValueOnce([
-        { bucket: new Date("2026-10-02T00:00:00.000Z"), type: "PAGE_VIEW", count: 1n },
-      ]);
+      // Call order is deterministic: raw #1 = bucket counts, #2 = visits.
+      prisma.$queryRaw
+        .mockResolvedValueOnce([
+          { bucket: new Date("2026-10-02T00:00:00.000Z"), type: "PAGE_VIEW", count: 1n },
+        ])
+        .mockResolvedValueOnce([
+          { bucket: new Date("2026-10-02T00:00:00.000Z"), count: 1n },
+        ]);
 
       const buckets = await service.timeseries({
         interval: "day",
@@ -101,13 +109,16 @@ describe("AnalyticsService", () => {
       expect(buckets).toHaveLength(3);
       expect(buckets[0]).toEqual({
         bucket: "2026-10-01T00:00:00.000Z",
+        VISITS: 0,
         PAGE_VIEW: 0,
         SIGNUP: 0,
         LOGIN: 0,
         DELIVERY_CREATED: 0,
       });
       expect(buckets[1].PAGE_VIEW).toBe(1);
+      expect(buckets[1].VISITS).toBe(1);
       expect(buckets[2].PAGE_VIEW).toBe(0);
+      expect(buckets[2].VISITS).toBe(0);
     });
 
     it("filters to a single type when requested", async () => {
@@ -123,9 +134,12 @@ describe("AnalyticsService", () => {
       });
 
       expect(buckets).toHaveLength(2);
-      // Only SIGNUP is present in the rows — other types are omitted.
+      // Only SIGNUP is present in the rows — other types are omitted, and
+      // a single-type filter NEVER carries VISITS (no sessionization query
+      // even runs — raw call count stays at exactly 1).
       expect(Object.keys(buckets[0]).sort()).toEqual(["SIGNUP", "bucket"]);
       expect(buckets[1].SIGNUP).toBe(2);
+      expect(prisma.$queryRaw).toHaveBeenCalledTimes(1);
     });
 
     it("passes the whitelist-validated interval into the SQL as a parameter", async () => {
@@ -137,8 +151,9 @@ describe("AnalyticsService", () => {
         to: new Date("2026-03-01T00:00:00.000Z"),
       });
 
-      expect(prisma.$queryRaw).toHaveBeenCalledTimes(1);
+      expect(prisma.$queryRaw).toHaveBeenCalledTimes(2);
       // month buckets align to calendar months, not fixed 30-day steps
+      // (raw call #1 = bucket counts, #2 = sessionized visits per bucket)
       const buckets = await service.timeseries({
         interval: "month",
         from: new Date("2026-01-15T00:00:00.000Z"),
@@ -198,6 +213,31 @@ describe("AnalyticsService", () => {
       expect(overview.totals.SIGNUP.current).toBe(5);
       expect(overview.totals.SIGNUP.previous).toBe(0);
       expect(overview.totals.SIGNUP.deltaPct).toBeNull();
+    });
+
+    it("builds VISITS totals from the four sessionization queries", async () => {
+      // Promise.all invocation order in overview(): raw #1-#4 are the visit
+      // counts (current / previous / today / yesterday); later raw calls
+      // (daily + monthly timeseries counts & visits) fall through to the
+      // base empty mock from beforeEach.
+      prisma.$queryRaw
+        .mockResolvedValueOnce([{ count: 12n }]) // current window
+        .mockResolvedValueOnce([{ count: 10n }]) // previous window
+        .mockResolvedValueOnce([{ count: 3n }]) // today
+        .mockResolvedValueOnce([{ count: 2n }]); // yesterday
+
+      const overview = await service.overview({
+        from: new Date("2026-10-11T00:00:00.000Z"),
+        to: new Date("2026-10-21T00:00:00.000Z"),
+      });
+
+      expect(overview.totals.VISITS).toEqual({
+        current: 12,
+        previous: 10,
+        deltaPct: 20,
+        today: 3,
+        yesterday: 2,
+      });
     });
   });
 

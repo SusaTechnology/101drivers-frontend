@@ -94,6 +94,8 @@ export interface MetricsTotals {
 export interface AnalyticsOverview {
   range: { from: string; to: string };
   totals: {
+    /** Derived server-side (30-min sessionization) — not a recorded type. */
+    VISITS: MetricsTotals;
     PAGE_VIEW: MetricsTotals;
     SIGNUP: MetricsTotals;
     LOGIN: MetricsTotals;
