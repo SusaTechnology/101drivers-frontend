@@ -29,6 +29,8 @@ import {
 // Product analytics API (Task 72)
 //
 //   POST /analytics/events    — PUBLIC ingest, PAGE_VIEW only, IP-budgeted.
+//                               Records PUBLIC (signed-out) visitors only:
+//                               authenticated pings are silently dropped.
 //                               SIGNUP/LOGIN/DELIVERY_CREATED are recorded
 //                               server-side ONLY and are rejected here so a
 //                               client can never forge business metrics.
@@ -69,11 +71,20 @@ export class AnalyticsController {
 
     const user = await this.resolveOptionalUser(request);
 
+    // Page views are a PUBLIC-visitor metric: once the visitor is signed
+    // in we no longer record their navigation (product decision — the
+    // ledger tracks marketing-site traffic, and dropping authenticated
+    // pings also keeps the table lean for the sessionization queries).
+    // Still respond { ok: true } so stale clients get a silent success.
+    if (user) {
+      return { ok: true };
+    }
+
     // recordSafe never throws — a ledger hiccup can never 500 the ping.
     await this.analytics.recordSafe({
       type: "PAGE_VIEW",
-      userId: user?.id ?? null,
-      role: this.normalizeRole(user?.roles),
+      userId: null,
+      role: null,
       sessionId: body?.sessionId,
       path: body?.path,
       referrer: body?.referrer,
@@ -177,17 +188,11 @@ export class AnalyticsController {
     }
   }
 
-  /** DB stores a scalar role; JWTs may carry an array — accept both. */
-  private normalizeRole(roles: unknown): string | null {
-    if (Array.isArray(roles) && roles.length) return String(roles[0]);
-    if (typeof roles === "string" && roles) return roles;
-    return null;
-  }
-
   /**
-   * Optional identity enrichment for public pings: verify the Bearer
-   * token when one is present; anything else (no token, expired,
-   * garbage) is an anonymous visitor — NEVER a 401.
+   * Optional identity probe for public pings: verify the Bearer token when
+   * one is present so SIGNED-IN visitors can be skipped (page views are a
+   * public-visitor metric); anything else (no token, expired, garbage) is
+   * an anonymous visitor — NEVER a 401.
    */
   private async resolveOptionalUser(
     request: Request

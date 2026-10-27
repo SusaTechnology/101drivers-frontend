@@ -12,7 +12,6 @@ import {
   Activity,
   BarChart3,
   CalendarRange,
-  Eye,
   Package,
   RefreshCw,
   ShieldAlert,
@@ -67,14 +66,7 @@ const METRICS = [
     label: 'Visits',
     color: '#14b8a6',
     icon: Users,
-    blurb: 'One per person per 30-min activity window',
-  },
-  {
-    key: 'PAGE_VIEW' as const,
-    label: 'Page Views',
-    color: '#3b82f6',
-    icon: Eye,
-    blurb: 'Every route change + refresh, raw',
+    blurb: 'One per visitor per 30-min window · public traffic only',
   },
   {
     key: 'SIGNUP' as const,
@@ -99,12 +91,22 @@ const METRICS = [
   },
 ] as const
 
+// Full definition shown as the native tooltip on the Visits card — what a
+// visit is, how it differs from a raw page count, and the public-only rule.
+const VISITS_TIP =
+  'A visit is one person actively browsing in a rolling 30-minute window. ' +
+  'Moving between pages or refreshing never creates a second visit — that ' +
+  'raw page count is deliberately not shown. Public (signed-out) visitors ' +
+  'only: signed-in users are not tracked.'
+
 const chartConfig = {
   VISITS: { label: 'Visits', color: '#14b8a6' },
-  PAGE_VIEW: { label: 'Page views', color: '#3b82f6' },
   SIGNUP: { label: 'Sign-ups', color: '#8b5cf6' },
   LOGIN: { label: 'Log-ins', color: '#f59e0b' },
   DELIVERY_CREATED: { label: 'Deliveries', color: '#22c55e' },
+  // Not charted (no KPI card anymore) but kept for the Records filter chip
+  // label — PAGE_VIEW rows still exist in the ledger (public visitors).
+  PAGE_VIEW: { label: 'Page views', color: '#3b82f6' },
 } satisfies ChartConfig
 
 const TYPE_CHIP: Record<string, string> = {
@@ -149,6 +151,19 @@ const RANGE_CHIPS: { value: MetricsRange; label: string }[] = [
 
 /** Records table rows per page. */
 const RECORDS_PAGE_SIZE = 10
+
+/**
+ * Ledger types offered in the Records filter. VISITS is deliberately NOT
+ * here (it is derived, never a ledger row); PAGE_VIEW stays — its rows
+ * (public visitors) still exist in the ledger even without a KPI card.
+ */
+const RECORDS_TYPE_FILTERS = [
+  'ALL',
+  'PAGE_VIEW',
+  'SIGNUP',
+  'LOGIN',
+  'DELIVERY_CREATED',
+] as const
 
 export default function AdminMetricsPage() {
   const { actionItems, signOut } = useAdminActions()
@@ -331,6 +346,7 @@ export default function AdminMetricsPage() {
                 overview.refetch()
                 hourly.refetch()
                 records.refetch()
+                blocked.refetch()
               }}
               disabled={isFetching}
               className="gap-1.5"
@@ -342,13 +358,14 @@ export default function AdminMetricsPage() {
         </div>
 
         {/* KPI cards */}
-        <div className="grid grid-cols-2 xl:grid-cols-5 gap-3">
+        <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
           {METRICS.map((m) => {
             const totals = data?.totals?.[m.key]
             return (
               <div
                 key={m.key}
                 className="rounded-xl border bg-card p-3.5 space-y-1.5"
+                title={m.key === 'VISITS' ? VISITS_TIP : undefined}
               >
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2 min-w-0">
@@ -521,7 +538,7 @@ export default function AdminMetricsPage() {
               </p>
             </div>
             <div className="flex flex-wrap gap-1">
-              {['ALL', ...METRICS.map((m) => m.key)].map((t) => (
+              {RECORDS_TYPE_FILTERS.map((t) => (
                 <button
                   key={t}
                   onClick={() => {

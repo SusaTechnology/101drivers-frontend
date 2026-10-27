@@ -41,7 +41,12 @@ export function trackPageView(path: string): void {
     lastTrackedPath = path;
     lastTrackedAt = now;
 
-    const token = getAccessToken();
+    // Page views are a PUBLIC-visitor metric (product decision): once the
+    // visitor is signed in we don't ping at all — no request, no ledger
+    // row. The backend independently drops authenticated pings, so this
+    // early return is purely about not wasting the request.
+    if (getAccessToken()) return;
+
     const body = JSON.stringify({
       type: 'PAGE_VIEW',
       path,
@@ -49,14 +54,13 @@ export function trackPageView(path: string): void {
       sessionId: getSessionId(),
     });
 
-    // keepalive lets the request survive page unload; the Bearer header
-    // (when a session exists) lets the server attribute the visit.
+    // keepalive lets the request survive page unload. Anonymous ping —
+    // no Authorization header by design.
     void fetch(`${API_BASE_URL}/api/analytics/events`, {
       method: 'POST',
       keepalive: true,
       headers: {
         'Content-Type': 'application/json',
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
       },
       body,
     }).catch(() => {
