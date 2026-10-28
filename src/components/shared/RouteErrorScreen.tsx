@@ -86,6 +86,18 @@ const STALE_CHUNK_PATTERNS = [
   // or repair) rebuilds the payload — treat exactly like stale chunks.
   'result.default',
   "reading 'default'",
+  // Mixed-generation route chunks (reported right after the AWS move,
+  // Oct-2026). When a lazy route chunk from ANOTHER deploy generation
+  // resolves into a mismatched route object, TanStack Router's internals
+  // read `.component` off undefined — the exact message documented in the
+  // sw.js v5.3 header as the classic mixed-build symptom:
+  //   Chrome: "Cannot read properties of undefined (reading 'component')"
+  //   Safari: "Undefined is not an object (evaluating 'm.component')"
+  // Same root cause, different minified victim — treat like stale chunks.
+  // (Safari's trailing quote in the pattern catches the "evaluating
+  // 'x.component')" phrasing regardless of the minified variable name.)
+  "reading 'component'",
+  ".component'",
 ]
 
 function isStaleChunkError(error: unknown): boolean {
@@ -95,6 +107,74 @@ function isStaleChunkError(error: unknown): boolean {
       : String(error ?? '')
   const lowered = raw.toLowerCase()
   return STALE_CHUNK_PATTERNS.some((p) => lowered.includes(p))
+}
+
+/**
+ * Generational staleness check for UNRECOGNIZED route crashes.
+ *
+ * WHY: error-signature matching can never be exhaustive. Minified builds
+ * produce crashes like "Undefined is not an object (evaluating m[n]" —
+ * the variable names and bracket reads change on every build, so no
+ * fixed pattern list can classify them. This check doesn't read the
+ * error at all: it asks whether THIS TAB is running an OLDER deploy
+ * generation than the server right now.
+ *
+ * HOW: production index.html contains exactly one entry module script
+ * ("/assets/index-<hash>.js") whose hash changes on every build. The tag
+ * stays in the DOM for the whole SPA session, so it fingerprints the
+ * generation this document booted from. Fetching the CURRENT index.html
+ * (cache-busted query + no-store, so neither the HTTP cache nor the
+ * service worker's dynamic bucket can answer from memory) and comparing
+ * the two hashes gives proof of staleness:
+ *
+ *   mismatch → this tab is provably from a previous deploy — the exact
+ *              condition behind every "works after a refresh" crash.
+ *              The caller promotes the crash to the stale-recovery path.
+ *   match    → same generation as the server; a genuine app bug — the
+ *              caller shows the ordinary error card.
+ *
+ * Failures of the check itself (offline, slow, unexpected markup) are
+ * conservative: they return false, leaving the ordinary path untouched.
+ */
+async function isStaleDeployGeneration(): Promise<boolean> {
+  if (import.meta.env.DEV) return false
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+    return false
+  }
+  try {
+    // The generation this document booted from. In dev the entry is
+    // "/src/main.tsx", so the selector matches nothing — another reason
+    // the DEV guard above already returned.
+    const booted = document.querySelector<HTMLScriptElement>(
+      'script[type="module"][src*="/assets/"]',
+    )?.getAttribute('src')
+    if (!booted) return false
+
+    // The generation the server serves RIGHT NOW. Unique query defeats
+    // exact-match lookups in the service worker's caches; no-store
+    // defeats the HTTP cache; the 3s abort bounds a slow radio.
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), 3_000)
+    let html: string
+    try {
+      const res = await fetch(`/index.html?stale-check=${Date.now()}`, {
+        cache: 'no-store',
+        signal: controller.signal,
+      })
+      if (!res.ok) return false
+      html = await res.text()
+    } finally {
+      clearTimeout(timer)
+    }
+
+    const served = html
+      .match(/<script\b[^>]*\bsrc="(\/assets\/[^"']+\.js)"[^>]*>/)?.[1]
+    if (!served) return false
+
+    return booted !== served
+  } catch {
+    return false
+  }
 }
 
 const RELOAD_GUARD_KEY = 'route-error:auto-reload-at'
@@ -310,7 +390,18 @@ export function RouteErrorScreen({
   reset: () => void
 }) {
   const offline = typeof navigator !== 'undefined' && !navigator.onLine
-  const staleChunk = isStaleChunkError(error)
+
+  // Stale-chunk crashes matched by signature take the recovery path
+  // immediately. UNRECOGNIZED crashes still might be stale — minified
+  // builds mint a new unmatchable message every deploy ("evaluating
+  // m[n]") — so they get one generational check before the card paints.
+  const [staleChunk, setStaleChunk] = useState(() => isStaleChunkError(error))
+  // While the generational check is in flight for an unrecognized crash,
+  // hold the quiet spinner (bounded by the check's 3s abort) instead of
+  // letting the card flash for a moment before recovery takes over.
+  const [stalenessPending, setStalenessPending] = useState(
+    () => !isStaleChunkError(error),
+  )
 
   // Feed the persisted client error log. window.onerror never fires for
   // errors React (or the router boundary) caught, so without this hook a
@@ -338,10 +429,22 @@ export function RouteErrorScreen({
 
   useEffect(() => {
     if (staleChunk) {
+      setStalenessPending(false)
       const plan = runStaleRecovery((step) => setRecoverStep(step))
       if (plan === 'blocked') setRecoveryBlocked(true)
       return
     }
+
+    // Unrecognized crash: ask the server whether this tab runs an older
+    // deploy generation (see isStaleDeployGeneration). Mismatch → promote
+    // to the stale path above (the effect re-runs on the state flip);
+    // match or failed check → a genuine bug, let the ordinary card paint.
+    let cancelled = false
+    void isStaleDeployGeneration().then((stale) => {
+      if (cancelled) return
+      setStalenessPending(false)
+      if (stale) setStaleChunk(true)
+    })
 
     // One silent auto-retry for every other crash. Loader failures and
     // render hiccups during login / page changes are overwhelmingly
@@ -349,11 +452,15 @@ export function RouteErrorScreen({
     // invisible. The module-level timestamp guarantees a persistent
     // error can never loop: on a re-catch the retry is skipped and the
     // card paints after QUIET_MS.
+    let resetTimer: ReturnType<typeof setTimeout> | undefined
     const now = Date.now()
     if (now - lastAutoResetAt >= AUTO_RESET_SPACING_MS) {
       lastAutoResetAt = now
-      const timer = setTimeout(() => reset(), AUTO_RESET_MS)
-      return () => clearTimeout(timer)
+      resetTimer = setTimeout(() => reset(), AUTO_RESET_MS)
+    }
+    return () => {
+      cancelled = true
+      if (resetTimer) clearTimeout(resetTimer)
     }
   }, [staleChunk, reset])
 
@@ -362,7 +469,7 @@ export function RouteErrorScreen({
     return () => clearTimeout(timer)
   }, [])
 
-  if (!staleChunk && !quietElapsed) {
+  if (!staleChunk && (stalenessPending || !quietElapsed)) {
     return <QuietShell text="Loading…" />
   }
 
