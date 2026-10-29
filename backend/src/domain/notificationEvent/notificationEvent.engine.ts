@@ -66,7 +66,16 @@ export class NotificationEventEngine {
     //   *-customer, dealer-*, customer-*  → customer.userId
     //   *-driver, driver-*, payout-*      → driver.userId
     //   admin-*, commission-*, pricing-*   → actorUserId (admin)
-    // If we can't determine, fall back to actorUserId.
+    //
+    // VISIBILITY RULE (owner requirement): an inbox only ever holds
+    // notifications addressed to ITS OWN user id — admins see admin
+    // notifications, customers theirs, drivers theirs. So when a
+    // customer/driver notification has no linked user account to route
+    // to, it becomes EMAIL-ONLY (toUserId = null, visible in NO bell) —
+    // it must NEVER fall back to actorUserId, which is usually the ADMIN
+    // who performed the action. That fallback is exactly how "Your
+    // customer account has been approved" (Hi Alex Private) ended up in
+    // the admin's bell.
     let toUserId = input.toUserId ?? null;
 
     if (!toUserId) {
@@ -101,14 +110,18 @@ export class NotificationEventEngine {
           where: { id: input.driverId },
           select: { userId: true },
         });
-        toUserId = driver?.userId ?? input.actorUserId ?? null;
+        // Driver's linked user ONLY — no actor fallback (see rule above).
+        toUserId = driver?.userId ?? null;
       } else if (input.customerId) {
         // Customer/dealer-facing notification
         const customer = await this.prisma.customer.findUnique({
           where: { id: input.customerId },
           select: { userId: true },
         });
-        toUserId = customer?.userId ?? input.actorUserId ?? null;
+        // Customer's linked user ONLY — no actor fallback (see rule
+        // above). With no linked user the email still goes out via
+        // toEmail; it just appears in nobody's bell.
+        toUserId = customer?.userId ?? null;
       } else {
         toUserId = input.actorUserId ?? null;
       }
@@ -219,10 +232,12 @@ export class NotificationEventEngine {
       return;
     }
 
-    // Push ONLY to the actual recipient (toUserId).
-    // If toUserId is null (old notification without the field),
-    // fall back to actorUserId so the bell still updates.
-    const userId = event.toUserId || event.actorUserId;
+    // Push ONLY to the actual recipient (toUserId). A notification with
+    // no bell recipient (toUserId null — email-only) rings NO ONE's bell,
+    // including the actor's: the strict /my/inbox filter would show
+    // nothing anyway, and ringing it just burns a phantom refetch on the
+    // actor's device (usually the admin who performed the action).
+    const userId = event.toUserId;
     if (!userId) {
       return;
     }
