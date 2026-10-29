@@ -1,7 +1,7 @@
 import { Outlet, createRootRoute, useRouterState } from '@tanstack/react-router'
 import { TanStackRouterDevtoolsPanel } from '@tanstack/react-router-devtools'
 import { TanStackDevtools } from '@tanstack/react-devtools'
-import { useEffect } from 'react'
+import { useEffect, useLayoutEffect } from 'react'
 import { PWAInstallPrompt } from '../components/pwa/PWAInstallPrompt'
 import { NotFoundScreen } from '../components/shared/NotFoundScreen'
 import { PageViewTracker } from '../components/shared/PageViewTracker'
@@ -96,12 +96,42 @@ function useRobotsMeta() {
   }, [pathname])
 }
 
+/**
+ * Admin shell push gate — the router-root half of the "page swings
+ * sideways" fix (ERP sidebar, app-sidebar.tsx).
+ *
+ * The sidebar publishes its rail width as the --app-sidebar-push variable
+ * and styles.css converts it into body padding-left on desktop. That
+ * padding must be active EXACTLY while an admin-shell page is displayed.
+ * The sidebar itself cannot own the on/off decision: it unmounts on every
+ * route change (each admin page renders <Navbar> itself), including the
+ * pending windows (<RoutePending> shows for every >150ms navigation), so
+ * a component-lifecycle reset used to drop the padding mid-navigation and
+ * swing the whole page. The ROOT layout never unmounts between routes and
+ * re-renders with the new pathname the moment navigation starts, so it
+ * owns the gate instead: pathname starts with /admin = admin shell on.
+ * Every route that renders the admin navbar/sidebar starts with /admin
+ * (verified across all 39 testNavbar importers). The width VALUE stays
+ * owned by the sidebar (it knows the collapsed state); index.html
+ * pre-seeds both pre-paint.
+ */
+function useAdminShellGate() {
+  const pathname = useRouterState({ select: (s) => s.location.pathname })
+
+  useLayoutEffect(() => {
+    document.documentElement.dataset.adminShell = pathname.startsWith('/admin')
+      ? 'on'
+      : 'off'
+  }, [pathname])
+}
+
 export const Route = createRootRoute({
   // Branded 404 — TanStack Router renders this inside the root layout
   // whenever the URL matches no route (the devtools + PWA prompt stay up).
   notFoundComponent: NotFoundScreen,
   component: () => {
     useRobotsMeta()
+    useAdminShellGate()
     return (
       <>
         {/* Product analytics (Task 72) — one PAGE_VIEW per navigation,

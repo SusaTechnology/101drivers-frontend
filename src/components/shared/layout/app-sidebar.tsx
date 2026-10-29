@@ -110,15 +110,26 @@ export function AppSidebar({ items }: { items: AppSidebarItem[] }) {
 
   // Publish the push width BEFORE paint (useLayoutEffect) so navigating
   // between admin pages never shows one frame of unpadded content.
+  //
+  // NOTE: deliberately NO cleanup that resets the variable to 0px. This
+  // component unmounts on every route change (each admin page renders
+  // <Navbar> itself), INCLUDING during pending windows — every navigation
+  // slower than defaultPendingMs (150ms) swaps the whole tree for
+  // <RoutePending>, unmounting us mid-navigation. Resetting there made
+  // body padding-left animate 240px → 0px → 240px and the entire page
+  // visibly swung sideways on every such navigation (and on load, where
+  // the variable only appeared after React mounted). The width VALUE now
+  // survives route changes; whether the padding applies at all is decided
+  // by the html[data-admin-shell] gate owned by the router root
+  // (__root.tsx), which switches it off only when the user actually
+  // leaves the admin area. index.html pre-seeds the same value pre-paint
+  // so even the first load never renders unpadded.
   useLayoutEffect(() => {
     const root = document.documentElement;
     root.style.setProperty(
       '--app-sidebar-push',
       `${collapsed ? SIDEBAR_WIDTH_COLLAPSED : SIDEBAR_WIDTH_EXPANDED}px`
     );
-    return () => {
-      root.style.setProperty('--app-sidebar-push', '0px');
-    };
   }, [collapsed]);
 
   // Ctrl/Cmd+B — the toggle shortcut every major dashboard uses.

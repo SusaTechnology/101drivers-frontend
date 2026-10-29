@@ -268,17 +268,51 @@ html {
 /* ERP sidebar push — the persistent admin sidebar (app-sidebar.tsx) is
    position:fixed, so it cannot move the page by itself. It publishes its
    current width as --app-sidebar-push on <html> (useLayoutEffect, set
-   before paint), and this rule converts that into body padding on desktop
-   only: the sticky navbar, the centered page containers and every in-flow
-   element slide right in lockstep with the sidebar's own width transition
-   — the classic ERP "push" that never overlaps content. Below lg the
-   variable is ignored (mobile keeps the drawer), and position:fixed
-   elements (the sidebar itself, Radix poppers/dialogs) are unaffected by
-   body padding by spec, so overlays keep anchoring correctly. */
+   before paint; index.html pre-seeds it pre-React), and this rule converts
+   that into body padding on desktop only: the sticky navbar, the centered
+   page containers and every in-flow element slide right in lockstep with
+   the sidebar's own width transition — the classic ERP "push" that never
+   overlaps content. Below lg the variable is ignored (mobile keeps the
+   drawer), and position:fixed elements (the sidebar itself, Radix
+   poppers/dialogs) are unaffected by body padding by spec, so overlays
+   keep anchoring correctly.
+   GATED by html[data-admin-shell]: the push must be ON exactly while an
+   admin-shell page is displayed. The gate is owned by the router root
+   (__root.tsx, keyed on pathname — it never unmounts between routes), NOT
+   by the sidebar component, whose unmount during pending windows
+   (<RoutePending> for every >150ms navigation) used to reset the push to
+   0px and swing the whole page sideways mid-navigation. */
 @media (min-width: 1024px) {
-  body {
+  html[data-admin-shell='on'] body {
     padding-left: var(--app-sidebar-push, 0px);
     transition: padding-left 200ms ease;
+  }
+}
+
+/* Scroll-lock compensation cancellation, round 3 — the sidebar-push
+   clobber ("page slams under the sidebar when any dropdown opens").
+   react-remove-scroll-bar v2.3.8 (mounted by EVERY Radix Select,
+   DropdownMenu and Dialog, default gapMode 'margin') injects while the
+   overlay is open:
+     body[data-scroll-locked] {
+       padding-left: <body's measured margin-left>;   ← "margin migration"
+       ...
+       margin-right: <scrollbar gap>px !important;    ← canceled in round 2
+     }
+   The padding-left line exists to migrate centered-page body margins into
+   padding while the scrollbar hides. This app has body margin 0, so it
+   always writes padding-left: 0px — and its selector (0,1,1) beats the
+   push rule's plain `body` (0,0,1), silently canceling the 240px ERP
+   sidebar push the moment ANY dropdown opened: the whole page slammed
+   240px left under the fixed sidebar, then snapped back on close.
+   Re-assert the push here: same gate + media as the push rule above, so
+   public pages and mobile are untouched (below lg and on public pages the
+   injected padding-left: 0px equals the real body padding — no-op).
+   Unconditional in scrollbar-gutter terms on purpose: the clobber exists
+   in every browser and has nothing to do with gutter support. */
+@media (min-width: 1024px) {
+  html[data-admin-shell='on'] body[data-scroll-locked] {
+    padding-left: var(--app-sidebar-push, 0px) !important;
   }
 }
 

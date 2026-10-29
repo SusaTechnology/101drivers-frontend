@@ -372,6 +372,35 @@
         }
       })();
     </script>
+
+    <!-- Inline script: pre-paint admin shell geometry ("page slides
+         sideways on load" fix, part of the ERP sidebar swing fix).
+         The ERP sidebar (app-sidebar.tsx) publishes its rail width as the
+         --app-sidebar-push CSS variable and styles.css converts it into
+         body padding-left on desktop admin pages — but the sidebar is a
+         React component, so the variable used to appear only after React
+         mounted: the first paint rendered admin pages unpadded and the
+         200ms padding transition then slid the whole page 240px right.
+         Set the same values synchronously here so the FIRST paint already
+         has the final geometry. The width constants mirror
+         SIDEBAR_WIDTH_EXPANDED / SIDEBAR_WIDTH_COLLAPSED in
+         app-sidebar.tsx, and the admin-shell gate mirrors the pathname
+         check in __root.tsx — React overwrites both with the
+         authoritative values the moment it mounts. -->
+    <script>
+      (function() {
+        try {
+          var collapsed = false;
+          try { collapsed = localStorage.getItem('app_sidebar_collapsed') === '1'; } catch (e) {}
+          document.documentElement.style.setProperty(
+            '--app-sidebar-push',
+            collapsed ? '68px' : '240px'
+          );
+          document.documentElement.dataset.adminShell =
+            location.pathname.indexOf('/admin') === 0 ? 'on' : 'off';
+        } catch (e) { /* storage unavailable — React will set it */ }
+      })();
+    </script>
   </head>
   <body>
     <noscript>
