@@ -15,18 +15,24 @@ export type CustomerApprovalStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'SUSP
 // ON_HOLD: parked applicant — held without rejection (driver oversupply /
 // region not launched yet); the record stays and can be released or
 // rejected later. See DriverApprovalEngine.holdDriver.
-export type DriverStatus = 'WAITLISTED' | 'INVITED' | 'PENDING_APPROVAL' | 'APPROVED' | 'SUSPENDED' | 'REJECTED' | 'ON_HOLD';
+// MEETING_REQUESTED: scheduling email sent from PENDING_APPROVAL — the
+// application is complete and under final review, but a meeting is still
+// outstanding. Distinct from PENDING_APPROVAL so admins always see who
+// has been contacted. See DriverApprovalEngine.requestMeetingDriver.
+export type DriverStatus = 'WAITLISTED' | 'INVITED' | 'PENDING_APPROVAL' | 'MEETING_REQUESTED' | 'APPROVED' | 'SUSPENDED' | 'REJECTED' | 'ON_HOLD';
 
 // V2: unified admin status — the single `status` param for the /admin/v2
 // endpoint. Maps to both customer + driver sides:
-//   PENDING     → Customer.PENDING OR Driver IN (WAITLISTED, INVITED, PENDING_APPROVAL)
+//   PENDING     → Customer.PENDING OR Driver IN (WAITLISTED, INVITED,
+//                 PENDING_APPROVAL, MEETING_REQUESTED)
 //   APPROVED    → Customer.APPROVED OR Driver.APPROVED
 //   REJECTED    → Customer.REJECTED OR Driver.REJECTED
 //   SUSPENDED   → Customer.SUSPENDED OR Driver.SUSPENDED
 //   INVITED     → Driver.INVITED (driver-only)
 //   WAITLISTED  → Driver.WAITLISTED (driver-only)
 //   ON_HOLD     → Driver.ON_HOLD (driver-only)
-export type AdminUnifiedStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'SUSPENDED' | 'INVITED' | 'WAITLISTED' | 'ON_HOLD';
+//   MEETING_REQUESTED → Driver.MEETING_REQUESTED (driver-only)
+export type AdminUnifiedStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'SUSPENDED' | 'INVITED' | 'WAITLISTED' | 'ON_HOLD' | 'MEETING_REQUESTED';
 
 // Referral relationship status — matches the backend EnumReferralStatus enum
 // (prisma/schema.prisma).
@@ -566,6 +572,14 @@ export interface InviteDriverRequest {
   actorUserId?: string;
 }
 
+// Request Meeting — admin-composed email body for the scheduling email.
+// The backend sends the email and flips the driver to MEETING_REQUESTED
+// in ONE transaction: if the send fails, everything rolls back.
+export interface RequestDriverMeetingRequest {
+  message: string;
+  actorUserId?: string;
+}
+
 export interface SuspendCustomerRequest {
   reason: string;
   actorUserId?: string;
@@ -698,6 +712,7 @@ export const DRIVER_STATUS_LABELS: Record<DriverStatus, string> = {
   WAITLISTED: 'Waitlisted',
   INVITED: 'Invited',
   PENDING_APPROVAL: 'Pending Approval',
+  MEETING_REQUESTED: 'Meeting Requested',
   APPROVED: 'Approved',
   SUSPENDED: 'Suspended',
   REJECTED: 'Rejected',
@@ -714,6 +729,7 @@ export const ADMIN_UNIFIED_STATUS_LABELS: Record<AdminUnifiedStatus, string> = {
   INVITED: 'Invited (driver only)',
   WAITLISTED: 'Waitlisted (driver only)',
   ON_HOLD: 'On Hold (driver only)',
+  MEETING_REQUESTED: 'Meeting Requested (driver only)',
 };
 
 // ==================== HELPER FUNCTIONS ====================
@@ -760,6 +776,8 @@ export function getDriverStatusColor(status: DriverStatus): string {
       return 'amber';
     case 'PENDING_APPROVAL':
       return 'amber';
+    case 'MEETING_REQUESTED':
+      return 'violet';
     case 'SUSPENDED':
       return 'rose';
     case 'REJECTED':

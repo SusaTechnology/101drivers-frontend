@@ -1518,6 +1518,12 @@ enum EnumDriverStatus {
   WAITLISTED
   INVITED
   PENDING_APPROVAL
+  // Admin sent the scheduling email (DriverApprovalEngine.requestMeetingDriver)
+  // — application is complete and under final review, but a meeting has been
+  // proposed and is still outstanding. Distinct from PENDING_APPROVAL so the
+  // admin always sees who has been contacted. Approve / Reject remain
+  // available from here.
+  MEETING_REQUESTED
   APPROVED
   SUSPENDED
   REJECTED
@@ -1862,6 +1868,7 @@ enum EnumAdminAuditLogAction {
   DRIVER_UNSUSPEND
   DRIVER_HOLD
   DRIVER_RELEASE
+  DRIVER_MEETING_REQUEST
   DELIVERY_CANCEL
   DELIVERY_REASSIGN
   PRICING_UPDATE

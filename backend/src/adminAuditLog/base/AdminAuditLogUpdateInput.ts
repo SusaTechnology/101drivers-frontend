@@ -50,6 +50,7 @@ class AdminAuditLogUpdateInput {
     | "DRIVER_UNSUSPEND"
     | "DRIVER_HOLD"
     | "DRIVER_RELEASE"
+    | "DRIVER_MEETING_REQUEST"
     | "DELIVERY_CANCEL"
     | "DELIVERY_REASSIGN"
     | "PRICING_UPDATE"

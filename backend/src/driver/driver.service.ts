@@ -524,6 +524,23 @@ async approveDriver(input: {
   return this.domain.findUnique({ id: input.driverId });
 }
 
+// REQUEST MEETING passthrough — see DriverApprovalEngine.requestMeetingDriver
+// for the atomicity contract (status + audit + bell row + SMTP send in ONE
+// transaction; email failure rolls everything back).
+async requestMeetingDriver(input: {
+  driverId: string;
+  actorUserId?: string | null;
+  message: string;
+}): Promise<any> {
+  await this.driverApprovalEngine.requestMeetingDriver({
+    driverId: input.driverId,
+    actorUserId: input.actorUserId ?? null,
+    message: input.message,
+  });
+
+  return this.domain.findUnique({ id: input.driverId });
+}
+
 async suspendDriver(input: {
   driverId: string;
   actorUserId?: string | null;

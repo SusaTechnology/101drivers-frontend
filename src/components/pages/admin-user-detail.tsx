@@ -52,6 +52,7 @@ import {
   Trash2,
   ArrowLeftRight,
   PauseCircle,
+  CalendarClock,
   Info,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -113,6 +114,7 @@ import {
   useReleaseDriverHold,
   useInviteDriver,
   useResendInviteDriver,
+  useRequestDriverMeeting,
   useAdminUpdateUser,
   useDeleteUser,
   useSaveDriverInternalNotes,
@@ -133,6 +135,7 @@ import {
   getInitials,
 } from '@/types/users';
 import type { AdminUserDetail, AdminUpdateUserRequest, AdminInviteStatus } from '@/types/users';
+import { RequestMeetingDialog } from '@/components/shared/RequestMeetingDialog';
 import { effectiveAdminStatus } from '@/lib/adminStatus';
 import { ServiceAreaBadge } from '@/components/admin/ServiceAreaBadge';
 import { navItems } from '@/lib/items/navItems';
@@ -216,6 +219,7 @@ function StatusBadge({
     indigo: 'bg-indigo-50 dark:bg-indigo-900/10 border-indigo-100 dark:border-indigo-900/30 text-indigo-900 dark:text-indigo-200',
     primary: 'bg-primary/10 border-primary/25 text-primary-foreground',
     sky: 'bg-sky-50 dark:bg-sky-900/10 border-sky-100 dark:border-sky-900/30 text-sky-900 dark:text-sky-200',
+    violet: 'bg-violet-50 dark:bg-violet-900/10 border-violet-100 dark:border-violet-900/30 text-violet-900 dark:text-violet-200',
   };
 
   const StatusIcon = Icon || CheckCircle;
@@ -518,6 +522,10 @@ export default function AdminUserDetailPage({ userId }: AdminUserDetailPageProps
   const [dialogOpen, setDialogOpen] = useState(false);
   const [dialogAction, setDialogAction] = useState<'approve-customer' | 'reject-customer' | 'suspend-customer' | 'unsuspend-customer' | 'invite-driver' | 'resend-invite-driver' | 'approve-driver' | 'reject-driver' | 'hold-driver' | 'release-driver-hold' | 'suspend-driver' | 'unsuspend-driver' | 'delete-user'>('approve-customer');
 
+  // Request Meeting dialog — the reusable RequestMeetingDialog (shared
+  // with the Users table). The subject is this page's user.
+  const [requestMeetingOpen, setRequestMeetingOpen] = useState(false);
+
   // Edit mode state
   const [editMode, setEditMode] = useState<'none' | 'user' | 'customer' | 'driver'>('none');
   const [postpaidEnabled, setPostpaidEnabled] = useState(false);
@@ -736,6 +744,7 @@ export default function AdminUserDetailPage({ userId }: AdminUserDetailPageProps
   const unsuspendCustomerMutation = useUnsuspendCustomer();
   const approveDriverMutation = useApproveDriver();
   const inviteDriverMutation = useInviteDriver();
+  const requestMeetingMutation = useRequestDriverMeeting();
   const resendInviteDriverMutation = useResendInviteDriver();
   const rejectDriverMutation = useRejectDriver();
   const holdDriverMutation = useHoldDriver();
@@ -964,6 +973,30 @@ export default function AdminUserDetailPage({ userId }: AdminUserDetailPageProps
       }
     );
   }, [user, resendInviteDriverMutation, closeDialog, refetch]);
+
+  // Request Meeting — sends the composed email + flips the status in one
+  // backend transaction. A failure leaves the driver in Pending Approval
+  // and the error surfaces here so the admin can retry.
+  const handleRequestMeeting = useCallback((message: string) => {
+    if (!user) return;
+    requestMeetingMutation.mutate(
+      { pathParams: { id: user.id }, message, actorUserId: getActorUserId() },
+      {
+        onSuccess: () => {
+          toast.success('Meeting request sent', {
+            description: 'The driver was emailed and moved to Meeting Requested.',
+          });
+          setRequestMeetingOpen(false);
+          refetch();
+        },
+        onError: (error: any) =>
+          toast.error('Failed to send meeting request', {
+            description: error?.message ||
+              'The email could not be sent — the driver stays in Pending Approval. Fix the issue and retry.',
+          }),
+      }
+    );
+  }, [user, requestMeetingMutation, refetch]);
 
   const handleApproveDriver = () => {
     if (!user || !actorUserId) return;
@@ -1439,7 +1472,10 @@ export default function AdminUserDetailPage({ userId }: AdminUserDetailPageProps
                     </Button>
                   </>
                 )}
-                {/* Driver pending approval - show Approve/Hold/Reject */}
+                {/* Driver pending approval - Approve / Request Meeting /
+                    Hold / Reject. Request Meeting opens the reusable email
+                    dialog and moves the driver to MEETING_REQUESTED in the
+                    same backend transaction that sends the email. */}
                 {!user.disabledAt && user.driver?.status === 'PENDING_APPROVAL' && (
                   <>
                     <Button
@@ -1450,11 +1486,41 @@ export default function AdminUserDetailPage({ userId }: AdminUserDetailPageProps
                       Approve Driver
                     </Button>
                     <Button
+                      onClick={() => setRequestMeetingOpen(true)}
+                      className="inline-flex items-center gap-2 px-6 py-3 rounded-2xl bg-violet-600 text-white hover:opacity-90 transition"
+                    >
+                      <CalendarClock className="w-4 h-4" />
+                      Request Meeting
+                    </Button>
+                    <Button
                       onClick={() => openDialog('hold-driver')}
                       className="inline-flex items-center gap-2 px-6 py-3 rounded-2xl bg-amber-500 text-white hover:opacity-90 transition"
                     >
                       <PauseCircle className="w-4 h-4" />
                       Hold
+                    </Button>
+                    <Button
+                      onClick={() => openDialog('reject-driver')}
+                      variant="destructive"
+                      className="inline-flex items-center gap-2 px-6 py-3 rounded-2xl"
+                    >
+                      <XCircle className="w-4 h-4" />
+                      Reject Driver
+                    </Button>
+                  </>
+                )}
+                {/* Driver meeting requested - Approve / Reject. The
+                    scheduling email already went out; Approve closes the
+                    loop after the meeting, Reject is the exit for
+                    no-shows / failed meetings. */}
+                {!user.disabledAt && user.driver?.status === 'MEETING_REQUESTED' && (
+                  <>
+                    <Button
+                      onClick={() => openDialog('approve-driver')}
+                      className="inline-flex items-center gap-2 px-6 py-3 rounded-2xl bg-emerald-600 text-white hover:opacity-90 transition"
+                    >
+                      <CheckCircle className="w-4 h-4" />
+                      Approve Driver
                     </Button>
                     <Button
                       onClick={() => openDialog('reject-driver')}
@@ -2234,7 +2300,7 @@ export default function AdminUserDetailPage({ userId }: AdminUserDetailPageProps
                           <StatusBadge
                             status={DRIVER_STATUS_LABELS[user.driver.status]}
                             color={getDriverStatusColor(user.driver.status)}
-                            icon={user.driver.status === 'APPROVED' ? CheckCircle : user.driver.status === 'SUSPENDED' ? Ban : Clock}
+                            icon={user.driver.status === 'APPROVED' ? CheckCircle : user.driver.status === 'SUSPENDED' ? Ban : user.driver.status === 'MEETING_REQUESTED' ? CalendarClock : Clock}
                           />
                         </div>
                       </div>
@@ -3178,6 +3244,17 @@ export default function AdminUserDetailPage({ userId }: AdminUserDetailPageProps
         }}
       />
       {photoUpload.HiddenFileInput}
+
+      {/* Request Meeting — reusable dialog (shared with the Users table).
+          Sends the composed email + MEETING_REQUESTED flip in one backend
+          transaction; a failed email changes nothing. */}
+      <RequestMeetingDialog
+        open={requestMeetingOpen}
+        onOpenChange={setRequestMeetingOpen}
+        driverName={user?.fullName}
+        pending={requestMeetingMutation.isPending}
+        onConfirm={handleRequestMeeting}
+      />
 
       <footer className="bg-white dark:bg-slate-950 border-t border-slate-200 dark:border-slate-800 pt-10 pb-10">
         <div className="max-w-[1440px] mx-auto px-6 lg:px-8">

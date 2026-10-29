@@ -53,6 +53,7 @@ import { DeliveryStatusHistoryWhereUniqueInput } from "../deliveryStatusHistory/
 import {
   UserAdminActionDto,
   UserAdminApprovalActionDto,
+  UserAdminRequestMeetingDto,
   UserAdminCreateBodyDto,
   UserAdminListQueryDto,
   UserAdminUpdateBodyDto,
@@ -351,6 +352,28 @@ async resendInviteDriverFromUser(
     userId: id,
     actorUserId: body.actorUserId ?? null,
     note: body.note ?? null,
+  });
+}
+
+// REQUEST MEETING — sends the admin-composed scheduling email and moves
+// the driver PENDING_APPROVAL → MEETING_REQUESTED in ONE backend
+// transaction (see DriverApprovalEngine.requestMeetingDriver): a failed
+// email rolls the status change, the audit row, and the bell row back.
+@common.Post(":id/request-meeting-driver")
+@swagger.ApiOkResponse({ type: Object })
+@nestAccessControl.UseRoles({
+  resource: "User",
+  action: "update",
+  possession: "any",
+})
+async requestMeetingDriverFromUser(
+  @common.Param("id") id: string,
+  @common.Body() body: UserAdminRequestMeetingDto
+): Promise<any> {
+  return this.service.requestMeetingDriverFromUser({
+    userId: id,
+    actorUserId: body.actorUserId ?? null,
+    message: body.message,
   });
 }
 

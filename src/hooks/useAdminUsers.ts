@@ -16,6 +16,7 @@ import type {
   HoldDriverRequest,
   ReleaseDriverHoldRequest,
   InviteDriverRequest,
+  RequestDriverMeetingRequest,
   SuspendCustomerRequest,
   UnsuspendCustomerRequest,
   SuspendDriverRequest,
@@ -525,6 +526,23 @@ export function useInviteDriver() {
 export function useResendInviteDriver() {
   return useDataMutation<AdminUserDetail, InviteDriverRequest>({
     apiEndPoint: `${API_BASE_URL}/api/users/:id/resend-invite-driver`,
+    method: 'POST',
+    invalidateQueryKey: [['admin-users'], ['admin-users-v2'], ['admin-users-summary'], ['admin-users-status-stats'], ['admin-user-detail']],
+  });
+}
+
+// ==================== REQUEST DRIVER MEETING ====================
+
+/**
+ * Hook for sending the scheduling email to a pending-approval driver and
+ * moving them to MEETING_REQUESTED — one backend call, one transaction:
+ * the email send and the status flip commit together or roll back
+ * together (a failed email leaves the driver in Pending Approval).
+ * POST /api/users/:id/request-meeting-driver
+ */
+export function useRequestDriverMeeting() {
+  return useDataMutation<AdminUserDetail, RequestDriverMeetingRequest>({
+    apiEndPoint: `${API_BASE_URL}/api/users/:id/request-meeting-driver`,
     method: 'POST',
     invalidateQueryKey: [['admin-users'], ['admin-users-v2'], ['admin-users-summary'], ['admin-users-status-stats'], ['admin-user-detail']],
   });

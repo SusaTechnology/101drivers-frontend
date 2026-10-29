@@ -6,6 +6,7 @@ import {
   IsEmail,
   IsIn,
   IsInt,
+  IsNotEmpty,
   IsOptional,
   IsString,
   Matches,
@@ -229,6 +230,24 @@ export class UserAdminApprovalActionDto {
   @IsOptional()
   @IsBoolean()
   postpaidEnabled?: boolean;
+}
+
+// REQUEST MEETING — the admin-composed email body for the scheduling
+// email. Required (unlike note/reason on the generic action DTO): the
+// whole point of the flow is a personalized email, and the backend
+// transaction rolls the status flip back if the send fails, so an empty
+// message must be rejected before any of that starts.
+export class UserAdminRequestMeetingDto {
+  @swagger.ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  actorUserId?: string | null;
+
+  @swagger.ApiProperty({ minLength: 1 })
+  @IsString()
+  @IsNotEmpty({ message: "A meeting request message is required" })
+  @MaxLength(2000, { message: "Meeting request message must be at most 2000 characters" })
+  message!: string;
 }
 
 export class UserAdminCreateBodyDto {

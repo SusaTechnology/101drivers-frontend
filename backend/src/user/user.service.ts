@@ -626,6 +626,7 @@ async getAdminUsersSummary(): Promise<any> {
             EnumDriverStatus.WAITLISTED,
             EnumDriverStatus.INVITED,
             EnumDriverStatus.PENDING_APPROVAL,
+            EnumDriverStatus.MEETING_REQUESTED,
           ],
         },
       },
@@ -887,7 +888,7 @@ async getAdminUsersV2(query: {
   //   ADMIN_* lifecycle     → roles=ADMIN ALWAYS (the name declares the
   //                           scope; an explicit non-admin role + admin
   //                           status is a contradictory request)
-  const driverOnlyStatuses = ["INVITED", "WAITLISTED", "PENDING_APPROVAL", "ON_HOLD"];
+  const driverOnlyStatuses = ["INVITED", "WAITLISTED", "PENDING_APPROVAL", "MEETING_REQUESTED", "ON_HOLD"];
   const adminLifecycleStatuses = [
     "ADMIN_ACTIVE",
     "ADMIN_PENDING_INVITE",
@@ -916,7 +917,8 @@ async getAdminUsersV2(query: {
   // + driverStatus, we have ONE `status` that ORs both sides.
   //
   // The mapping:
-  //   PENDING     → customer.PENDING OR driver IN (WAITLISTED, INVITED, PENDING_APPROVAL)
+  //   PENDING     → customer.PENDING OR driver IN (WAITLISTED, INVITED,
+  //                 PENDING_APPROVAL, MEETING_REQUESTED)
   //   APPROVED    → customer.APPROVED OR driver.APPROVED
   //   REJECTED    → customer.REJECTED OR driver.REJECTED
   //   SUSPENDED   → customer.SUSPENDED OR driver.SUSPENDED
@@ -931,7 +933,9 @@ async getAdminUsersV2(query: {
     const status = query.status;
 
     if (status === "PENDING") {
-      // The broadest case — matches Customer.PENDING + 3 driver statuses
+      // The broadest case — matches Customer.PENDING + 4 driver statuses
+      // (MEETING_REQUESTED is still an unactivated applicant — the
+      // scheduling email went out, the approval decision hasn't happened)
       where.OR = [
         {
           customer: {
@@ -946,6 +950,7 @@ async getAdminUsersV2(query: {
                   EnumDriverStatus.WAITLISTED,
                   EnumDriverStatus.INVITED,
                   EnumDriverStatus.PENDING_APPROVAL,
+                  EnumDriverStatus.MEETING_REQUESTED,
                 ],
               },
             },
@@ -1009,13 +1014,20 @@ async getAdminUsersV2(query: {
       };
     } else if (status === "PENDING_APPROVAL") {
       // Driver-native — the Role=Driver dropdown sends this so the label
-      // matches the row badge exactly. The unified "Pending" ORs three
+      // matches the row badge exactly. The unified "Pending" ORs four
       // driver states + customers, which read as "nothing changed" when
       // the newest rows are all pending; the native value filters one
       // state whose badge says the same thing as the option. Role
       // auto-forces to DRIVER above when absent.
       where.driver = {
         is: { status: EnumDriverStatus.PENDING_APPROVAL },
+      };
+    } else if (status === "MEETING_REQUESTED") {
+      // Driver-native — scheduling email sent, approval decision still
+      // outstanding (DriverApprovalEngine.requestMeetingDriver). Role
+      // auto-forces to DRIVER above when absent.
+      where.driver = {
+        is: { status: EnumDriverStatus.MEETING_REQUESTED },
       };
     } else if (status === "ADMIN_DISABLED") {
       // Admin lifecycle — roles=ADMIN forced above
@@ -1230,6 +1242,7 @@ async getAdminUsersV2(query: {
             EnumDriverStatus.WAITLISTED,
             EnumDriverStatus.INVITED,
             EnumDriverStatus.PENDING_APPROVAL,
+            EnumDriverStatus.MEETING_REQUESTED,
           ],
         },
       },
@@ -2278,6 +2291,30 @@ async resendInviteDriverFromUser(input: {
     driverId: driver.id,
     actorUserId: input.actorUserId ?? null,
     note: input.note ?? null,
+  });
+
+  // Status change — ping admin stat surfaces (live Users-page cards).
+  this.appEvents.emit(APP_EVENT.USER_STATS_CHANGED);
+
+  return this.getAdminUserDetail(input.userId);
+}
+
+// REQUEST MEETING (user-based endpoint) — sends the admin-composed
+// scheduling email and flips the driver to MEETING_REQUESTED in ONE
+// backend transaction (see DriverApprovalEngine.requestMeetingDriver):
+// a failed email rolls the status change, the audit row, and the bell
+// row back, so the admin can simply retry.
+async requestMeetingDriverFromUser(input: {
+  userId: string;
+  actorUserId?: string | null;
+  message: string;
+}) {
+  const driver = await this.getUserDriverOrThrow(input.userId);
+
+  await this.driverService.requestMeetingDriver({
+    driverId: driver.id,
+    actorUserId: input.actorUserId ?? null,
+    message: input.message,
   });
 
   // Status change — ping admin stat surfaces (live Users-page cards).

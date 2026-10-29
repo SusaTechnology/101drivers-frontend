@@ -69,7 +69,7 @@ interface LoginResponse {
   name?: string;
   // Approval status for customers and drivers
   customerApprovalStatus?: 'PENDING' | 'APPROVED' | 'REJECTED' | 'SUSPENDED';
-  driverStatus?: 'WAITLISTED' | 'INVITED' | 'PENDING' | 'PENDING_APPROVAL' | 'APPROVED' | 'SUSPENDED' | 'REJECTED';
+  driverStatus?: 'WAITLISTED' | 'INVITED' | 'PENDING' | 'PENDING_APPROVAL' | 'MEETING_REQUESTED' | 'APPROVED' | 'SUSPENDED' | 'REJECTED';
   // User active status
   isActive?: boolean;
 }

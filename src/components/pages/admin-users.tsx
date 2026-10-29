@@ -34,6 +34,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { ConfirmActionDialog } from '@/components/shared/ConfirmActionDialog';
+import { RequestMeetingDialog } from '@/components/shared/RequestMeetingDialog';
 import {
   Table,
   TableBody,
@@ -62,6 +63,7 @@ import {
   useUnsuspendDriver,
   useInviteDriver,
   useResendInviteDriver,
+  useRequestDriverMeeting,
   useInviteAdminUser,
   useResendAdminInvite,
   useDisableAdmin,
@@ -125,6 +127,7 @@ import {
   UserPlus,
   Send,
   PauseCircle,
+  CalendarClock,
   Info,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -191,6 +194,7 @@ const V2_STATUS_OPTIONS: { value: string; label: string; driverOnly: boolean }[]
 const DRIVER_STATUS_OPTIONS: { value: string; label: string }[] = [
   { value: 'all', label: 'All Status' },
   { value: 'PENDING_APPROVAL', label: 'Pending Approval' },
+  { value: 'MEETING_REQUESTED', label: 'Meeting Requested' },
   { value: 'WAITLISTED', label: 'Waitlisted' },
   { value: 'INVITED', label: 'Invited' },
   { value: 'ON_HOLD', label: 'On Hold' },
@@ -244,6 +248,7 @@ const DRIVER_STAT_CARDS: StatCardConfig[] = [
   { value: 'WAITLISTED', label: 'Waitlisted', color: 'text-slate-600 dark:text-slate-300', bgColor: 'bg-slate-50 dark:bg-slate-800/50', borderColor: 'border-slate-200 dark:border-slate-700' },
   { value: 'INVITED', label: 'Invited', color: 'text-sky-600 dark:text-sky-400', bgColor: 'bg-sky-50 dark:bg-sky-900/20', borderColor: 'border-sky-200 dark:border-sky-800' },
   { value: 'PENDING_APPROVAL', label: 'Pending Approval', color: 'text-amber-600 dark:text-amber-400', bgColor: 'bg-amber-50 dark:bg-amber-900/20', borderColor: 'border-amber-200 dark:border-amber-800' },
+  { value: 'MEETING_REQUESTED', label: 'Meeting Requested', color: 'text-violet-600 dark:text-violet-400', bgColor: 'bg-violet-50 dark:bg-violet-900/20', borderColor: 'border-violet-200 dark:border-violet-800' },
   { value: 'APPROVED', label: 'Approved', color: 'text-emerald-600 dark:text-emerald-400', bgColor: 'bg-emerald-50 dark:bg-emerald-900/20', borderColor: 'border-emerald-200 dark:border-emerald-800' },
   { value: 'ON_HOLD', label: 'On Hold', color: 'text-amber-600 dark:text-amber-400', bgColor: 'bg-amber-50 dark:bg-amber-900/20', borderColor: 'border-amber-200 dark:border-amber-800' },
   { value: 'REJECTED', label: 'Rejected', color: 'text-rose-600 dark:text-rose-400', bgColor: 'bg-rose-50 dark:bg-rose-900/20', borderColor: 'border-rose-200 dark:border-rose-800' },
@@ -726,7 +731,7 @@ function CustomerStatusBadge({ status }: { status: CustomerApprovalStatus }) {
 
 function DriverStatusBadge({ status }: { status: DriverStatus }) {
   const color = getDriverStatusColor(status);
-  const Icon = status === 'APPROVED' ? CheckCircle : status === 'SUSPENDED' ? Ban : status === 'ON_HOLD' ? PauseCircle : Clock;
+  const Icon = status === 'APPROVED' ? CheckCircle : status === 'SUSPENDED' ? Ban : status === 'ON_HOLD' ? PauseCircle : status === 'MEETING_REQUESTED' ? CalendarClock : Clock;
 
   return (
     <Badge className={cn(
@@ -734,6 +739,7 @@ function DriverStatusBadge({ status }: { status: DriverStatus }) {
       color === 'emerald' && 'bg-emerald-50 text-emerald-700 border-emerald-200',
       color === 'amber' && 'bg-amber-50 text-amber-700 border-amber-200',
       color === 'rose' && 'bg-rose-50 text-rose-700 border-rose-200',
+      color === 'violet' && 'bg-violet-50 text-violet-700 border-violet-200',
     )}>
       <Icon className="w-3 h-3 mr-1" />
       {DRIVER_STATUS_LABELS[status]}
@@ -986,6 +992,12 @@ export default function AdminUsersPage() {
   // Invite Admin Dialog State
   const [inviteAdminDialogOpen, setInviteAdminDialogOpen] = useState(false);
 
+  // Request Meeting Dialog State — the reusable RequestMeetingDialog
+  // (shared with the driver profile page). Keyed by the selected row so
+  // the description names the right driver.
+  const [requestMeetingOpen, setRequestMeetingOpen] = useState(false);
+  const [requestMeetingUser, setRequestMeetingUser] = useState<AdminUserRow | null>(null);
+
   // ==================== QUERIES (V2 — single call) ====================
 
   const {
@@ -1203,6 +1215,7 @@ export default function AdminUsersPage() {
   const unsuspendDriverMutation = useUnsuspendDriver();
   const inviteDriverMutation = useInviteDriver();
   const resendInviteDriverMutation = useResendInviteDriver();
+  const requestMeetingMutation = useRequestDriverMeeting();
   const inviteAdminMutation = useInviteAdminUser();
   const resendAdminInviteMutation = useResendAdminInvite();
   const disableAdminMutation = useDisableAdmin();
@@ -1352,6 +1365,29 @@ export default function AdminUsersPage() {
       }
     );
   }, [selectedUser, actorUserId, resendInviteDriverMutation, closeDialog]);
+
+  // Request Meeting — sends the composed email + flips the status in one
+  // backend transaction. Error messages surface the SMTP failure so the
+  // admin knows nothing changed and can retry.
+  const handleRequestMeeting = useCallback((message: string) => {
+    if (!requestMeetingUser) return;
+    requestMeetingMutation.mutate(
+      { pathParams: { id: requestMeetingUser.id }, message, actorUserId },
+      {
+        onSuccess: () => {
+          toast.success('Meeting request sent', {
+            description: 'The driver was emailed and moved to Meeting Requested.',
+          });
+          setRequestMeetingOpen(false);
+        },
+        onError: (error: any) =>
+          toast.error('Failed to send meeting request', {
+            description: error?.message ||
+              'The email could not be sent — the driver stays in Pending Approval. Fix the issue and retry.',
+          }),
+      }
+    );
+  }, [requestMeetingUser, actorUserId, requestMeetingMutation]);
 
   const handleRejectDriver = useCallback((data: RejectFormData) => {
     if (!selectedUser || !actorUserId) return;
@@ -2215,8 +2251,29 @@ export default function AdminUsersPage() {
                                 </Button>
                               </>
                             )}
-                            {/* Driver pending approval - show Approve/Reject */}
+                            {/* Driver pending approval - Approve / Request
+                                Meeting / Reject. Request Meeting opens the
+                                reusable email dialog and moves the driver to
+                                MEETING_REQUESTED in the same backend
+                                transaction that sends the email. */}
                             {!user.disabledAt && user.driver?.status === 'PENDING_APPROVAL' && (
+                              <>
+                                <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg" onClick={() => openDialog('approve-driver', user)}>
+                                  <CheckCircle className="w-3.5 h-3.5 mr-1" /> Approve
+                                </Button>
+                                <Button size="sm" className="bg-violet-600 hover:bg-violet-700 text-white rounded-lg" onClick={() => { setRequestMeetingUser(user); setRequestMeetingOpen(true); }}>
+                                  <CalendarClock className="w-3.5 h-3.5 mr-1" /> Request Meeting
+                                </Button>
+                                <Button size="sm" variant="destructive" className="rounded-lg" onClick={() => openDialog('reject-driver', user)}>
+                                  <XCircle className="w-3.5 h-3.5 mr-1" /> Reject
+                                </Button>
+                              </>
+                            )}
+                            {/* Driver meeting requested - Approve / Reject.
+                                The scheduling email already went out; Approve
+                                closes the loop after the meeting, Reject is
+                                the exit for no-shows / failed meetings. */}
+                            {!user.disabledAt && user.driver?.status === 'MEETING_REQUESTED' && (
                               <>
                                 <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg" onClick={() => openDialog('approve-driver', user)}>
                                   <CheckCircle className="w-3.5 h-3.5 mr-1" /> Approve
@@ -2882,6 +2939,17 @@ export default function AdminUsersPage() {
           </form>
         </DialogContent>
       </Dialog>
+
+      {/* Request Meeting — reusable dialog (shared with the driver profile
+          page). Sends the composed email + MEETING_REQUESTED flip in one
+          backend transaction; a failed email changes nothing. */}
+      <RequestMeetingDialog
+        open={requestMeetingOpen}
+        onOpenChange={setRequestMeetingOpen}
+        driverName={requestMeetingUser?.fullName}
+        pending={requestMeetingMutation.isPending}
+        onConfirm={handleRequestMeeting}
+      />
     </div>
   );
 }

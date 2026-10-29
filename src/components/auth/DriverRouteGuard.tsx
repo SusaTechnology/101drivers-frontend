@@ -57,7 +57,11 @@ function computeDriverGuardAccess(): { state: GuardState; message: string } {
   if (driverStatus === 'INVITED') {
     return { state: "invited", message: "" };
   }
-  if (driverStatus === 'PENDING_APPROVAL' || driverStatus === 'PENDING') {
+  if (driverStatus === 'PENDING_APPROVAL' || driverStatus === 'PENDING' || driverStatus === 'MEETING_REQUESTED') {
+    // MEETING_REQUESTED: the admin emailed about a scheduling meeting but
+    // the approval decision hasn't happened — the driver is still gated
+    // out of driver pages exactly like PENDING_APPROVAL (falling through
+    // would hand them the dashboard before approval).
     return { state: "pending_approval", message: "" };
   }
   if (driverStatus === 'SUSPENDED') {

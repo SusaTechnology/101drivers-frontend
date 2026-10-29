@@ -21,6 +21,7 @@ export enum EnumAdminAuditLogAction {
   DriverUnsuspend = "DRIVER_UNSUSPEND",
   DriverHold = "DRIVER_HOLD",
   DriverRelease = "DRIVER_RELEASE",
+  DriverMeetingRequest = "DRIVER_MEETING_REQUEST",
   DeliveryCancel = "DELIVERY_CANCEL",
   DeliveryReassign = "DELIVERY_REASSIGN",
   PricingUpdate = "PRICING_UPDATE",

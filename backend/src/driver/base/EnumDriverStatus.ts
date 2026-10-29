@@ -15,6 +15,7 @@ export enum EnumDriverStatus {
   Waitlisted = "WAITLISTED",
   Invited = "INVITED",
   PendingApproval = "PENDING_APPROVAL",
+  MeetingRequested = "MEETING_REQUESTED",
   Approved = "APPROVED",
   Suspended = "SUSPENDED",
   Rejected = "REJECTED",

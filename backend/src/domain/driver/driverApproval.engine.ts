@@ -4,11 +4,13 @@ import {
   EnumAdminAuditLogActorType,
   EnumDriverStatus,
   EnumNotificationEventChannel,
+  EnumNotificationEventStatus,
   EnumNotificationEventType,
   Prisma,
 } from "@prisma/client";
 import { PrismaService } from "../../prisma/prisma.service";
 import { NotificationEventEngine } from "../notificationEvent/notificationEvent.engine";
+import { MailService } from "../../common/mail/mail.service";
 import { ReferralTriggerService } from "../../referral/referral-trigger.service";
 import { randomBytes } from "crypto";
 
@@ -16,6 +18,7 @@ import { randomBytes } from "crypto";
 export class DriverApprovalEngine {
   constructor(
     private readonly prisma: PrismaService,
+    private readonly mailService: MailService,
     private readonly notificationEventEngine: NotificationEventEngine,
     // forwardRef avoids a circular module dependency:
     //   DriverModule → DriverApprovalEngine → ReferralTriggerService
@@ -190,9 +193,10 @@ export class DriverApprovalEngine {
 
     if (
       driver.status !== EnumDriverStatus.PENDING_APPROVAL &&
+      driver.status !== EnumDriverStatus.MEETING_REQUESTED &&
       driver.status !== EnumDriverStatus.REJECTED
     ) {
-      throw new BadRequestException("Only drivers with pending approval or rejected can be approved");
+      throw new BadRequestException("Only drivers with pending approval, meeting requested, or rejected can be approved");
     }
 
     const beforeJson = driver;
@@ -291,6 +295,199 @@ export class DriverApprovalEngine {
       // Swallow — don't break the approval flow on referral trigger failure
       console.error("[DriverApprovalEngine] referral trigger failed:", err);
     });
+  }
+
+  /**
+   * REQUEST MEETING: Admin emails a pending-approval driver to schedule
+   * their onboarding meeting.
+   * PENDING_APPROVAL → MEETING_REQUESTED
+   *
+   * ATOMICITY CONTRACT (the whole point of this method): the status flip,
+   * the audit row, the driver-facing NotificationEvent row, and the SMTP
+   * send all happen inside ONE interactive transaction, with the email
+   * send LAST so every statement that could realistically fail fails
+   * BEFORE the email leaves. If the send throws (bad credentials, SMTP
+   * outage, slow server), the whole transaction rolls back — the driver
+   * stays PENDING_APPROVAL, no audit row, no bell row, and the admin sees
+   * the exact error and can retry. There is never a committed state where
+   * the status says "not contacted" but the email went out, or the other
+   * way around (the only theoretical window is a commit failure after a
+   * successful send — same residual risk as Stripe-style "webhook after
+   * commit" designs; unavoidable with an external side effect).
+   *
+   * This deliberately does NOT reuse NotificationEventEngine.queueAndSend:
+   * that path is fire-and-forget (the send happens after the HTTP response)
+   * and cannot roll the status change back on email failure.
+   */
+  async requestMeetingDriver(input: {
+    driverId: string;
+    actorUserId?: string | null;
+    message: string;
+  }): Promise<void> {
+    const message = (input.message ?? "").trim();
+    if (!message) {
+      throw new BadRequestException("A meeting request message is required");
+    }
+
+    // Fail fast BEFORE opening the transaction when SMTP is not configured
+    // — an otherwise-guaranteed rollback with a clearer, actionable error.
+    if (!this.mailService.isConfigured) {
+      throw new BadRequestException(
+        "Email sending is not configured on the server (SMTP). Cannot send a meeting request."
+      );
+    }
+
+    // Pre-read for a friendly 404 + email presence + the before/after
+    // audit snapshot. The AUTHORITATIVE status guard is the updateMany
+    // inside the transaction below (atomic — a concurrent approve/reject
+    // that commits first makes it match zero rows instead of double-sending).
+    const driver = await this.prisma.driver.findUnique({
+      where: { id: input.driverId },
+      select: {
+        id: true,
+        status: true,
+        userId: true,
+        user: {
+          select: {
+            email: true,
+            fullName: true,
+          },
+        },
+      },
+    });
+
+    if (!driver) {
+      throw new NotFoundException("Driver not found");
+    }
+
+    if (driver.status !== EnumDriverStatus.PENDING_APPROVAL) {
+      throw new BadRequestException(
+        "Only drivers with pending approval can be requested for a meeting"
+      );
+    }
+
+    const toEmail = driver.user?.email?.trim().toLowerCase() || null;
+    if (!toEmail) {
+      throw new BadRequestException(
+        "This driver has no email address on file — a meeting request email cannot be sent"
+      );
+    }
+
+    const displayName = driver.user?.fullName || "Driver";
+    const subject = "Let's schedule your 101 Drivers onboarding meeting";
+    const text = [
+      `Hi ${displayName},`,
+      "",
+      message,
+      "",
+      "Thanks,",
+      "101 Drivers",
+    ].join("\n");
+    const html = this.wrapMeetingEmailHtml(displayName, message);
+
+    // The interactive transaction carries an SMTP round-trip (bounded by
+    // MailService's 15s/30s socket timeouts), so the default 5s transaction
+    // timeout must be raised — otherwise Prisma would abort the tx mid-send
+    // and roll back while the email was still in flight.
+    await this.prisma.$transaction(
+      async (tx) => {
+        // 1. ATOMIC status guard: only flips when the row is still
+        //    PENDING_APPROVAL at commit time. count=0 → someone approved /
+        //    rejected / already requested concurrently → abort with zero
+        //    side effects (no duplicate email).
+        const updated = await tx.driver.updateMany({
+          where: {
+            id: input.driverId,
+            status: EnumDriverStatus.PENDING_APPROVAL,
+          },
+          data: { status: EnumDriverStatus.MEETING_REQUESTED },
+        });
+
+        if (updated.count === 0) {
+          throw new BadRequestException(
+            "Driver is no longer pending approval — refresh and try again"
+          );
+        }
+
+        // 2. Audit trail — who requested the meeting, when, the exact
+        //    message that went out, and the before/after status.
+        await tx.adminAuditLog.create({
+          data: {
+            action: EnumAdminAuditLogAction.DRIVER_MEETING_REQUEST,
+            actorUserId: input.actorUserId ?? null,
+            actorType: EnumAdminAuditLogActorType.USER,
+            driverId: input.driverId,
+            reason: message,
+            beforeJson: { status: driver.status } as Prisma.JsonObject,
+            afterJson: {
+              status: EnumDriverStatus.MEETING_REQUESTED,
+            } as Prisma.JsonObject,
+          },
+        });
+
+        // 3. Driver-facing NotificationEvent row (driver inbox / bell data
+        //    source). Created with status SENT + sentAt because the send
+        //    below happens before commit — if it throws, this row never
+        //    materializes.
+        await tx.notificationEvent.create({
+          data: {
+            actorUserId: input.actorUserId ?? null,
+            driverId: input.driverId,
+            toUserId: driver.userId,
+            channel: EnumNotificationEventChannel.EMAIL,
+            type: EnumNotificationEventType.REMINDER,
+            status: EnumNotificationEventStatus.SENT,
+            sentAt: new Date(),
+            subject,
+            body: text,
+            templateCode: "driver-meeting-request",
+            toEmail,
+            payload: {
+              driverId: input.driverId,
+              message,
+            },
+          },
+        });
+
+        // 4. THE SEND — deliberately last. Any throw above already
+        //    aborted; any throw here rolls 1–3 back together.
+        await this.mailService.sendMail({
+          to: toEmail,
+          subject,
+          text,
+          html,
+        });
+      },
+      { maxWait: 10_000, timeout: 60_000 }
+    );
+  }
+
+  /** Plain-text meeting email → simple branded HTML (same style the
+   *  NotificationEventEngine uses for its generic emails). */
+  private wrapMeetingEmailHtml(displayName: string, message: string): string {
+    const escape = (value: string): string =>
+      value
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+
+    const escapedMessage = escape(message)
+      .replace(/\n/g, "<br />")
+      .replace(
+        /(https?:\/\/[^\s<]+)/g,
+        '<a href="$1" style="color: #2563eb; word-break: break-all;">$1</a>'
+      );
+
+    return `
+      <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #111; max-width: 600px; margin: 0 auto;">
+        <h2>Let's schedule your onboarding meeting</h2>
+        <p>Hi ${escape(displayName)},</p>
+        <p>${escapedMessage}</p>
+        <p>Thanks,<br />101 Drivers</p>
+      </div>
+    `;
   }
 
   /**
@@ -598,6 +795,7 @@ export class DriverApprovalEngine {
       driver.status !== EnumDriverStatus.WAITLISTED &&
       driver.status !== EnumDriverStatus.INVITED &&
       driver.status !== EnumDriverStatus.PENDING_APPROVAL &&
+      driver.status !== EnumDriverStatus.MEETING_REQUESTED &&
       driver.status !== EnumDriverStatus.ON_HOLD
     ) {
       throw new BadRequestException("Driver cannot be rejected in current status");

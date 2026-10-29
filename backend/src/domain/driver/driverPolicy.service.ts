@@ -185,6 +185,11 @@ export class DriverPolicyService {
     // path must not be able to set it. Holds go through
     // DriverApprovalEngine.holdDriver / releaseDriverHold so every hold
     // and release writes an AdminAuditLog row (who / when / reason).
+    // MEETING_REQUESTED is excluded for the same reason — the scheduling
+    // email + status flip must move together through
+    // DriverApprovalEngine.requestMeetingDriver's single transaction;
+    // setting the status over raw CRUD would imply an email that never
+    // went out.
     const validStatuses: EnumDriverStatus[] = [
       EnumDriverStatus.WAITLISTED,
       EnumDriverStatus.INVITED,
