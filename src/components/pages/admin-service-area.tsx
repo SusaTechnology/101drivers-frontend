@@ -28,7 +28,7 @@
 // manual, and the California-only signup gate is unchanged.
 
 // @ts-nocheck
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from '@tanstack/react-router';
 import { GoogleMap, Polygon, useJsApiLoader } from '@react-google-maps/api';
 import { toast } from 'sonner';
@@ -45,6 +45,8 @@ import {
   Users,
   Info,
 } from 'lucide-react';
+import { AppSidebar } from '@/components/shared/layout/app-sidebar';
+import { navItems } from '@/lib/items/navItems';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -295,6 +297,12 @@ export default function AdminServiceAreaPage() {
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
+      {/* Persistent ERP app sidebar — the same shell every other admin
+          page gets (lg+ only; below lg nothing renders and this page has
+          no drawer to preserve). Self-pushing: it publishes its width as
+          --app-sidebar-push and styles.css slides the page right. */}
+      <AppSidebar items={navItems} />
+
       {/* Top bar */}
       <header className="sticky top-0 z-20 border-b border-slate-200 dark:border-slate-800 bg-white/90 dark:bg-slate-900/90 backdrop-blur">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4 flex items-center gap-4">

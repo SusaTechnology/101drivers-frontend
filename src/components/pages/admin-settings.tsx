@@ -60,6 +60,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { AppSidebar } from '@/components/shared/layout/app-sidebar';
+import { navItems } from '@/lib/items/navItems';
 
 // Mock config data
 const MOCK_CONFIG = {
@@ -404,15 +406,25 @@ export default function AdminSettingsHubPage() {
 
   return (
     <div className="min-h-screen bg-background-light dark:bg-background-dark font-sans antialiased text-slate-900 dark:text-white">
+      {/* Persistent ERP app sidebar — the same shell every other admin
+          page gets. Desktop (lg+) only: at lg+ it owns navigation and the
+          hamburger/drawer below switch off (lg:hidden); below lg nothing
+          renders and the existing hamburger + drawer behavior is intact.
+          Self-pushing: it publishes its width as --app-sidebar-push and
+          styles.css slides the page right. */}
+      <AppSidebar items={navItems} />
+
       {/* Top Bar */}
       <header className="sticky top-0 z-50 border-b border-slate-200 dark:border-slate-800 bg-white/85 dark:bg-background-dark/80 backdrop-blur-md">
         <div className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 h-16 lg:h-20 flex items-center justify-between gap-4">
           <div className="flex items-center gap-4">
-            {/* Mobile menu button */}
+            {/* Mobile menu button — below lg only: at lg+ the persistent
+                app sidebar owns navigation (same contract as the shared
+                Navbar's hamburger). */}
             <Button
               variant="outline"
               size="icon"
-              className="xl:hidden w-11 h-11 rounded-2xl"
+              className="lg:hidden w-11 h-11 rounded-2xl"
               onClick={() => setMobileMenuOpen(true)}
             >
               <Menu className="w-5 h-5" />
@@ -478,7 +490,7 @@ export default function AdminSettingsHubPage() {
       {/* Mobile sidebar backdrop */}
       {mobileMenuOpen && (
         <div
-          className="xl:hidden fixed inset-0 bg-black/40 z-40"
+          className="lg:hidden fixed inset-0 bg-black/40 z-40"
           onClick={() => setMobileMenuOpen(false)}
         />
       )}
@@ -486,7 +498,7 @@ export default function AdminSettingsHubPage() {
       {/* Mobile sidebar drawer */}
       <div
         className={cn(
-          "xl:hidden fixed z-50 top-0 left-0 h-full w-[88%] max-w-sm bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 p-5 overflow-y-auto transition-transform duration-300",
+          "lg:hidden fixed z-50 top-0 left-0 h-full w-[88%] max-w-sm bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 p-5 overflow-y-auto transition-transform duration-300",
           mobileMenuOpen ? "translate-x-0" : "-translate-x-full",
         )}
       >

@@ -48,6 +48,8 @@ import {
   useDeleteServiceDistrict,
   type ServiceDistrict,
 } from '@/hooks/useAdminServiceDistricts';
+import { AppSidebar } from '@/components/shared/layout/app-sidebar';
+import { navItems } from '@/lib/items/navItems';
 
 export default function AdminServiceDistrictsPage() {
   const navigate = useNavigate();
@@ -150,6 +152,12 @@ export default function AdminServiceDistrictsPage() {
 
   return (
     <div className="min-h-screen bg-background-light dark:bg-background-dark font-sans antialiased text-slate-900 dark:text-white">
+      {/* Persistent ERP app sidebar — the same shell every other admin
+          page gets (lg+ only; below lg nothing renders and this page has
+          no drawer to preserve). Self-pushing: it publishes its width as
+          --app-sidebar-push and styles.css slides the page right. */}
+      <AppSidebar items={navItems} />
+
       {/* Header */}
       <header className="sticky top-0 z-50 bg-white/85 dark:bg-slate-950/85 backdrop-blur-md border-b border-slate-200 dark:border-slate-800">
         <div className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 h-14 lg:h-16 flex items-center justify-between">

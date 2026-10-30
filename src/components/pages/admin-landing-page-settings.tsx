@@ -252,12 +252,24 @@ export default function AdminHomePageSettings() {
     })
   }
 
+  // Loading / error states keep the shell (Navbar → AppSidebar) so the
+  // navigation chrome never pops in or vanishes between states — the
+  // content area alone swaps, exactly like every other admin page.
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-background-light dark:bg-background-dark flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-lime-500 mx-auto"></div>
-          <p className="mt-4 text-slate-600 dark:text-slate-400">Loading settings...</p>
+      <div className="min-h-screen bg-background-light dark:bg-background-dark font-sans antialiased text-slate-900 dark:text-white">
+        <Navbar
+          brand={<Brand />}
+          items={navItems}
+          actions={actionItems}
+          onSignOut={signOut}
+          title="Admin"
+        />
+        <div className="flex items-center justify-center" style={{ minHeight: 'calc(100vh - 5rem)' }}>
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-lime-500 mx-auto"></div>
+            <p className="mt-4 text-slate-600 dark:text-slate-400">Loading settings...</p>
+          </div>
         </div>
       </div>
     )
@@ -265,13 +277,22 @@ export default function AdminHomePageSettings() {
 
   if (isError) {
     return (
-      <div className="min-h-screen bg-background-light dark:bg-background-dark flex items-center justify-center">
-        <Card className="max-w-md p-6 text-center">
-          <AlertCircle className="h-12 w-12 text-red-500 mx-auto" />
-          <h2 className="mt-4 text-xl font-black text-slate-900 dark:text-white">Failed to load settings</h2>
-          <p className="mt-2 text-slate-600 dark:text-slate-400">{error?.message || 'Please try again later.'}</p>
-          <Button onClick={() => refetch()} className="mt-6 bg-lime-500 text-slate-950">Retry</Button>
-        </Card>
+      <div className="min-h-screen bg-background-light dark:bg-background-dark font-sans antialiased text-slate-900 dark:text-white">
+        <Navbar
+          brand={<Brand />}
+          items={navItems}
+          actions={actionItems}
+          onSignOut={signOut}
+          title="Admin"
+        />
+        <div className="flex items-center justify-center" style={{ minHeight: 'calc(100vh - 5rem)' }}>
+          <Card className="max-w-md p-6 text-center">
+            <AlertCircle className="h-12 w-12 text-red-500 mx-auto" />
+            <h2 className="mt-4 text-xl font-black text-slate-900 dark:text-white">Failed to load settings</h2>
+            <p className="mt-2 text-slate-600 dark:text-slate-400">{error?.message || 'Please try again later.'}</p>
+            <Button onClick={() => refetch()} className="mt-6 bg-lime-500 text-slate-950">Retry</Button>
+          </Card>
+        </div>
       </div>
     )
   }

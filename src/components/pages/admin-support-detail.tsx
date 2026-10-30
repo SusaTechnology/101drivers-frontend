@@ -341,25 +341,36 @@ export default function AdminSupportDetailPage({ supportRequestId }: { supportRe
     changeStatusMutation.mutate({ status: newStatus })
   }
 
-  // If no ID, redirect
+  // If no ID, redirect. The shell (Navbar → AppSidebar) still renders —
+  // an admin landing here by direct URL keeps the same navigation chrome
+  // as every other admin page; only the content area is the notice card.
   if (!requestId) {
     return (
-      <div className="min-h-screen bg-background-light dark:bg-background-dark flex items-center justify-center p-6">
-        <Card className="w-full max-w-md border-slate-200 dark:border-slate-800">
-          <CardContent className="p-6 text-center">
-            <AlertCircle className="h-12 w-12 text-amber-500 mx-auto mb-4" />
-            <h2 className="text-lg font-bold text-slate-900 dark:text-white">No Request Selected</h2>
-            <p className="text-sm text-slate-600 dark:text-slate-400 mt-2">
-              Please select a support request from the list.
-            </p>
-            <Link
-              to="/admin-support-list"
-              className="mt-4 inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-primary text-slate-950 font-bold hover:shadow-lg transition"
-            >
-              View All Requests
-            </Link>
-          </CardContent>
-        </Card>
+      <div className="min-h-screen bg-background-light dark:bg-background-dark font-sans antialiased text-slate-900 dark:text-white">
+        <Navbar
+          brand={<Brand />}
+          items={navItems}
+          actions={actionItems}
+          onSignOut={signOut}
+          title="Support Request"
+        />
+        <div className="flex items-center justify-center p-6">
+          <Card className="w-full max-w-md border-slate-200 dark:border-slate-800">
+            <CardContent className="p-6 text-center">
+              <AlertCircle className="h-12 w-12 text-amber-500 mx-auto mb-4" />
+              <h2 className="text-lg font-bold text-slate-900 dark:text-white">No Request Selected</h2>
+              <p className="text-sm text-slate-600 dark:text-slate-400 mt-2">
+                Please select a support request from the list.
+              </p>
+              <Link
+                to="/admin-support-list"
+                className="mt-4 inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-primary text-slate-950 font-bold hover:shadow-lg transition"
+              >
+                View All Requests
+              </Link>
+            </CardContent>
+          </Card>
+        </div>
       </div>
     )
   }
