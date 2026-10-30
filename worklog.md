@@ -1750,3 +1750,43 @@ Stage Summary:
   browsers that refuse the cookie stay unlocked via the signed token —
   so "cookie set → /auth/admin-signin without the key" finally behaves
   as designed. Unlock failures log their HTTP status in the console.
+
+Task ID: 29
+Agent: main agent (Super Z)
+Task: keyed admin URLs now unlock and HARD-RELOAD in place — no router redirect, no white screen
+
+Work Log:
+- USER SPEC (verbatim intent): key in URL → put it in the cookie and
+  REFRESH THE PAGE, don't redirect; no key → check the browser cookie,
+  valid = let them through, invalid/absent = landing. "Not just plain
+  white page or redirect every time."
+- SYMPTOM REPRODUCED IN CLASS, ROOT-CAUSED: with a healthy stub API the
+  old flow actually rendered fine locally — the white screen in
+  production came from the router-INTERNAL strip redirect
+  (throw redirect to the same path) racing a stale module/chunk graph
+  after a deploy: unlock 200 → URL stripped → SPA tries to render from
+  a half-stale graph → white; refresh without a landed cookie → landing.
+- FIX (src/routes/__root.tsx, the only file touched): after a
+  successful unlock the gate now does window.location.replace(same URL
+  minus ?key) — a REAL reload. The fresh boot re-reads the cookie/token
+  it just earned and renders normally. beforeLoad parks on a never-
+  resolving promise while the browser tears the document down. Bad key
+  still redirects to landing; no key still goes mirror-cookie →
+  x-admin-gate-token → status probe → landing on failure.
+- VERIFIED end-to-end headless (vite dev + crypto-faithful stub :8901):
+  1) keyed URL → unlock → hard reload → sign-in page RENDERS, URL
+  clean (no ?key), admin_gate + mirror cookies set; 2) reload → stays
+  on sign-in; 3) bad key → landing; 4) admin page, no key, no cookie →
+  landing. Exactly the owner's four rules.
+- GATES: scoped FE check (tsconfig.fe-check.json) = 137 errors WITH and
+  WITHOUT my change (stash-verified — the +6 vs the old 131 baseline is
+  sandbox/node_modules drift, zero errors in __root.tsx/adminGate.ts);
+  vite build green (22s). FE-only change: backend untouched this round,
+  but Task 28's backend (host-only cookie + token) MUST be deployed for
+  the cookie to persist at all.
+
+Stage Summary:
+- Keyed links behave like a key card: click → cookie lands → the page
+  refreshes itself → you're on the login page. Afterwards plain URLs
+  just work; without a valid cookie everything bounces to the landing
+  page. No more white screens, no more redirect loops.

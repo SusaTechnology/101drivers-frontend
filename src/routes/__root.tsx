@@ -158,17 +158,21 @@ async function adminGateBeforeLoad(location: {
       // Wrong or expired key — indistinguishable from no key at all.
       throw redirect({ to: '/', replace: true })
     }
-    // Door is open — strip the key from the address bar so it doesn't
-    // linger in the URL/history after first use. Every OTHER search
-    // param is preserved (admin deep links carry userId & co).
-    const { key: _usedKey, ...restSearch } = search
-    throw redirect({
-      to: pathname,
-      replace: true,
-      search: restSearch,
-      // `pathname` is any /admin* route — the router's typed-`to`
-      // generic can't know these are valid internal paths.
-    } as never)
+    // Door is open — clean the address bar with a HARD reload (owner
+    // spec: "put it in the cookie and refresh the page, not a
+    // redirect"). The SPA boots fresh at the same path WITHOUT the key,
+    // the fresh boot finds the cookie/token it just earned, and the
+    // page renders normally. A router-internal redirect here left
+    // production sessions staring at a white screen (stale module/
+    // chunk graph after a deploy); a real reload rebuilds everything
+    // from disk. Every OTHER search param is preserved (admin deep
+    // links carry userId & co).
+    const url = new URL(window.location.href)
+    url.searchParams.delete('key')
+    window.location.replace(url.toString())
+    // The browser is tearing this document down — never resolve, so the
+    // router doesn't try to render this navigation mid-unload.
+    await new Promise<void>(() => {})
   }
 
   if (!(await ensureAdminGateUnlocked())) {
