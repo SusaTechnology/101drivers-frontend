@@ -6,3 +6,7 @@
 
 # email campaign script output
 email-campaign-reports/
+
+# harden-test-usernames.ts output — the new login names for the test
+# accounts. NEVER commit this file: anyone with repo access could sign in.
+scripts/test-username-map.local.json
