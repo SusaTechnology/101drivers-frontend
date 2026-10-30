@@ -35,6 +35,7 @@ import { DeliveryRatingModule } from "./deliveryRating/deliveryRating.module";
 import { TipModule } from "./tip/tip.module";
 import { NotificationEventModule } from "./notificationEvent/notificationEvent.module";
 import { AdminAuditLogModule } from "./adminAuditLog/adminAuditLog.module";
+import { AdminGateModule } from "./admin-gate/admin-gate.module";
 import { AppSettingModule } from "./appSetting/appSetting.module";
 import { DealerLeadModule } from "./dealerLead/dealerLead.module";
 import { InvestorLeadModule } from "./investorLead/investorLead.module";
@@ -89,6 +90,9 @@ import { GeoModule } from "./geo/geo.module";
     // Leaf module; business modules import it for recordSafe() hooks.
     AnalyticsModule,
     GeoModule,
+    // Shared-secret door in front of the admin UI (?key= links → signed
+    // 30-day cookie; see src/admin-gate). Leaf module, no dependencies.
+    AdminGateModule,
     AuthModule,
     UserModule,
     CustomerModule,

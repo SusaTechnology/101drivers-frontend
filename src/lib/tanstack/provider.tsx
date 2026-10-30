@@ -3,6 +3,7 @@ import { ThemeProvider } from '@/lib/theme'
 import { Toaster } from 'sonner'
 import type { ReactNode } from 'react'
 import { getLastKnownRoles, registerSignOutCacheClear } from './dataQuery'
+import { isAdminGatePath } from '@/lib/adminGate'
 import { UploadFeedbackOverlay } from '@/lib/uploadFeedback'
 import { installResumeSync } from './resume-sync'
 
@@ -95,6 +96,19 @@ function redirectToLogin() {
   } else {
     // Dealer / customer (PRIVATE_CUSTOMER, BUSINESS_CUSTOMER) or fallback
     loginPath = '/auth/dealer-signin?session=expired'
+  }
+
+  // Carry the admin-gate access key across this hard redirect. The gate's
+  // early unlock fires at module load, but this window.location.replace()
+  // tears the page down mid-flight and cancels that POST — re-firing it on
+  // the login page is what actually lands the 30-day gate cookie. Only
+  // relevant on gated admin paths; the param is stripped by the gate as
+  // soon as the key validates.
+  const gateKey = new URLSearchParams(window.location.search).get('key')
+  if (gateKey && isAdminGatePath(window.location.pathname)) {
+    const target = new URL(loginPath, window.location.origin)
+    target.searchParams.set('key', gateKey)
+    loginPath = target.pathname + target.search
   }
 
   window.location.replace(loginPath)

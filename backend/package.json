@@ -8,6 +8,7 @@
     "build": "prisma generate && nest build",
     "test": "jest",
     "seed": "ts-node scripts/seed.ts",
+    "admin-gate:key": "ts-node scripts/admin-gate-key.ts",
     "email:campaign": "ts-node scripts/send-invite-approval-emails.ts",
     "email:campaign:dry": "ts-node scripts/send-invite-approval-emails.ts --dry-run",
     "seed:referral": "ts-node scripts/seed-referral-settings.ts",

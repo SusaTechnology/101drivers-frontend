@@ -1589,3 +1589,79 @@ Stage Summary:
 - Every news announcement and blog post can now be forwarded: native
   share sheet on phones, copy-link on desktop, from both the listing
   cards and the article pages. No API or CMS changes needed.
+
+Task ID: 26
+Agent: main agent (Super Z)
+Task: admin gate — shared-secret ?key= door in front of every admin screen (cookie, auto-rotating monthly)
+
+Work Log:
+- DECISION (answer-only turn first, then build): the user asked how to
+  hide the admin UI behind a shareable link with a cookie that renews
+  every 30 days, and picked the cookie ?key= design. TOTP was ruled out
+  together (a 30s code can't live inside a shareable link). The gate is
+  a UI-privacy layer — the JWT + AdminGuard stack still protects the
+  data underneath.
+- BACKEND: new leaf module src/admin-gate (service + controller + module,
+  registered in app.module.ts next to AuthModule).
+  - Access key = HMAC-SHA256(ADMIN_GATE_SECRET || JWT_SECRET,
+    "admin-gate-key:YYYY-MM") trimmed to 32 hex chars — it CHANGES BY
+    ITSELF at month rollover, zero cron, zero DB. Current + previous
+    month accepted (rollover grace for links shared on the 31st).
+  - POST /api/admin-gate/unlock validates the key (timing-safe compare)
+    and sets TWO cookies via getCookieOptionsFromRequest (same
+    secure/sameSite/domain policy as the existing auth cookies):
+    admin_gate = "<expiryMs>.<HMAC>" httpOnly 30d (value verified
+    statelessly; expiry capped at TTL + 60s skew), plus admin_gate_ok=1
+    JS-readable mirror for same-origin deployments.
+  - GET /api/admin-gate/status → 200/401 from the cookie. Both endpoints
+    are public by design (the door must work before login) and leak
+    nothing — they return {ok:true} or 401, never admin data.
+  - Kill switch: change ADMIN_GATE_SECRET in the server env → every key
+    and cookie dies instantly.
+  - npm run admin-gate:key (scripts/admin-gate-key.ts, dotenv like the
+    other scripts) prints current/next/previous month keys + the ready-
+    to-share link.
+- FRONTEND: src/lib/adminGate.ts + root-route beforeLoad.
+  - ROOT beforeLoad (runs before any admin screen mounts): gated paths
+    are /admin* AND /auth/admin-signin. With ?key= → unlock → strip the
+    key from the URL (all OTHER params preserved — deep links carry
+    userId & co); without → GET status. Any failure → throw redirect to
+    the LANDING page, so a locked visitor never even sees admin chrome
+    flash. routes/index.tsx: the authenticated-admin bounce from / now
+    only fires while the gate is unlocked — otherwise admin↔landing
+    ping-pong loop (found by reading the redirect pair, not by testing).
+  - /admin- DASH BUG: the first prefix rule required "/admin" + "/", so
+    isAdminGatePath('/admin-dashboard') was FALSE — every admin page is
+    dash-style, the gate only ever caught /auth/admin-signin. Boot probe
+    console.log exposed it; rule is now a bare startsWith('/admin').
+  - EARLY UNLOCK: the session layer (provider.tsx redirectToLogin →
+    window.location.replace) can hard-navigate a sessionless visitor to
+    the sign-in page BEFORE the router gate runs — and that navigation
+    CANCELS the in-flight unlock POST. Fix: adminGate.ts fires the
+    unlock at module evaluation (window-level, before anything boots)
+    and provider.tsx carries the ?key= across the hard redirect (only
+    from gated paths); the login page re-fires the unlock and the cookie
+    lands. The router awaits the same promise — no double POST.
+- INCIDENT / RECOVERY: mid-implementation the sandbox restored the repo
+  to a STALE snapshot — HEAD rewound from d41c5f9e to e7906471 (4
+  commits, incl. the share-button feature), worklog entries 22-25 gone
+  from the tree. Everything was already PUSHED to origin; recovered
+  with `git fetch && git reset --hard origin/master` after backing up
+  the in-flight gate files to /tmp. Lesson: `git stash -u` while a
+  background npm install churns the tree amplified the confusion.
+- SMOKE-TESTED headless against vite dev + a crypto-faithful stub of the
+  two endpoints (port 8901 — Chromium REFUSES port 6000 as an unsafe
+  X11 port, which had masked all unlock attempts at first):
+  no cookie → landing; bad key → landing, zero cookies; valid key →
+  admin_gate + mirror cookies land, sessionless visitor lands on the
+  sign-in page (door open), deep link ?userId=42 survives the key
+  strip; with cookie, dashboard/signin stay reachable. Gates: backend
+  tsc 2 = baseline (0 new), FE tsc 131 = baseline (0 new), vite build
+  green.
+
+Stage Summary:
+- Nobody without this month's key link (or the 30-day cookie it sets)
+  can even see the admin screens or the admin sign-in page — any admin
+  URL typed without them redirects to the public landing page. The key
+  rotates by itself every month; one env change kills everything. Admin
+  DATA remains protected by the existing JWT + role guards.

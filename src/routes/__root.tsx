@@ -1,4 +1,4 @@
-import { Outlet, createRootRoute, useRouterState } from '@tanstack/react-router'
+import { Outlet, createRootRoute, redirect, useRouterState } from '@tanstack/react-router'
 import { TanStackRouterDevtoolsPanel } from '@tanstack/react-router-devtools'
 import { TanStackDevtools } from '@tanstack/react-devtools'
 import { useEffect, useLayoutEffect } from 'react'
@@ -6,6 +6,7 @@ import { PWAInstallPrompt } from '../components/pwa/PWAInstallPrompt'
 import { NotFoundScreen } from '../components/shared/NotFoundScreen'
 import { PageViewTracker } from '../components/shared/PageViewTracker'
 import { AdminShell } from '../components/shared/layout/AdminShell'
+import { ensureAdminGateUnlocked, isAdminGatePath } from '../lib/adminGate'
 
 /**
  * Pathname prefixes that should NOT be indexed by search engines.
@@ -126,7 +127,57 @@ function useAdminShellGate() {
   }, [pathname])
 }
 
+/**
+ * Admin gate — the shared-secret door in front of the admin UI.
+ *
+ * Nobody without the gate cookie (or a valid ?key= link that sets it)
+ * may even SEE the admin screens: /admin* and /auth/admin-signin are
+ * bounced to the public landing page before anything renders. The
+ * backend owns the key/cookie (src/admin-gate on the API side); this
+ * beforeLoad only asks it "is the door open?".
+ *
+ * Runs in beforeLoad (not in a component) so a locked visitor never
+ * sees the admin chrome flash — the navigation is refused outright.
+ */
+async function adminGateBeforeLoad(location: {
+  pathname: string
+  search: unknown
+}): Promise<void> {
+  const pathname = location.pathname
+  if (!isAdminGatePath(pathname)) return
+
+  const search = (location.search ?? {}) as Record<string, unknown>
+  const accessKey =
+    typeof search.key === 'string' && search.key.length > 0
+      ? search.key
+      : undefined
+
+  if (accessKey) {
+    const unlocked = await ensureAdminGateUnlocked(accessKey)
+    if (!unlocked) {
+      // Wrong or expired key — indistinguishable from no key at all.
+      throw redirect({ to: '/', replace: true })
+    }
+    // Door is open — strip the key from the address bar so it doesn't
+    // linger in the URL/history after first use. Every OTHER search
+    // param is preserved (admin deep links carry userId & co).
+    const { key: _usedKey, ...restSearch } = search
+    throw redirect({
+      to: pathname,
+      replace: true,
+      search: restSearch,
+      // `pathname` is any /admin* route — the router's typed-`to`
+      // generic can't know these are valid internal paths.
+    } as never)
+  }
+
+  if (!(await ensureAdminGateUnlocked())) {
+    throw redirect({ to: '/', replace: true })
+  }
+}
+
 export const Route = createRootRoute({
+  beforeLoad: ({ location }) => adminGateBeforeLoad(location),
   // Branded 404 — TanStack Router renders this inside the root layout
   // whenever the URL matches no route (the devtools + PWA prompt stay up).
   notFoundComponent: NotFoundScreen,

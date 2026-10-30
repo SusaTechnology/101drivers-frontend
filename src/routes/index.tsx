@@ -1,6 +1,7 @@
 import { createFileRoute, redirect } from '@tanstack/react-router'
 import LandingPage from '@/components/pages/homePage'
 import { isAuthenticated, getUser, startSessionKeepAlive } from '@/lib/tanstack/dataQuery'
+import { isAdminGateUnlocked } from '@/lib/adminGate'
 
 export const Route = createFileRoute('/')({
   beforeLoad: () => {
@@ -13,10 +14,16 @@ export const Route = createFileRoute('/')({
       
       // Redirect authenticated users to their respective dashboard
       if (roles.includes('ADMIN')) {
-        throw redirect({
-          to: '/admin-dashboard',
-          replace: true,
-        })
+        // Only while the admin gate is unlocked. A logged-in admin whose
+        // gate cookie is missing/expired must see the PUBLIC landing page
+        // here — bouncing them to /admin-dashboard would ping-pong with
+        // the gate's own "locked → landing" redirect forever.
+        if (isAdminGateUnlocked()) {
+          throw redirect({
+            to: '/admin-dashboard',
+            replace: true,
+          })
+        }
       } else if (roles.includes('DRIVER')) {
         // Only bounce drivers that have a dashboard to serve. Pending /
         // waitlisted / on-hold / invited / rejected drivers have no dashboard
