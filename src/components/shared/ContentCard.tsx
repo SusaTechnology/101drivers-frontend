@@ -1,7 +1,10 @@
+import { useState } from "react";
 import { Link } from "@tanstack/react-router";
 import type { LinkProps, RegisteredRouter } from "@tanstack/react-router";
-import { ArrowRight } from "lucide-react";
+import { ArrowRight, Check, Share2 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
+
+import { sharePageLink } from "@/lib/share";
 
 /**
  * ContentCard / ContentCardGrid — the shared "YouTube-flex-style" card
@@ -40,6 +43,13 @@ interface ContentCardOwnProps {
   fallbackIcon: LucideIcon;
   /** Card call-to-action, e.g. "Read article" / "View role". */
   ctaLabel?: string;
+  /**
+   * Absolute public URL of this item. When provided, a small share
+   * button is overlaid on the cover: it opens the native share sheet on
+   * mobile and copies the link elsewhere. Omit it on sections where
+   * sharing makes no sense (e.g. careers).
+   */
+  shareUrl?: string;
 }
 
 type ContentCardProps<
@@ -79,7 +89,26 @@ export function ContentCard<
   meta,
   fallbackIcon: FallbackIcon,
   ctaLabel = "Read more",
+  shareUrl,
 }: ContentCardProps<TFrom, TTo>) {
+  // Transient feedback after the clipboard fallback — the native share
+  // sheet gives its own feedback, so only the copy path flips the icon.
+  const [justCopied, setJustCopied] = useState(false);
+
+  const handleShare = (event: React.MouseEvent<HTMLButtonElement>) => {
+    // The whole card is a <Link> — stop it from navigating when the
+    // user only wants to forward the article to someone.
+    event.preventDefault();
+    event.stopPropagation();
+    if (!shareUrl) return;
+    void sharePageLink({ title, url: shareUrl }).then((result) => {
+      if (result.copied) {
+        setJustCopied(true);
+        window.setTimeout(() => setJustCopied(false), 2500);
+      }
+    });
+  };
+
   return (
     <Link
       to={to}
@@ -109,6 +138,21 @@ export function ContentCard<
           <span className="absolute left-3 top-3 rounded-full bg-slate-950/80 px-3 py-1 text-[10px] font-extrabold uppercase tracking-widest text-lime-400 backdrop-blur-sm">
             {badge}
           </span>
+        )}
+        {shareUrl && (
+          <button
+            type="button"
+            aria-label={`Share link to ${title}`}
+            title="Share or copy link"
+            onClick={handleShare}
+            className="absolute right-3 top-3 z-10 flex h-9 w-9 items-center justify-center rounded-full bg-slate-950/70 text-white backdrop-blur-sm transition-colors hover:bg-lime-500 hover:text-slate-950 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-lime-500"
+          >
+            {justCopied ? (
+              <Check className="h-4 w-4" aria-hidden="true" />
+            ) : (
+              <Share2 className="h-4 w-4" aria-hidden="true" />
+            )}
+          </button>
         )}
       </div>
 

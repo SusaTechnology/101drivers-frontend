@@ -1232,3 +1232,360 @@ Work Log:
 
 Stage Summary:
 - Close/cancel penalty fee is now admin-configurable from Admin → Config Hub → Delivery Policies (live read by the engine, 0 = disabled, $48 fallback); dead admin-settings page no longer offers the field
+---
+Task ID: 19
+Agent: main agent (Super Z)
+Task: recover rolled-back repo + persistent admin navbar/sidebar (mounted across page changes)
+
+Work Log:
+- INCIDENT / RECOVERY: the sandbox's repo had been restored to a stale
+  snapshot — HEAD was 37a049cf, ~10 commits behind origin/master, and the
+  working tree was missing every recent feature (AdminBackButton, navHistory,
+  the whole harden-test-usernames script, the audit-table work). This is why
+  the user saw "no back button at all": the code genuinely wasn't there.
+  The REMOTE was intact (fetch showed 37a049cf..df886544). Fixed with
+  `git merge --ff-only origin/master` → all commits restored; also restored
+  7 working-tree-deleted backend/src/upload files (git restore) and noted
+  backend/node_modules must be reinstalled before the next backend gate.
+  Nothing was ever lost on GitHub.
+- PERSISTENT SHELL (user-approved, done cautiously):
+  - New src/components/shared/layout/AdminShell.tsx, rendered ONCE by the
+    router root (__root.tsx) ABOVE <Outlet/>. It mounts when pathname starts
+    with /admin and STAYS MOUNTED across admin→admin navigations, pending
+    windows included — only the page content below it swaps now. Renders
+    null outside /admin* and on the 4 bespoke-header pages
+    (admin-settings, admin-service-districts, admin-service-area,
+    admin-notification-policy) so those keep exactly one header+sidebar and
+    nothing changes for them yet.
+  - AdminShell renders the same <Navbar> with the same shared props the
+    pages used (navItems / Brand / useAdminActions) — visually identical,
+    just no longer torn down per navigation. ResizeObservers, drawer state,
+    the hamburger and the AdminBackButton now live for the whole admin
+    session.
+  - 41 admin pages migrated: their <Navbar …/> blocks removed + the
+    Navbar/navItems/Brand/useAdminActions imports and hook calls that only
+    fed them. Done with a dry-run-first codemod
+    (/home/z/my-project/scripts/remove-page-navbar.mjs): standard block
+    shapes only (title="Admin" and lone-"/> variants), per-file count
+    parity check, identifier-usage-verified import drops, admin-pages-only
+    guard, idempotent. Codemod bugs found and fixed during the run (counted
+    own lines as usage; nested import-drop; too-narrow file guard).
+  - admin-user-detail hand-fixed: renamed destructure
+    (signOut: adminSignOut) with BOTH bindings unused — hook call + import
+    removed.
+  - testNavbar: closes the mobile drawer on pathname change explicitly
+    (the per-page remount used to reset it as a side effect).
+  - Guard rail kept: __root's useAdminShellGate still owns the body-padding
+    (data-admin-shell) toggle — unchanged.
+- Gates: FE tsc 139 src errors = exact baseline (0 new); vite build green
+  (18.7s). Committed 706be20d, pushed df886544..706be20d; worklog left
+  uncommitted per convention.
+
+Stage Summary:
+- Repo restored to origin/master; every feature the user reported missing
+  (right-hemisphere back button, sidebar brand-row collapse, audit table,
+  harden script) is verifiably back in the tree.
+- Admin navbar + sidebar are now persistent app chrome: one mount per
+  admin session instead of one per page — no more shell flicker on slow
+  navigations; dealer/driver/public routes untouched.
+---
+Task ID: 20
+Agent: main agent (Super Z)
+Task: admin-cms editor action bar floated mid-screen hiding content (new shell layout)
+
+Work Log:
+- User report: on the CMS editing page, the bar with the Back + Save/Publish
+  buttons "comes at the middle hiding contents" — it must sit under the
+  navbar in the new (persistent-shell) layout.
+- ROOT CAUSE (geometry, introduced by the 706be20d shell refactor): the
+  navbar is now rendered ABOVE the page by AdminShell in the router root
+  (sticky top-0, h-16 mobile / h-20 desktop, in flow). The CMS editor frame
+  still assumed it owned the navbar:
+  1) lg:h-[100dvh] on a frame that starts BELOW the 80px navbar → document
+     = 100dvh + 80px → dead 80px window scroll, split panes' bottom 80px
+     below the fold.
+  2) sticky top-16 lg:top-20 on the action bar: inside the frame (the
+     nearest scroll container via lg:overflow-hidden) the bar's natural
+     offset became 0 (the navbar is no longer its first sibling), so the
+     sticky threshold offset it 80px DOWN out of its flex slot — the bar
+     painted mid-screen over the editor/preview panes. Old layout was
+     immune because the in-flow navbar inside the frame made the natural
+     offset exactly equal the threshold.
+- FIX (src/components/pages/admin-cms.tsx, both views):
+  - Editor frame height = viewport minus navbar:
+    min-h-[calc(100dvh-4rem)] mobile, lg:h-[calc(100dvh-5rem)] +
+    lg:min-h-0 desktop (lg:min-h-0 required or the mobile min-h would
+    override the fixed height and re-introduce a 16px overflow).
+  - Action bar: sticky top-16 lg:static — mobile keeps dock-under-navbar
+    scrolling; desktop is a plain first row of the non-scrolling frame.
+  - List view root: min-h-screen → the same viewport-minus-navbar
+    min-heights (kills the dead 64/80px scroll there too).
+- Scope note: checked the other top-16/top-20 users — admin-content
+  (window scrollport, still correct) and admin-support-list (fixed
+  top-16/lg:top-20 under the sticky navbar, still correct). Only admin-cms
+  had a fixed-height overflow-hidden frame, so only it needed the fix.
+- Gates: FE tsc 139 src errors = exact baseline (0 new); vite build green
+  (19.6s). Committed 0bc3330a, pushed 706be20d..0bc3330a; worklog left
+  uncommitted per convention.
+
+Stage Summary:
+- The CMS editor's action bar (Back / status / Hide preview / Unpublish /
+  Save draft / Publish / Delete) is back where it belongs: row one, directly
+  under the persistent navbar, covering nothing — on both the split desktop
+  view and the stacked mobile view; the frame now ends exactly at the
+  viewport bottom with no dead scroll.
+---
+Task ID: 21
+Agent: main agent (Super Z)
+Task: breadcrumb + page title in the navbar's left hemisphere ("where am I" block)
+
+Work Log:
+- User request: in the navbar's left part, at the logo's place, show a
+  breadcrumb as a gray sub-header and the current page's title as the
+  header text.
+- NEW src/lib/items/pageHeading.ts — resolves { crumb, title } purely from
+  the router pathname, three tiers:
+  1) SUB_PAGES: 24 detail/sub routes → parent section + explicit title.
+     Parents verified by grepping who actually links each route: payout +
+     payout-run + billing-health under Payments (linked from payment-detail
+     / payments), pricing rule/config under Pricing, report-* under
+     Reports, and the Config Hub children use the hub's own card titles
+     ("Home Page Settings", "Notification Policy", "Service Area",
+     "Service Districts", "Content Editor", "Referral Program",
+     "Delivery Policies").
+  2) navItems exact/nested match → crumb "Admin / <Label>", title <Label>.
+     startsWith(href + '/') guard so /admin-user-detail can't match
+     /admin-users.
+  3) Fallback: crumb "Admin", title = humanized last segment — a new
+     route never shows a raw slug.
+- testNavbar: renders the block right after the brand mark (logo kept,
+  thin vertical rule sm+): gray uppercase tracking-wide sub-header + bold
+  page title, flex-1 min-w-0 truncating. Because the Navbar is persistent
+  shell chrome, the heading updates live on every navigation with zero
+  per-page wiring and no remount. The measured nav slot just sees the
+  space left, so the collapse/expand hysteresis is untouched; on lg the
+  sidebar owns navigation and the block owns the navbar row.
+- Naming care: local pageTitle (the existing `title` prop stays the mobile
+  drawer's "Admin" label). data-testid="admin-page-heading" for tests.
+- Gates: FE tsc 139 src errors = exact baseline (0 new); vite build green
+  (18.3s); confirmed the map is in the built bundle. Committed e7906471,
+  pushed 0bc3330a..e7906471; worklog left uncommitted per convention.
+
+Stage Summary:
+- Every admin page now tells you where you are: brand mark | ADMIN / USERS
+  (gray breadcrumb) over "Users" (bold title) in the navbar's left
+  hemisphere, including the 4 bespoke-header pages (they render the same
+  Navbar). Detail pages read like "ADMIN / DELIVERIES" over "Delivery
+  Details". Right hemisphere (actions + Back) unchanged.
+---
+Task ID: 22
+Agent: main agent (Super Z)
+Task: support conversations — composer pinned to screen bottom, strip fixed, independent right column; driver gets the same chat UI
+
+Work Log:
+- USER REPORT (admin /admin-support-detail): the reply input requires
+  scrolling to the bottom of the thread to be found; the conversation
+  header (title strip) must stay fixed at its spot; messages should scroll
+  between those two fixed parts with z-index so nothing paints over them;
+  the right column must scroll on its own, not with the left. And: the
+  driver support request screen should get the same conversation UI.
+- ROOT CAUSES (admin):
+  1) Same navbar-offset bug as the CMS editor (Task 20): root was
+     lg:h-dvh below the 80px persistent navbar → 100dvh+80px document →
+     dead scroll, composer cut below the fold on desktop.
+  2) Mobile: the chat column was unbounded — messages box was
+     flex-1 min-h-[45vh] inside an auto-height column, so with a long
+     thread the box grew to full content height and the composer landed at
+     the very bottom of the document.
+- ADMIN FIX (admin-support-detail.tsx):
+  - Frame = viewport minus navbar (min-h-[calc(100dvh-4rem)] /
+    lg:h-[calc(100dvh-5rem)] + lg:min-h-0 lg:overflow-hidden).
+  - Chat column bounded on ALL viewports: h-[calc(100dvh-5.5rem)] below
+    lg (navbar 4rem + main py-3 top/bottom = 5.5rem), lg:h-auto grid
+    stretch. Messages box flex-1 min-h-0 (min-h-[45vh] removed) → the
+    ONLY scroller, strip fixed at its spot, composer at the screen bottom.
+  - relative z-20 on strip + composer + closed notice (user's z-index ask).
+  - Aside keeps lg:overflow-y-auto — independent scroll, now full-height.
+  - No-request notice root gets the same viewport-minus-navbar min-height.
+- DRIVER REBUILD (driver-support-detail.tsx, both routes
+  /driver-support-detail?id=… and /driver/support-detail):
+  - Same conversation UI as the admin column: h-14 header strip (category
+    icon, subject, category · created line, status + priority pills,
+    refresh with isFetching spinner) — fixed under the driver's own page
+    header; the conversation screen as the only scroller (related delivery
+    card at top, original request rendered as the first "You" lime bubble
+    WhatsApp-style, then the unchanged reply bubbles with avatars/identity/
+    contact lines); WhatsApp composer pinned at the bottom (Enter sends,
+    Shift+Enter newline, IME-safe keydown, auto-grow cap 132px, shrink on
+    send) — copied from the admin helpers; closed/resolved → emerald
+    notice where the composer would be (old "Add Reply" card + status-info
+    banner folded into it).
+  - Page is a fixed chat frame: h-[calc(100dvh-4rem)] overflow-hidden
+    (driver header is h-16 at every viewport) — nothing scrolls except
+    the messages. Auto-scroll to bottom on new history (container
+    scrollTop pattern, same as admin).
+  - New-message auto-scroll + isFetching destructure added; imports
+    cleaned (Headphones/Reply/CardHeader/CardTitle/CardDescription out,
+    RefreshCw + SupportRequestPriority in); pre-existing unused imports
+    (Separator/Menu/Home/Inbox/Car/Clock) left untouched.
+- Gates: FE tsc 139 src errors = exact baseline (0 new — the
+  support-detail errors listed are pre-existing history-state/mutation
+  typing ones, untouched lines); vite build green (20.1s). Committed
+  4951cb4d, pushed e7906471..4951cb4d; worklog left uncommitted.
+
+Stage Summary:
+- Both support conversations are now true chat apps: fixed header strip,
+  messages scrolling between, composer always at the bottom of the screen,
+  z-index guards on the fixed parts. Admin keeps its two-column layout
+  with the right column scrolling independently; the driver screen is the
+  single-column version of the same UI.
+---
+Task ID: 23
+Agent: main agent (Super Z)
+Task: conversation screen — opening message no longer duplicated; photo button in every composer; driver issue report lands in the new conversation
+
+Work Log:
+- ROOT CAUSE (duplicate first message, every role): the backend's
+  createContactRequest (support-request-orchestrator.service.ts) persists
+  the opening text TWICE — once on the SupportRequest row (message) and
+  once as the conversation's first SupportRequestNote. Every conversation
+  screen rendered the ticket-level copy as a special opening bubble AND
+  mapped the notes, so the same text appeared twice back-to-back on the
+  admin, driver and dealer threads.
+  - Fix (frontend, all 3 detail screens): showOpeningBubble = ticket has a
+    message AND no visible note carries the exact same text. When the
+    thread already carries the original as a note, the opening
+    bubble/"Original Request" card stays hidden — the message still shows
+    exactly once, as a regular chat bubble. A thread whose first note is
+    missing keeps the bubble, so the opening text can never disappear.
+    (Backend left untouched on purpose: the note copy is what the message
+    lists preview, and the frontend filter covers both legacy and future
+    tickets.)
+- PHOTO BUTTON in every composer (both parties, mid-conversation):
+  admin-support-detail, driver-support-detail, dealer-support-detail now
+  wire the shared useSupportAttachments hook — ImagePlus attach button
+  (left of the input), hidden accept="image/*" picker, compress → upload
+  to the user-scoped /uploads/support-attachment endpoint, 48px thumbnail
+  chips above the input (tap = existing PhotoDialog preview, ✕ = remove,
+  dashed Loader2 tile while uploading). On send the URLs ride inside the
+  message text as the standard [Attachments] block (SupportRequest has no
+  attachments column) — SupportMessageBody already lifts it back out as
+  tappable thumbnails on every chat surface. Send disabled while an
+  upload is in flight; text-only OR photo-only messages both allowed;
+  clearAttachments (new, added to the hook) empties the chips after a
+  successful send. Dealer's inline Enter handler gained the IME
+  composition guard the other two already had.
+- driver-issue-report: after a successful submit the driver now lands
+  straight in the new ticket's conversation — navigate to
+  /driver-support-detail?id=<created id> (deep-linkable route, same
+  target NotificationBell uses) instead of the 2s-delayed /driver-active
+  redirect; toast says "Opening the conversation…". Also fixed the
+  swapped useCreate generics (TData is the RESPONSE type onSuccess
+  receives, TVariables what mutate takes) — data.id now typechecks and a
+  pre-existing mutate() typing error in that file disappeared.
+- Gates: FE tsc 138 src errors = one BELOW the 139 baseline (0 new; the
+  generics swap fixed the pre-existing issue-report one); vite build
+  green (19.7s).
+
+Stage Summary:
+- The opening message shows exactly once on every role's conversation
+  screen; both parties can attach photos mid-conversation from all three
+  composers (same upload pipeline the creation forms use); submitting a
+  driver issue report drops the driver into the new conversation instead
+  of bouncing to driver-active.
+
+Task ID: 24
+Agent: main agent (Super Z)
+Task: support detail pages stop scrolling as a page (admin + driver + dealer); newly created topic shows in the list when you come back
+
+Work Log:
+- ROOT CAUSE (page-level scroll on ALL THREE chat screens, the "the page
+  itself should not scroll" report): the global PWA body rule
+  body { min-height: max(884px, 100dvh) } (styles.css). On any viewport
+  shorter than 884px (laptops with browser chrome, Windows 125% scaling —
+  a 1280x700 window is typical) the body is forced 184px taller than the
+  viewport-locked chat frame, leaving dead page scroll under it. Verified
+  in a real browser: doc scrollHeight 884 vs viewport 700 → page scrolls.
+  - Fix: pages mark their root [data-viewport-lock]; styles.css adds the
+    unlayered rule body:has([data-viewport-lock]) { min-height: 100dvh }
+    which beats the @layer base floor. Browser-verified: body min-height
+    700px, doc scrollHeight = viewport, page never scrolls; browsers
+    without :has() gracefully keep the old floor.
+- admin-support-detail second bug: the two-column grid's single desktop
+  row was CONTENT-sized — a long thread or a long aside inflated the row
+  past the frame (overflow doesn't reduce intrinsic size), the grid
+  overflowed the root's clip and pushed the composer below the fold.
+  lg:grid-rows-[minmax(0,1fr)] pins the row to the frame's height so the
+  aside's lg:overflow-y-auto has a real bound and the chat column's flex
+  chain gets the definite height it needs. Browser-verified at 1280x700
+  with an 80-bubble thread + 24-card aside: page locked, messages AND
+  aside scroll internally, composer visible.
+- driver-support-detail geometry bug: the frame was
+  h-[calc(100dvh_-_4rem)] while the h-16 header lives INSIDE the frame —
+  the header was subtracted twice, leaving a dead 4rem strip under the
+  composer (document = 100dvh - 4rem). Root is now h-dvh; browser-
+  verified composer sits at the viewport bottom on desktop AND phone.
+- dealer-support-detail was already structurally correct (h-dvh +
+  bounded flex chain) — it only needed data-viewport-lock.
+- NEW-TOPIC-MISSING-FROM-LIST (driver creates a request, lands in the
+  conversation, goes back to My Support Requests, topic not there): the
+  list queries cache 5 minutes (useDataQuery staleTime) and nothing
+  invalidated them at creation. driver-issue-report + dealer-support-
+  request now invalidate every /supportRequests/ query in the create
+  onSuccess BEFORE navigating (same predicate the list pages' socket
+  handlers use). Also invalidated in ALL detail reply/note/status
+  onSuccess handlers (socket pings only reach the OTHER party's room, so
+  the local list previews were stale after replying too).
+- Type hygiene while in these files: un-swapped useCreate generics
+  (TData = response, TVariables = payload) in admin (reply/internal
+  note/status), driver + dealer reply — five pre-existing tsc errors
+  gone.
+- Gates: FE tsc 131 src errors = 7 BELOW the 138 baseline (0 new); vite
+  build green (18.9s). Layout verified with a headless browser against
+  the REAL compiled CSS at 1280x700, 375x667 desktop+mobile.
+
+Stage Summary:
+- The three support conversation screens are now truly viewport-locked:
+  the page never scrolls, the message column and (on admin) the detail
+  column scroll by themselves, the composer stays reachable at the
+  bottom. Creating a ticket and going back to the list now shows the new
+  topic immediately, and replies refresh the list previews everywhere.
+
+Task ID: 25
+Agent: main agent (Super Z)
+Task: forward link on news + blog — share button on every card and article page
+
+Work Log:
+- NEW src/lib/share.ts — sharePageLink(): navigator.share (native share
+  sheet: WhatsApp / SMS / email — the PWA case) when the browser supports
+  it, clipboard copy as the desktop fallback, execCommand as the last
+  resort for insecure contexts. Returns a structured result
+  {shared, copied, cancelled} so callers can show feedback; a blocked
+  clipboard degrades to a silent no-op instead of an unhandled rejection.
+  AbortError from the share sheet is not surfaced to callers.
+- ContentCard gained an OPTIONAL shareUrl prop: a 36px round Share2 icon
+  button overlaid on the cover's top-right (the badge pill owns the top-
+  left). onClick does preventDefault + stopPropagation so the card's
+  wrapping <Link> never navigates; after a clipboard fallback the icon
+  flips to a Check for 2.5s. Careers cards don't pass shareUrl — no
+  change there.
+- blog.tsx + news.tsx pass shareUrl from the canonical public URL
+  (https://101drivers.com/{blog|news}/$slug) — the link a recipient gets
+  is always the production URL, even if the sender browses a preview
+  domain.
+- blog-detail.tsx + news-detail.tsx: the back-link row is now
+  justify-between with a "Share" pill (Share2 icon, uppercase label).
+  news-detail also extracted its inline canonical URL into a postUrl
+  const now shared by SEOHead, the NewsArticle schema and the share call
+  — one source of truth.
+- Verified headless against vite preview (real compiled build):
+  card click does NOT navigate (URL stays /blog), clipboard fallback
+  fires and the check icon shows; blog + news detail Share buttons flip
+  to "LINK COPIED" on a real (trusted) click; zero console errors.
+  Synthetic eval() clicks are untrusted activations → the clipboard
+  correctly refuses and the button no-ops silently — expected.
+
+Stage Summary:
+- Every news announcement and blog post can now be forwarded: native
+  share sheet on phones, copy-link on desktop, from both the listing
+  cards and the article pages. No API or CMS changes needed.

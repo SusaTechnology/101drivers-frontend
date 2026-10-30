@@ -79,6 +79,7 @@ function BlogPage() {
                   meta={[{ label: formatContentDate(post.date) }]}
                   fallbackIcon={BookOpen}
                   ctaLabel="Read article"
+                  shareUrl={`https://101drivers.com/blog/${post.slug}`}
                 />
               ))}
             </ContentCardGrid>

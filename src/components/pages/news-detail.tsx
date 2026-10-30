@@ -1,5 +1,6 @@
+import { useState } from "react";
 import { Link } from "@tanstack/react-router";
-import { ArrowLeft, Calendar, Newspaper } from "lucide-react";
+import { ArrowLeft, Calendar, Check, Newspaper, Share2 } from "lucide-react";
 
 import { NavBar } from "../shared/layout/navbar";
 import { SEOHead } from "../shared/SEOHead";
@@ -12,6 +13,7 @@ import {
 } from "@/lib/cms";
 import { formatContentDate } from "@/lib/format-date";
 import { renderCmsInline } from "@/lib/cms-inline";
+import { sharePageLink } from "@/lib/share";
 
 /**
  * News announcement — /news/$slug. The post comes from the CMS (Postgres
@@ -23,6 +25,9 @@ import { renderCmsInline } from "@/lib/cms-inline";
  */
 export default function NewsDetailPage({ slug }: { slug: string }) {
   const { post, isLoading } = useCmsNewsPost(slug);
+  // Transient feedback when the share falls back to a clipboard copy —
+  // the native share sheet gives its own feedback on mobile.
+  const [justCopied, setJustCopied] = useState(false);
 
   if (isLoading) {
     return (
@@ -56,12 +61,25 @@ export default function NewsDetailPage({ slug }: { slug: string }) {
     );
   }
 
+  const postUrl = `https://101drivers.com/news/${post.slug}`;
+
+  // Forward the announcement: native share sheet (WhatsApp, SMS, email,
+  // …) where supported, clipboard copy everywhere else.
+  const handleShare = () => {
+    void sharePageLink({ title: post.title, url: postUrl }).then((result) => {
+      if (result.copied) {
+        setJustCopied(true);
+        window.setTimeout(() => setJustCopied(false), 2500);
+      }
+    });
+  };
+
   return (
     <div className="min-h-screen bg-background-light dark:bg-background-dark">
       <SEOHead
         title={`${post.title} | 101 Drivers News`}
         description={post.excerpt}
-        canonicalUrl={`https://101drivers.com/news/${post.slug}`}
+        canonicalUrl={postUrl}
         ogType="article"
         ogImage={resolveCmsAssetAbsoluteUrl(post.image)}
         ogImageAlt={post.imageAlt}
@@ -71,7 +89,7 @@ export default function NewsDetailPage({ slug }: { slug: string }) {
           headline: post.title,
           description: post.excerpt,
           datePublished: post.date,
-          url: `https://101drivers.com/news/${post.slug}`,
+          url: postUrl,
           image: resolveCmsAssetAbsoluteUrl(post.image),
           publisher: {
             "@type": "Organization",
@@ -84,14 +102,28 @@ export default function NewsDetailPage({ slug }: { slug: string }) {
 
       <main className="w-full max-w-[1440px] mx-auto px-6 lg:px-8 py-10 lg:py-14">
         <article className="max-w-3xl mx-auto">
-          {/* Back to the index */}
-          <Link
-            to="/news"
-            className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors"
-          >
-            <ArrowLeft className="h-3.5 w-3.5" aria-hidden="true" />
-            All news
-          </Link>
+          {/* Back to the index + forward/share the announcement */}
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <Link
+              to="/news"
+              className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors"
+            >
+              <ArrowLeft className="h-3.5 w-3.5" aria-hidden="true" />
+              All news
+            </Link>
+            <button
+              type="button"
+              onClick={handleShare}
+              className="inline-flex items-center gap-2 rounded-full border border-slate-200 px-4 py-2 text-xs font-bold uppercase tracking-wider text-slate-700 transition-colors hover:border-lime-500 hover:text-lime-600 dark:border-slate-700 dark:text-slate-300 dark:hover:border-lime-500 dark:hover:text-lime-400"
+            >
+              {justCopied ? (
+                <Check className="h-3.5 w-3.5 text-lime-500" aria-hidden="true" />
+              ) : (
+                <Share2 className="h-3.5 w-3.5" aria-hidden="true" />
+              )}
+              {justCopied ? "Link copied" : "Share"}
+            </button>
+          </div>
 
           {/* Cover */}
           {post.image && (

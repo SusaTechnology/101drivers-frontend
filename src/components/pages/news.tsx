@@ -80,6 +80,7 @@ function NewsPage() {
                   meta={[{ label: formatContentDate(post.date) }]}
                   fallbackIcon={Newspaper}
                   ctaLabel="Read update"
+                  shareUrl={`https://101drivers.com/news/${post.slug}`}
                 />
               ))}
             </ContentCardGrid>
