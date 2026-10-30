@@ -43,10 +43,6 @@ import {
   CardTitle,
 } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { Navbar } from '../shared/layout/testNavbar'
-import { Brand } from '@/lib/items/brand'
-import { useAdminActions } from '@/hooks/useAdminActions'
-import { navItems } from '@/lib/items/navItems'
 
 // Config data
 const MOCK_CONFIG = {
@@ -196,20 +192,12 @@ const configCards = [
 ]
 
 export default function AdminConfigHubPage() {
-  const { actionItems, signOut } = useAdminActions();
   const [portalPasswordOpen, setPortalPasswordOpen] = useState(false);
   const [whatsAppOpen, setWhatsAppOpen] = useState(false);
 
   return (
     <div className="min-h-screen bg-background-light dark:bg-background-dark font-sans antialiased text-slate-900 dark:text-white">
       {/* Top Bar */}
-      <Navbar
-        brand={<Brand />}
-        items={navItems}
-        actions={actionItems}
-        onSignOut={signOut}
-        title="Admin"
-      />
 
       <main className="max-w-[1440px] mx-auto px-6 lg:px-8 py-6 lg:py-8 space-y-6">
         {/* Page header */}

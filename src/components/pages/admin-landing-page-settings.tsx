@@ -41,10 +41,6 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useDataQuery, useDataMutation, useFileUpload } from '@/lib/tanstack/dataQuery'
-import { Navbar } from '../shared/layout/testNavbar'
-import { Brand } from '@/lib/items/brand'
-import { useAdminActions } from '@/hooks/useAdminActions'
-import { navItems } from '@/lib/items/navItems'
 
 // Types
 interface LandingPageSettings {
@@ -89,7 +85,6 @@ interface UploadResponse {
 }
 
 export default function AdminHomePageSettings() {
-  const { actionItems, signOut } = useAdminActions()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [isUploading, setIsUploading] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -258,13 +253,6 @@ export default function AdminHomePageSettings() {
   if (isLoading) {
     return (
       <div className="min-h-screen bg-background-light dark:bg-background-dark font-sans antialiased text-slate-900 dark:text-white">
-        <Navbar
-          brand={<Brand />}
-          items={navItems}
-          actions={actionItems}
-          onSignOut={signOut}
-          title="Admin"
-        />
         <div className="flex items-center justify-center" style={{ minHeight: 'calc(100vh - 5rem)' }}>
           <div className="text-center">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-lime-500 mx-auto"></div>
@@ -278,13 +266,6 @@ export default function AdminHomePageSettings() {
   if (isError) {
     return (
       <div className="min-h-screen bg-background-light dark:bg-background-dark font-sans antialiased text-slate-900 dark:text-white">
-        <Navbar
-          brand={<Brand />}
-          items={navItems}
-          actions={actionItems}
-          onSignOut={signOut}
-          title="Admin"
-        />
         <div className="flex items-center justify-center" style={{ minHeight: 'calc(100vh - 5rem)' }}>
           <Card className="max-w-md p-6 text-center">
             <AlertCircle className="h-12 w-12 text-red-500 mx-auto" />
@@ -299,13 +280,6 @@ export default function AdminHomePageSettings() {
 
   return (
     <div className="min-h-screen bg-background-light dark:bg-background-dark font-sans antialiased text-slate-900 dark:text-white">
-      <Navbar
-        brand={<Brand />}
-        items={navItems}
-        actions={actionItems}
-        onSignOut={signOut}
-        title="Admin"
-      />
 
       <div className="max-w-[1440px] mx-auto px-6 lg:px-8 py-8 lg:py-10">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8">

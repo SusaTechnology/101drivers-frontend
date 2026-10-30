@@ -37,10 +37,6 @@ import {
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Navbar } from '../shared/layout/testNavbar'
-import { Brand } from '@/lib/items/brand'
-import { useAdminActions } from '@/hooks/useAdminActions'
-import { navItems } from '@/lib/items/navItems'
 import { useDataQuery, useDataMutation } from '@/lib/tanstack/dataQuery'
 
 const API_URL = import.meta.env.VITE_API_URL
@@ -52,7 +48,6 @@ interface DeliverySettings {
 }
 
 export default function AdminDeliveryPoliciesPage() {
-  const { actionItems, signOut } = useAdminActions()
 
   // Form state (strings so the inputs can be empty while editing)
   const [penaltyFee, setPenaltyFee] = useState('')
@@ -124,13 +119,6 @@ export default function AdminDeliveryPoliciesPage() {
 
   return (
     <div className="min-h-screen bg-background-light dark:bg-background-dark font-sans antialiased text-slate-900 dark:text-white">
-      <Navbar
-        brand={<Brand />}
-        items={navItems}
-        actions={actionItems}
-        onSignOut={signOut}
-        title="Admin"
-      />
 
       <main className="max-w-[1440px] mx-auto px-6 lg:px-8 py-6 lg:py-8 space-y-6">
         {/* Page header */}

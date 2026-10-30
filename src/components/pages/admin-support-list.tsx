@@ -57,10 +57,6 @@ import { getUser, useDataQuery } from '@/lib/tanstack/dataQuery'
 import { useQueryClient } from '@tanstack/react-query'
 import { useSocketEvent } from '@/hooks/useSocket'
 import { socketJoinStaffOps, socketLeaveStaffOps } from '@/lib/socket'
-import { Navbar } from '@/components/shared/layout/testNavbar'
-import { navItems } from '@/lib/items/navItems'
-import { Brand } from '@/lib/items/brand'
-import { useAdminActions } from '@/hooks/useAdminActions'
 import {
   STATUS_OPTIONS,
   PRIORITY_OPTIONS,
@@ -105,7 +101,6 @@ const PER_PAGE_OPTIONS = [10, 20, 50, 100]
 const SEARCH_DEBOUNCE_MS = 350
 
 export default function AdminSupportListPage() {
-  const { actionItems, signOut } = useAdminActions()
   const user = getUser()
   const queryClient = useQueryClient()
 
@@ -426,13 +421,6 @@ export default function AdminSupportListPage() {
   return (
     <div className="min-h-screen bg-background-light dark:bg-background-dark font-sans antialiased text-slate-900 dark:text-white">
       {/* Header */}
-      <Navbar
-        brand={<Brand />}
-        items={navItems}
-        actions={actionItems}
-        onSignOut={signOut}
-        title="Support Requests"
-      />
 
       <main className="w-full max-w-[1600px] mx-auto px-4 lg:px-5 py-4 lg:py-5">
         {/* Page Header */}

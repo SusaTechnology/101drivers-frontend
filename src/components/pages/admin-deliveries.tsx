@@ -22,10 +22,6 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Navbar } from '../shared/layout/testNavbar';
-import { navItems } from '@/lib/items/navItems';
-import { Brand } from '@/lib/items/brand';
-import { useAdminActions } from '@/hooks/useAdminActions';
 import { 
   useAdminDeliveries,
   useAdminDeliveryStats,
@@ -145,7 +141,6 @@ const CUSTOMER_TYPE_OPTIONS: { value: string; label: string }[] = [
 ];
 
 export default function AdminDeliveriesPage() {
-  const { actionItems, signOut } = useAdminActions();
   const queryClient = useQueryClient();
 
   // ==================== DEEP-LINK FILTERS (dashboard urgent tiles) ====================
@@ -539,13 +534,6 @@ export default function AdminDeliveriesPage() {
   return (
     <div className="min-h-screen bg-background-light dark:bg-background-dark">
       {/* Header */}
-      <Navbar
-        brand={<Brand />}
-        items={navItems}
-        actions={actionItems}
-        onSignOut={signOut}
-        title="Admin"
-      />
 
       {/* Main Content */}
       <main className="max-w-[1440px] mx-auto px-6 lg:px-8 py-6 lg:py-8">

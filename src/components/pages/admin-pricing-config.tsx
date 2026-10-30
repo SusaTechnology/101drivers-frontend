@@ -12,10 +12,6 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
-import { Navbar } from '@/components/shared/layout/testNavbar';
-import { Brand } from '@/lib/items/brand';
-import { navItems } from '@/lib/items/navItems';
-import { useAdminActions } from '@/hooks/useAdminActions';
 import { PricingConfigList } from '@/components/pricing/PricingConfigList';
 import {
   useDataQuery,
@@ -27,7 +23,6 @@ import type { PricingConfig } from '@/types/pricing';
 const API_BASE_URL = import.meta.env.VITE_API_URL || '';
 
 export default function AdminPricingConfigPage() {
-  const { actionItems, signOut } = useAdminActions();
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -78,13 +73,6 @@ export default function AdminPricingConfigPage() {
   return (
     <div className="min-h-screen bg-background-light dark:bg-background-dark font-sans antialiased text-slate-900 dark:text-white">
       {/* Header */}
-      <Navbar
-        brand={<Brand />}
-        items={navItems}
-        actions={actionItems}
-        onSignOut={signOut}
-        title="Admin"
-      />
 
       <main className="w-full max-w-[1440px] mx-auto px-6 lg:px-8 py-10 lg:py-12">
         {/* Top header */}

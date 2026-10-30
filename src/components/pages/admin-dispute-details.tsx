@@ -52,10 +52,6 @@ import {
   getDisputeStatusColor,
 } from "@/hooks/useAdminDisputes";
 import type { DisputeListItem } from "@/types/dispute";
-import { Navbar } from "../shared/layout/testNavbar";
-import { navItems } from "@/lib/items/navItems";
-import { Brand } from "@/lib/items/brand";
-import { useAdminActions } from "@/hooks/useAdminActions";
 
 interface AdminDisputeDetailsPageProps {
   disputeId: string;
@@ -66,7 +62,6 @@ export default function AdminDisputeDetailsPage({
 }: AdminDisputeDetailsPageProps) {
   const { data: dispute, isLoading, isError, refetch } = useDisputeDetail(disputeId);
   const actions = useDisputeActions(disputeId);
-  const { actionItems, signOut } = useAdminActions();
 
   // ─── Action dialog state ───
   const [activeAction, setActiveAction] = useState<
@@ -85,13 +80,6 @@ export default function AdminDisputeDetailsPage({
   if (!disputeId) {
     return (
       <div className="min-h-screen bg-background-light dark:bg-background-dark">
-        <Navbar
-          brand={<Brand />}
-          items={navItems}
-          actions={actionItems}
-          onSignOut={signOut}
-          title="Admin"
-        />
         <main className="max-w-[1440px] mx-auto px-6 lg:px-8 py-10">
           <Alert>
             <AlertCircle className="h-4 w-4" />
@@ -112,13 +100,6 @@ export default function AdminDisputeDetailsPage({
   if (isLoading) {
     return (
       <div className="min-h-screen bg-background-light dark:bg-background-dark">
-        <Navbar
-          brand={<Brand />}
-          items={navItems}
-          actions={actionItems}
-          onSignOut={signOut}
-          title="Admin"
-        />
         <main className="max-w-[1440px] mx-auto px-6 lg:px-8 py-10">
           <div className="flex items-center gap-3 text-slate-500">
             <Sync className="h-4 w-4 animate-spin" />
@@ -132,13 +113,6 @@ export default function AdminDisputeDetailsPage({
   if (isError || !dispute) {
     return (
       <div className="min-h-screen bg-background-light dark:bg-background-dark">
-        <Navbar
-          brand={<Brand />}
-          items={navItems}
-          actions={actionItems}
-          onSignOut={signOut}
-          title="Admin"
-        />
         <main className="max-w-[1440px] mx-auto px-6 lg:px-8 py-10">
           <Alert variant="destructive">
             <AlertCircle className="h-4 w-4" />
@@ -262,13 +236,6 @@ export default function AdminDisputeDetailsPage({
   return (
     <div className="min-h-screen bg-background-light dark:bg-background-dark">
       {/* ─── Admin navigation (same as all other admin pages) ─── */}
-      <Navbar
-        brand={<Brand />}
-        items={navItems}
-        actions={actionItems}
-        onSignOut={signOut}
-        title="Admin"
-      />
 
       {/* ─── Page content ─── */}
       <main className="max-w-[1440px] mx-auto px-6 lg:px-8 py-6 lg:py-8 space-y-6">

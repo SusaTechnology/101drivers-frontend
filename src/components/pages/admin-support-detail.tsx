@@ -45,10 +45,6 @@ import { cn } from '@/lib/utils'
 import { getUser, useDataQuery, useCreate } from '@/lib/tanstack/dataQuery'
 import { useSocketEvent } from '@/hooks/useSocket'
 import { socketJoinSupport, socketLeaveSupport } from '@/lib/socket'
-import { Navbar } from '@/components/shared/layout/testNavbar'
-import { navItems } from '@/lib/items/navItems'
-import { Brand } from '@/lib/items/brand'
-import { useAdminActions } from '@/hooks/useAdminActions'
 import {
   SupportAvatar,
   SupportContactLine,
@@ -122,7 +118,6 @@ export default function AdminSupportDetailPage({ supportRequestId }: { supportRe
   // that still pass state (support list page).
   const requestId = (supportRequestId ?? state?.id) || ''
   const navigate = useNavigate()
-  const { actionItems, signOut } = useAdminActions()
   const user = getUser()
   const adminId = user?.id
 
@@ -347,13 +342,6 @@ export default function AdminSupportDetailPage({ supportRequestId }: { supportRe
   if (!requestId) {
     return (
       <div className="min-h-screen bg-background-light dark:bg-background-dark font-sans antialiased text-slate-900 dark:text-white">
-        <Navbar
-          brand={<Brand />}
-          items={navItems}
-          actions={actionItems}
-          onSignOut={signOut}
-          title="Support Request"
-        />
         <div className="flex items-center justify-center p-6">
           <Card className="w-full max-w-md border-slate-200 dark:border-slate-800">
             <CardContent className="p-6 text-center">
@@ -378,13 +366,6 @@ export default function AdminSupportDetailPage({ supportRequestId }: { supportRe
   return (
     <div className="min-h-dvh lg:h-dvh lg:overflow-hidden flex flex-col bg-background-light dark:bg-background-dark font-sans antialiased text-slate-900 dark:text-white">
       {/* Header */}
-      <Navbar
-        brand={<Brand />}
-        items={navItems}
-        actions={actionItems}
-        onSignOut={signOut}
-        title="Support Request"
-      />
 
       {/* Chat-workspace shell: on desktop the page NEVER scrolls — the two
           columns below own their own scrolling (chat screen inside the main

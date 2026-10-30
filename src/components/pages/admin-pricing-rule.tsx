@@ -66,10 +66,6 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
-import { navItems } from "@/lib/items/navItems";
-import { Navbar } from '@/components/shared/layout/testNavbar';
-import { Brand } from '@/lib/items/brand';
-import { useAdminActions } from '@/hooks/useAdminActions';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -140,7 +136,6 @@ const MOCK_PRICING_RULE = {
 };
 
 export default function AdminPricingRulePage() {
-  const { actionItems, signOut } = useAdminActions();
   const [sampleMiles, setSampleMiles] = useState(142);
   const [quotePreview, setQuotePreview] = useState({
     base: 276.9,
@@ -221,13 +216,6 @@ export default function AdminPricingRulePage() {
           a stale hard-coded item list (no Support, Content, Reports, Config,
           Audit Logs), no Support unread badge, and its own sign-out flow.
           The shared navbar inherits all of it and stays in sync forever. */}
-      <Navbar
-        brand={<Brand />}
-        items={navItems}
-        actions={actionItems}
-        onSignOut={signOut}
-        title="Admin"
-      />
       <main className="w-full max-w-[1440px] mx-auto px-6 lg:px-8 py-10 lg:py-12">
         {/* Top */}
         <section className="flex flex-col xl:flex-row xl:items-start xl:justify-between gap-6">

@@ -54,10 +54,6 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Navbar } from "../shared/layout/testNavbar";
-import { Brand } from "@/lib/items/brand";
-import { useAdminActions } from "@/hooks/useAdminActions";
-import { navItems } from "@/lib/items/navItems";
 
 const API_URL = import.meta.env.VITE_API_URL;
 
@@ -299,7 +295,6 @@ const SafeNumberInput = ({
 
 export default function AdminReferralProgramPage() {
   const { theme, setTheme } = useTheme();
-  const { actionItems, signOut } = useAdminActions();
 
   // ── Config state ──
   const [config, setConfig] = useState<ReferralConfig | null>(null);
@@ -902,13 +897,6 @@ export default function AdminReferralProgramPage() {
 
   return (
     <div className="min-h-screen bg-background-light dark:bg-background-dark font-sans antialiased text-slate-900 dark:text-white">
-      <Navbar
-        brand={<Brand />}
-        items={navItems}
-        actions={actionItems}
-        onSignOut={signOut}
-        title="Admin"
-      />
 
       <main className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 py-8 lg:py-12 space-y-8">
         {/* ── Page header ── */}

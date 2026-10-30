@@ -11,10 +11,6 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Navbar } from '@/components/shared/layout/testNavbar';
-import { Brand } from '@/lib/items/brand';
-import { navItems } from '@/lib/items/navItems';
-import { useAdminActions } from '@/hooks/useAdminActions';
 import { PricingConfigForm } from '@/components/pricing/PricingConfigForm';
 import { transformToPayload } from '@/hooks/pricing/usePricingConfigs'; // keep utility
 import {
@@ -32,7 +28,6 @@ interface AdminPricingConfigFormPageProps {
 }
 
 export default function AdminPricingConfigFormPage({ configId }: AdminPricingConfigFormPageProps) {
-  const { actionItems, signOut } = useAdminActions();
   const navigate = useNavigate();
 
   const isEditMode = !!configId;
@@ -146,13 +141,6 @@ export default function AdminPricingConfigFormPage({ configId }: AdminPricingCon
   if (isEditMode && (isLoading || !initialData)) {
     return (
       <div className="min-h-screen bg-background-light dark:bg-background-dark font-sans antialiased text-slate-900 dark:text-white">
-        <Navbar
-          brand={<Brand />}
-          items={navItems}
-          actions={actionItems}
-          onSignOut={signOut}
-          title="Admin"
-        />
 
         <main className="w-full max-w-[1440px] mx-auto px-6 lg:px-8 py-10 lg:py-12">
           <div className="space-y-6">
@@ -168,13 +156,6 @@ export default function AdminPricingConfigFormPage({ configId }: AdminPricingCon
   if (isEditMode && isError) {
     return (
       <div className="min-h-screen bg-background-light dark:bg-background-dark font-sans antialiased text-slate-900 dark:text-white">
-        <Navbar
-          brand={<Brand />}
-          items={navItems}
-          actions={actionItems}
-          onSignOut={signOut}
-          title="Admin"
-        />
 
         <main className="w-full max-w-[1440px] mx-auto px-6 lg:px-8 py-10 lg:py-12">
           <Alert className="bg-red-50 dark:bg-red-900/10 border-red-200 dark:border-red-900/30">
@@ -203,13 +184,6 @@ export default function AdminPricingConfigFormPage({ configId }: AdminPricingCon
   return (
     <div className="min-h-screen bg-background-light dark:bg-background-dark font-sans antialiased text-slate-900 dark:text-white">
       {/* Header */}
-      <Navbar
-        brand={<Brand />}
-        items={navItems}
-        actions={actionItems}
-        onSignOut={signOut}
-        title="Admin"
-      />
 
       <main className="w-full max-w-[1440px] mx-auto px-6 lg:px-8 py-10 lg:py-12">
         {/* Top header */}

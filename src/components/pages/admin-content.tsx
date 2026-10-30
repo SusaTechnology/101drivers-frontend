@@ -11,10 +11,6 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent } from '@/components/ui/card'
-import { Navbar } from '../shared/layout/testNavbar'
-import { navItems } from '@/lib/items/navItems'
-import { Brand } from '@/lib/items/brand'
-import { useAdminActions } from '@/hooks/useAdminActions'
 import { RichTextEditor } from '@/components/shared/RichTextEditor'
 import { authFetch } from '@/lib/tanstack/dataQuery'
 import { useQueryClient } from '@tanstack/react-query'
@@ -222,7 +218,6 @@ const CONTENT_SECTIONS = [
 ]
 
 export default function AdminContentPage() {
-  const { actionItems, signOut } = useAdminActions()
   const queryClient = useQueryClient()
   const [activeKey, setActiveKey] = useState('agreement')
   const [content, setContent] = useState<string>('')
@@ -336,7 +331,6 @@ export default function AdminContentPage() {
 
   return (
     <div className="min-h-screen bg-background-light dark:bg-background-dark">
-      <Navbar brand={<Brand />} items={navItems} actions={actionItems} onSignOut={signOut} title="Admin" />
 
       <main className="max-w-[1200px] mx-auto px-6 py-6">
         {/* Header — sticky below the navbar so Save Changes is always visible.

@@ -96,7 +96,6 @@ import {
 } from '@/components/ui/dialog';
 import { Skeleton } from '@/components/ui/skeleton';
 import { PhotoDialog, usePhotoUpload, downloadImageAsFile } from '@/components/ui/photo-dialog';
-import { useAdminActions } from '@/hooks/useAdminActions';
 import { CustomerPricingCard } from '@/components/admin/CustomerPricingCard';
 import PostpaidBillingCard from '@/components/admin/PostpaidBillingCard';
 import { BillingSwitchDialog, type SwitchEligibility } from '@/components/admin/BillingSwitchDialog';
@@ -138,9 +137,6 @@ import type { AdminUserDetail, AdminUpdateUserRequest, AdminInviteStatus, AdminA
 import { RequestMeetingDialog } from '@/components/shared/RequestMeetingDialog';
 import { effectiveAdminStatus } from '@/lib/adminStatus';
 import { ServiceAreaBadge } from '@/components/admin/ServiceAreaBadge';
-import { navItems } from '@/lib/items/navItems';
-import { Navbar } from '../shared/layout/testNavbar';
-import { Brand } from '@/lib/items/brand';
 
 // ==================== SCHEMAS ====================
 
@@ -537,7 +533,6 @@ function DetailSkeleton() {
 
 export default function AdminUserDetailPage({ userId }: AdminUserDetailPageProps) {
   const navigate = useNavigate();
-  const { actionItems, signOut: adminSignOut } = useAdminActions();
   const actorUserId = getActorUserId();
 
   // ══ Working-set pager (Previous / Next user) ══
@@ -1376,13 +1371,6 @@ export default function AdminUserDetailPage({ userId }: AdminUserDetailPageProps
           Support unread badge, no NotificationBell, no measured collapse,
           and a stale mobile menu. Now badge + bell + responsive drawer are
           inherited automatically and can never drift again. */}
-      <Navbar
-        brand={<Brand />}
-        items={navItems}
-        actions={actionItems}
-        onSignOut={adminSignOut}
-        title="Admin"
-      />
 
       <main className="w-full max-w-[1440px] mx-auto px-6 lg:px-8 py-10 lg:py-12">
         {/* Breadcrumb + working-set pager */}

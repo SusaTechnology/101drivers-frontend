@@ -32,7 +32,7 @@ import React, {
   useState,
   type ReactNode,
 } from 'react';
-import { Link } from '@tanstack/react-router';
+import { Link, useRouterState } from '@tanstack/react-router';
 import { cn } from '@/lib/utils';
 import { Menu } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -87,6 +87,15 @@ export function Navbar({
 }: NavbarProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
+
+  // The navbar is PERSISTENT now (mounted once by <AdminShell> in the
+  // router root, above <Outlet/>). It used to remount per page, which reset
+  // the mobile drawer as a side effect — keep that behavior explicitly:
+  // any navigation closes the drawer.
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
+  useEffect(() => {
+    setMenuOpen(false);
+  }, [pathname]);
 
   // The global Back button lives in the RIGHT hemisphere (last item of the
   // actions cluster, pinned nearest the right edge) and is the SAME

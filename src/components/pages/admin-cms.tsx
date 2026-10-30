@@ -17,10 +17,6 @@ import {
 } from "lucide-react";
 
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { Navbar } from "../shared/layout/testNavbar";
-import { navItems } from "@/lib/items/navItems";
-import { Brand } from "@/lib/items/brand";
-import { useAdminActions } from "@/hooks/useAdminActions";
 import { Button } from "@/components/ui/button";
 import {
   AlertDialog,
@@ -237,7 +233,6 @@ function clientValidate(draft: Draft, forPublish: boolean): string | null {
 }
 
 export default function AdminCmsPage() {
-  const { actionItems, signOut } = useAdminActions();
 
   const [section, setSection] = useState<CmsSection>("blog");
   const [draft, setDraft] = useState<Draft | null>(null);
@@ -458,7 +453,6 @@ export default function AdminCmsPage() {
 
     return (
       <div className="min-h-screen lg:h-[100dvh] lg:overflow-hidden flex flex-col bg-background-light dark:bg-background-dark">
-        <Navbar brand={<Brand />} items={navItems} actions={actionItems} onSignOut={signOut} title="Admin" />
 
         {/* Action bar — fixed in view at all times: on small screens it sticks
             under the navbar while the page scrolls; on the desktop split it is
@@ -558,7 +552,6 @@ export default function AdminCmsPage() {
   // ── List view ──
   return (
     <div className="min-h-screen bg-background-light dark:bg-background-dark">
-      <Navbar brand={<Brand />} items={navItems} actions={actionItems} onSignOut={signOut} title="Admin" />
       <main className="max-w-[1200px] mx-auto px-6 py-6">
         {/* Header */}
         <div className="flex flex-wrap items-center justify-between gap-3 mb-4">

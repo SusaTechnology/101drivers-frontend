@@ -88,10 +88,6 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { useAdminActions } from "@/hooks/useAdminActions";
-import { navItems } from '@/lib/items/navItems'
-import { Navbar } from "../shared/layout/testNavbar";
-import { Brand } from "@/lib/items/brand";
 import { performSignOut } from '@/lib/tanstack/dataQuery';
 // Filter form schema
 const filterSchema = z.object({
@@ -189,9 +185,7 @@ const MOCK_PRICING = {
   },
 };
 
-
 export default function AdminPricingPage() {
-  const { actionItems, signOut } = useAdminActions();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [importExportOpen, setImportExportOpen] = useState(false);
@@ -354,13 +348,6 @@ export default function AdminPricingPage() {
   return (
     <div className="min-h-screen bg-background-light dark:bg-background-dark font-sans antialiased text-slate-900 dark:text-white">
       {/* Header */}
-          <Navbar
-            brand={<Brand />}
-            items={navItems}
-            actions={actionItems}
-            onSignOut={signOut}
-            title="Admin"
-            />
 
       <main className="w-full max-w-[1440px] mx-auto px-6 lg:px-8 py-10 lg:py-12">
         {/* Top header */}

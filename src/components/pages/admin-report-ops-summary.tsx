@@ -13,10 +13,6 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Navbar } from "../shared/layout/testNavbar";
-import { navItems } from "@/lib/items/navItems";
-import { Brand } from "@/lib/items/brand";
-import { useAdminActions } from "@/hooks/useAdminActions";
 
 // Types
 interface OpsSummaryRecord {
@@ -89,7 +85,6 @@ const initialRecords: OpsSummaryRecord[] = [
 ];
 
 const AdminOpsSummaryReport: React.FC = () => {
-  const { actionItems, signOut } = useAdminActions();
 
   // State (could be expanded with filters in the future)
   const [records] = React.useState<OpsSummaryRecord[]>(initialRecords);
@@ -97,13 +92,6 @@ const AdminOpsSummaryReport: React.FC = () => {
   return (
     <div className="min-h-screen bg-background-light dark:bg-background-dark">
       {/* Navbar */}
-      <Navbar
-        brand={<Brand />}
-        items={navItems}
-        actions={actionItems}
-        onSignOut={signOut}
-        title="Admin"
-      />
 
       {/* Main Content */}
       <main className="max-w-[1440px] mx-auto px-6 lg:px-8 py-10">

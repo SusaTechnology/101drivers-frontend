@@ -28,10 +28,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { Navbar } from '../shared/layout/testNavbar';
-import { navItems } from '@/lib/items/navItems';
-import { Brand } from '@/lib/items/brand';
-import { useAdminActions } from '@/hooks/useAdminActions';
 import { useAdminPayments, usePaymentActions, useAdminPaymentSummary } from '@/hooks/useAdminPayments';
 import { downloadReport } from '@/hooks/useAdminReports';
 import { getUser } from '@/lib/tanstack/dataQuery';
@@ -175,7 +171,6 @@ function getStatusColor(status: PaymentStatus) {
 }
 
 export default function AdminPaymentsPage() {
-  const { actionItems, signOut } = useAdminActions();
 
   // ==================== DEEP-LINK FILTERS (dashboard urgent tiles) ====================
   // The dashboard's "Payment failures" tile links here as
@@ -537,13 +532,6 @@ export default function AdminPaymentsPage() {
   return (
     <div className="min-h-screen bg-background-light dark:bg-background-dark">
       {/* Header */}
-      <Navbar
-        brand={<Brand />}
-        items={navItems}
-        actions={actionItems}
-        onSignOut={signOut}
-        title="Admin"
-      />
 
       {/* Main Content */}
       <main className="max-w-[1440px] mx-auto px-6 lg:px-8 py-6 lg:py-8">

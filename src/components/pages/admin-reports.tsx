@@ -4,10 +4,6 @@ import { Link } from '@tanstack/react-router';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Navbar } from '../shared/layout/testNavbar';
-import { navItems } from '@/lib/items/navItems';
-import { Brand } from '@/lib/items/brand';
-import { useAdminActions } from '@/hooks/useAdminActions';
 import {
   LayoutDashboard as Analytics,
   RefreshCw,
@@ -75,18 +71,10 @@ const reportCards = [
 ];
 
 const AdminReportsHubPage: React.FC = () => {
-  const { actionItems, signOut } = useAdminActions();
 
   return (
     <div className="min-h-screen bg-background-light dark:bg-background-dark">
       {/* Navbar */}
-      <Navbar
-        brand={<Brand />}
-        items={navItems}
-        actions={actionItems}
-        onSignOut={signOut}
-        title="Admin"
-      />
 
       {/* Main Content */}
       <main className="max-w-[1440px] mx-auto px-6 lg:px-8 py-6 lg:py-8">

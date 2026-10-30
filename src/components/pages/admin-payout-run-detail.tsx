@@ -22,10 +22,6 @@ import {
 } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Navbar } from '../shared/layout/testNavbar';
-import { navItems } from '@/lib/items/navItems';
-import { Brand } from '@/lib/items/brand';
-import { useAdminActions } from '@/hooks/useAdminActions';
 import { usePayoutRunDetail, formatReportCurrency, formatReportDateTime } from '@/hooks/useAdminReports';
 import {
   AlertCircle,
@@ -47,14 +43,12 @@ const RESULT_STATUS_COLORS: Record<string, string> = {
 };
 
 export default function AdminPayoutRunDetailPage({ runId }: { runId: string }) {
-  const { actionItems, signOut } = useAdminActions();
   const { data, isLoading, isError, refetch } = usePayoutRunDetail(runId || null);
 
   const run = data?.run;
 
   return (
     <div className="min-h-screen bg-background-light dark:bg-background-dark">
-      <Navbar brand={<Brand />} items={navItems} actions={actionItems} onSignOut={signOut} title="Admin" />
 
       <main className="max-w-[1300px] mx-auto px-6 lg:px-8 py-6 lg:py-8">
         <section className="flex flex-col xl:flex-row xl:items-end xl:justify-between gap-4 mb-6">

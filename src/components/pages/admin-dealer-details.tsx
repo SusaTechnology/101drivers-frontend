@@ -89,10 +89,7 @@ import {
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Label } from '@/components/ui/label'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Brand } from '@/lib/items/brand'
-import { navItems } from '@/lib/items/navItems'
 import { getAdminActionItems } from '@/lib/items/adminActionItems'
-import { Navbar } from '../shared/layout/testNavbar'
 import { performSignOut } from '@/lib/tanstack/dataQuery';
 
 // Form schemas
@@ -180,8 +177,6 @@ const MOCK_DEALER = {
     },
   ],
 }
-
-
 
 export default function AdminDealerDetailsPage() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
@@ -299,7 +294,6 @@ export default function AdminDealerDetailsPage() {
 
     const Icon = icons[status] || AlertCircle
 
-
     return (
       <Badge variant="outline" className={cn("gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-black uppercase tracking-widest", colors[status] || colors[color || ''])}>
         <Icon className="w-3.5 h-3.5" />
@@ -314,11 +308,6 @@ export default function AdminDealerDetailsPage() {
   return (
     <div className="min-h-screen bg-background-light dark:bg-background-dark font-sans antialiased text-slate-900 dark:text-white">
       {/* Header */}
-      <Navbar
-              brand={<Brand />}
-              items={navItems}
-              actions={actionItems}
-            />
 
       <main className="w-full max-w-[1440px] mx-auto px-6 lg:px-8 py-10 lg:py-12">
         {/* Breadcrumb */}

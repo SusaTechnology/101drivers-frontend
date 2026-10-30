@@ -40,10 +40,6 @@ import {
   ChartTooltipContent,
   type ChartConfig,
 } from '@/components/ui/chart'
-import { Navbar } from '@/components/shared/layout/testNavbar'
-import { navItems } from '@/lib/items/navItems'
-import { Brand } from '@/lib/items/brand'
-import { useAdminActions } from '@/hooks/useAdminActions'
 import { useSocketEvent } from '@/hooks/useSocket'
 import { socketJoinStaffOps, socketLeaveStaffOps } from '@/lib/socket'
 import {
@@ -166,7 +162,6 @@ const RECORDS_TYPE_FILTERS = [
 ] as const
 
 export default function AdminMetricsPage() {
-  const { actionItems, signOut } = useAdminActions()
 
   const [range, setRange] = useState<MetricsRange>('30D')
   const [customFrom, setCustomFrom] = useState('')
@@ -267,13 +262,6 @@ export default function AdminMetricsPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      <Navbar
-        brand={<Brand />}
-        items={navItems}
-        actions={actionItems}
-        onSignOut={signOut}
-        title="Admin"
-      />
 
       <main className="w-full max-w-[1600px] mx-auto px-4 lg:px-5 py-4 lg:py-5 space-y-4">
         {/* Header + range controls */}

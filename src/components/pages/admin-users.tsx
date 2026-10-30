@@ -44,10 +44,6 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Navbar } from '../shared/layout/testNavbar';
-import { navItems } from '@/lib/items/navItems';
-import { Brand } from '@/lib/items/brand';
-import { useAdminActions } from '@/hooks/useAdminActions';
 import { useSocketEvent } from '@/hooks/useSocket';
 import {
   useAdminUsersV2,
@@ -812,7 +808,6 @@ function TableSkeleton({ rows = 5 }: { rows?: number }) {
 export default function AdminUsersPage() {
   const queryClient = useQueryClient();
 
-  const { actionItems, signOut } = useAdminActions();
   const actorUserId = getActorUserId();
   // Super-admin gate for the elevated row actions (Disable / Enable /
   // Make Super Admin / Downgrade) — FALLBACK 1 of 2 (the primary gate is
@@ -1595,13 +1590,6 @@ export default function AdminUsersPage() {
 
   return (
     <div className="min-h-screen bg-background-light dark:bg-background-dark">
-      <Navbar
-        brand={<Brand />}
-        items={navItems}
-        actions={actionItems}
-        onSignOut={signOut}
-        title="Admin"
-      />
 
       <main className="max-w-[1440px] mx-auto px-6 lg:px-8 py-6 lg:py-8">
         {/* Header */}

@@ -36,10 +36,6 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Navbar } from '../shared/layout/testNavbar'
-import { navItems } from '@/lib/items/navItems'
-import { Brand } from '@/lib/items/brand'
-import { useAdminActions } from '@/hooks/useAdminActions'
 import { useDataQuery, authFetch } from '@/lib/tanstack/dataQuery'
 import {
   FrozenDealerRow,
@@ -176,7 +172,6 @@ function SectionHeader({
 }
 
 export default function AdminBillingHealthPage() {
-  const { actionItems, signOut } = useAdminActions()
 
   const {
     data: health,
@@ -221,13 +216,6 @@ export default function AdminBillingHealthPage() {
   return (
     <div className="min-h-screen bg-background-light dark:bg-background-dark">
       {/* Header — same shell as the other admin pages */}
-      <Navbar
-        brand={<Brand />}
-        items={navItems}
-        actions={actionItems}
-        onSignOut={signOut}
-        title="Admin"
-      />
 
       <main className="max-w-[1440px] mx-auto px-6 lg:px-8 py-6 lg:py-8">
         {/* Page Header */}

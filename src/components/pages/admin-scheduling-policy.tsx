@@ -41,10 +41,6 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Navbar } from '../shared/layout/testNavbar';
-import { navItems } from '@/lib/items/navItems';
-import { Brand } from '@/lib/items/brand';
-import { useAdminActions } from '@/hooks/useAdminActions';
 import {
   // Scheduling Policies
   useSchedulingPolicies,
@@ -176,7 +172,6 @@ const DAY_OF_WEEK_OPTIONS = [
 // ==================== MAIN COMPONENT ====================
 
 export default function AdminSchedulingPolicyPage() {
-  const { actionItems, signOut } = useAdminActions();
 
   // Tab state
   const [activeTab, setActiveTab] = useState<string>('policies');
@@ -503,13 +498,6 @@ export default function AdminSchedulingPolicyPage() {
   // ==================== RENDER ====================
   return (
     <div className="min-h-screen bg-background-light dark:bg-background-dark">
-      <Navbar
-        brand={<Brand />}
-        items={navItems}
-        actions={actionItems}
-        onSignOut={signOut}
-        title="Admin"
-      />
 
       <main className="max-w-[1440px] mx-auto px-6 lg:px-8 py-6 lg:py-8">
         {/* Header */}

@@ -7,10 +7,6 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Navbar } from "../shared/layout/testNavbar";
-import { navItems } from "@/lib/items/navItems";
-import { Brand } from "@/lib/items/brand";
-import { useAdminActions } from "@/hooks/useAdminActions"; // adjust path as needed
 import {
   LayoutDashboard,
   Hash as Numbers,
@@ -53,7 +49,6 @@ const deliveryData = {
 };
 
 const AdminDeliveryDetails: React.FC = () => {
-  const { actionItems, signOut } = useAdminActions();
 
   // Handler functions (replace with actual logic)
   const handleAssignDriver = () => {
@@ -83,13 +78,6 @@ const AdminDeliveryDetails: React.FC = () => {
   return (
     <div className="min-h-screen bg-background-light dark:bg-background-dark">
       {/* Navbar */}
-      <Navbar
-        brand={<Brand />}
-        items={navItems}
-        actions={actionItems}
-        onSignOut={signOut}
-        title="Admin"
-      />
 
       {/* Main Content */}
       <main className="max-w-[1440px] mx-auto px-6 lg:px-8 py-10">

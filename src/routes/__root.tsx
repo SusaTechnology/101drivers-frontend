@@ -5,6 +5,7 @@ import { useEffect, useLayoutEffect } from 'react'
 import { PWAInstallPrompt } from '../components/pwa/PWAInstallPrompt'
 import { NotFoundScreen } from '../components/shared/NotFoundScreen'
 import { PageViewTracker } from '../components/shared/PageViewTracker'
+import { AdminShell } from '../components/shared/layout/AdminShell'
 
 /**
  * Pathname prefixes that should NOT be indexed by search engines.
@@ -137,6 +138,13 @@ export const Route = createRootRoute({
         {/* Product analytics (Task 72) — one PAGE_VIEW per navigation,
             fully silent, renders nothing. */}
         <PageViewTracker />
+        {/* Persistent admin chrome (navbar + ERP sidebar). Mounts once when
+            the user enters /admin* and STAYS MOUNTED across admin→admin
+            navigations — pages no longer render their own <Navbar>, so the
+            shell (and the RoutePending windows) swap only the content below
+            it. Renders nothing outside /admin* and on the four
+            bespoke-header admin pages. */}
+        <AdminShell />
         <Outlet />
         <PWAInstallPrompt />
         <TanStackDevtools

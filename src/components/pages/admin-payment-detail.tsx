@@ -47,10 +47,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { Navbar } from '../shared/layout/testNavbar';
-import { navItems } from '@/lib/items/navItems';
-import { Brand } from '@/lib/items/brand';
-import { useAdminActions } from '@/hooks/useAdminActions';
 import {
   useAdminPaymentDetail,
   usePaymentActions,
@@ -101,7 +97,6 @@ interface AdminPaymentDetailPageProps {
 }
 
 export default function AdminPaymentDetailPage({ paymentId }: AdminPaymentDetailPageProps) {
-  const { actionItems, signOut } = useAdminActions();
   const { data: payment, isLoading, isError, error, refetch } = useAdminPaymentDetail(paymentId);
   const paymentActions = usePaymentActions(paymentId);
   const user = getUser();
@@ -176,13 +171,6 @@ export default function AdminPaymentDetailPage({ paymentId }: AdminPaymentDetail
   if (isLoading) {
     return (
       <div className="min-h-screen bg-background-light dark:bg-background-dark">
-        <Navbar
-          brand={<Brand />}
-          items={navItems}
-          actions={actionItems}
-          onSignOut={signOut}
-          title="Admin"
-        />
         <main className="max-w-[1440px] mx-auto px-6 lg:px-8 py-10">
           <div className="flex items-center gap-2 mb-6">
             <Skeleton className="h-8 w-32" />
@@ -209,13 +197,6 @@ export default function AdminPaymentDetailPage({ paymentId }: AdminPaymentDetail
   if (isError || !payment) {
     return (
       <div className="min-h-screen bg-background-light dark:bg-background-dark">
-        <Navbar
-          brand={<Brand />}
-          items={navItems}
-          actions={actionItems}
-          onSignOut={signOut}
-          title="Admin"
-        />
         <main className="max-w-[1440px] mx-auto px-6 lg:px-8 py-10">
           <Card className="rounded-2xl border-rose-200 dark:border-rose-800 bg-rose-50 dark:bg-rose-900/10">
             <CardContent className="p-8 text-center">
@@ -412,13 +393,6 @@ export default function AdminPaymentDetailPage({ paymentId }: AdminPaymentDetail
 
   return (
     <div className="min-h-screen bg-background-light dark:bg-background-dark">
-      <Navbar
-        brand={<Brand />}
-        items={navItems}
-        actions={actionItems}
-        onSignOut={signOut}
-        title="Admin"
-      />
       <main className="max-w-[1440px] mx-auto px-6 lg:px-8 py-10">
         {/* Breadcrumb + header */}
         <div className="flex flex-wrap items-center gap-2 mb-6">

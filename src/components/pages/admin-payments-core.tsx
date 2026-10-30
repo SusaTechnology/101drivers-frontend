@@ -15,10 +15,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Navbar } from "../shared/layout/testNavbar";
-import { navItems } from "@/lib/items/navItems";
-import { Brand } from "@/lib/items/brand";
-import { useAdminActions } from "@/hooks/useAdminActions";
 import { CreditCard as Payments, Download, RefreshCw } from "lucide-react";
 
 // Types
@@ -98,7 +94,6 @@ const initialPayments: PaymentRecord[] = [
 ];
 
 const AdminPayments: React.FC = () => {
-  const { actionItems, signOut } = useAdminActions();
 
   // State
   const [payments, setPayments] = useState<PaymentRecord[]>(initialPayments);
@@ -207,13 +202,6 @@ const AdminPayments: React.FC = () => {
   return (
     <div className="min-h-screen bg-background-light dark:bg-background-dark">
       {/* Navbar */}
-      <Navbar
-        brand={<Brand />}
-        items={navItems}
-        actions={actionItems}
-        onSignOut={signOut}
-        title="Admin"
-      />
 
       {/* Main Content */}
       <main className="max-w-[1440px] mx-auto px-6 lg:px-8 py-10">

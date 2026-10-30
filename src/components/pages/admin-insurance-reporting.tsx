@@ -22,10 +22,6 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Navbar } from '../shared/layout/testNavbar';
-import { navItems } from '@/lib/items/navItems';
-import { Brand } from '@/lib/items/brand';
-import { useAdminActions } from '@/hooks/useAdminActions';
 import {
   useInsuranceMileageReport,
   formatReportMiles,
@@ -71,7 +67,6 @@ const DEFAULT_FILTERS: InsuranceReportFiltersState = {
 };
 
 export default function AdminInsuranceReportingPage() {
-  const { actionItems, signOut } = useAdminActions();
 
   // Filter state — shared shape with the carrier portal
   const [filters, setFilters] = useState<InsuranceReportFiltersState>(DEFAULT_FILTERS);
@@ -151,7 +146,6 @@ export default function AdminInsuranceReportingPage() {
 
   return (
     <div className="min-h-screen bg-background-light dark:bg-background-dark">
-      <Navbar brand={<Brand />} items={navItems} actions={actionItems} onSignOut={signOut} title="Admin" />
 
       <main className="max-w-[1440px] mx-auto px-6 lg:px-8 py-6 lg:py-8">
         <section className="flex flex-col xl:flex-row xl:items-end xl:justify-between gap-4 mb-6">

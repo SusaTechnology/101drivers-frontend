@@ -39,10 +39,6 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Navbar } from '../shared/layout/testNavbar';
-import { navItems } from '@/lib/items/navItems';
-import { Brand } from '@/lib/items/brand';
-import { useAdminActions } from '@/hooks/useAdminActions';
 import { usePayoutDetail, formatReportCurrency, formatReportDateTime } from '@/hooks/useAdminReports';
 import { authFetch, getUser } from '@/lib/tanstack/dataQuery';
 import {
@@ -76,7 +72,6 @@ const BATCH_STATUS_COLORS: Record<string, string> = {
 };
 
 export default function AdminPayoutDetailPage({ payoutId }: { payoutId: string }) {
-  const { actionItems, signOut } = useAdminActions();
   const { data, isLoading, isError, refetch } = usePayoutDetail(payoutId || null);
 
   // ── Mark Payout Paid (manual out-of-band settlement) ────────────
@@ -135,7 +130,6 @@ export default function AdminPayoutDetailPage({ payoutId }: { payoutId: string }
 
   return (
     <div className="min-h-screen bg-background-light dark:bg-background-dark">
-      <Navbar brand={<Brand />} items={navItems} actions={actionItems} onSignOut={signOut} title="Admin" />
 
       <main className="max-w-[1100px] mx-auto px-6 lg:px-8 py-6 lg:py-8">
         <section className="flex flex-col xl:flex-row xl:items-end xl:justify-between gap-4 mb-6">

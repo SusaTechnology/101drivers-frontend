@@ -4,10 +4,6 @@ import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { useQuery } from '@tanstack/react-query'
 import { authFetch, useDataQuery } from '@/lib/tanstack/dataQuery'
-import { Navbar } from '../shared/layout/testNavbar'
-import { navItems } from '@/lib/items/navItems'
-import { Brand } from '@/lib/items/brand'
-import { useAdminActions } from '@/hooks/useAdminActions'
 import { useCustomerLookup } from '@/hooks/useAdminDashboard'
 import { useDriverLookup, useDeliveryLookup, useUserLookup } from '@/hooks/useAdminDeliveries'
 import { useDebouncedValue } from '@/hooks/useDebounce'
@@ -1211,7 +1207,6 @@ const ALL_ACTIONS: AuditAction[] = [
 const PAGE_SIZE_OPTIONS = [10, 20, 50, 100]
 
 export default function AdminAuditLogsPage() {
-  const { actionItems, signOut } = useAdminActions()
 
   // Filter states (immediate values for inputs)
   const [filterInputs, setFilterInputs] = useState<{
@@ -1432,13 +1427,6 @@ export default function AdminAuditLogsPage() {
   if (isLoading) {
     return (
       <div className="min-h-screen bg-background-light dark:bg-background-dark">
-        <Navbar
-          brand={<Brand />}
-          items={navItems}
-          actions={actionItems}
-          onSignOut={signOut}
-          title="Admin"
-        />
         <main className="max-w-[1440px] mx-auto px-6 lg:px-8 py-10 lg:py-14 flex items-center justify-center">
           <div className="text-center">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-lime-500 mx-auto"></div>
@@ -1453,13 +1441,6 @@ export default function AdminAuditLogsPage() {
   if (isError) {
     return (
       <div className="min-h-screen bg-background-light dark:bg-background-dark">
-        <Navbar
-          brand={<Brand />}
-          items={navItems}
-          actions={actionItems}
-          onSignOut={signOut}
-          title="Admin"
-        />
         <main className="max-w-[1440px] mx-auto px-6 lg:px-8 py-10 lg:py-14 flex items-center justify-center">
           <Card className="max-w-md p-6 text-center border-slate-200 dark:border-slate-800">
             <AlertCircle className="h-12 w-12 text-red-500 mx-auto" />
@@ -1474,13 +1455,6 @@ export default function AdminAuditLogsPage() {
 
   return (
     <div className="min-h-screen bg-background-light dark:bg-background-dark">
-      <Navbar
-        brand={<Brand />}
-        items={navItems}
-        actions={actionItems}
-        onSignOut={signOut}
-        title="Admin"
-      />
 
       <main className="max-w-[1440px] mx-auto px-6 lg:px-8 py-6 lg:py-8">
         {/* Page header */}

@@ -41,10 +41,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Navbar } from '../shared/layout/testNavbar';
-import { navItems } from '@/lib/items/navItems';
-import { Brand } from '@/lib/items/brand';
-import { useAdminActions } from '@/hooks/useAdminActions';
 import { useAdminDeliveryDetail, useDeliveryActions, useDriverLookup, useClosePenaltyPreview } from '@/hooks/useAdminDeliveries';
 import {
   getStatusColor,
@@ -103,7 +99,6 @@ import { RefundDialog } from '@/components/admin/RefundDialog';
 import { PhotoDialog, downloadImageAsFile } from '@/components/ui/photo-dialog';
 
 export default function AdminDeliveryDetailsPage({ deliveryId }: { deliveryId: string }) {
-  const { actionItems, signOut } = useAdminActions();
   
   // Fetch delivery details
   const { data: delivery, isLoading, isError, error, refetch } = useAdminDeliveryDetail(deliveryId);
@@ -483,13 +478,6 @@ export default function AdminDeliveryDetailsPage({ deliveryId }: { deliveryId: s
   if (isLoading) {
     return (
       <div className="min-h-screen bg-background-light dark:bg-background-dark">
-        <Navbar
-          brand={<Brand />}
-          items={navItems}
-          actions={actionItems}
-          onSignOut={signOut}
-          title="Admin"
-        />
         <main className="max-w-[1440px] mx-auto px-6 lg:px-8 py-10">
           <div className="flex items-center gap-2 mb-6">
             <Skeleton className="h-8 w-32" />
@@ -516,13 +504,6 @@ export default function AdminDeliveryDetailsPage({ deliveryId }: { deliveryId: s
   if (isError || !delivery) {
     return (
       <div className="min-h-screen bg-background-light dark:bg-background-dark">
-        <Navbar
-          brand={<Brand />}
-          items={navItems}
-          actions={actionItems}
-          onSignOut={signOut}
-          title="Admin"
-        />
         <main className="max-w-[1440px] mx-auto px-6 lg:px-8 py-10">
           <Card className="rounded-2xl border-rose-200 dark:border-rose-800 bg-rose-50 dark:bg-rose-900/10">
             <CardContent className="p-8 text-center">
@@ -597,13 +578,6 @@ export default function AdminDeliveryDetailsPage({ deliveryId }: { deliveryId: s
   return (
     <div className="min-h-screen bg-background-light dark:bg-background-dark">
       {/* Header */}
-      <Navbar
-        brand={<Brand />}
-        items={navItems}
-        actions={actionItems}
-        onSignOut={signOut}
-        title="Admin"
-      />
 
       {/* Main Content */}
       <main className="max-w-[1440px] mx-auto px-6 lg:px-8 py-10">
