@@ -155,18 +155,22 @@ export default function DriverIssueReportPage() {
     enabled: !!deliveryId,
   })
 
-  // Create support request mutation
-  const createSupportMutation = useCreate<CreateSupportRequestPayload, CreateSupportRequestResponse>(
+  // Create support request mutation — TData is the RESPONSE type (what
+  // onSuccess receives), TVariables the payload (what mutate takes).
+  const createSupportMutation = useCreate<CreateSupportRequestResponse, CreateSupportRequestPayload>(
     `${import.meta.env.VITE_API_URL}/api/supportRequests/contact`,
     {
       onSuccess: (data) => {
         toast.success('Report submitted', {
-          description: 'Operations team has been notified. Check your inbox for updates.',
+          description: 'Operations team has been notified. Opening the conversation…',
         })
-        // Navigate back to active delivery or support detail
-        setTimeout(() => {
-          navigate({ to: '/driver-active' })
-        }, 2000)
+        // Land the driver straight in the new ticket's conversation — the
+        // topic they just created IS that chat's opening message, and every
+        // follow-up (including photo replies) happens there. Deep-linkable
+        // ?id= route — the same target NotificationBell uses.
+        // "as any": the route's validateSearch schema isn't reflected in the
+        // generated route-tree types (same cast the other search navigations use).
+        navigate({ to: '/driver-support-detail', search: { id: data.id } as any })
       },
       onError: (error: any) => {
         toast.error('Failed to submit report', {

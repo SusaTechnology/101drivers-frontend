@@ -18,6 +18,8 @@ import {
   XCircle,
   Gavel,
   HelpCircle,
+  ImagePlus,
+  Loader2,
   Clock,
   Truck,
   Calendar,
@@ -36,6 +38,7 @@ import { useSocketEvent } from '@/hooks/useSocket'
 import { socketJoinSupport, socketLeaveSupport } from '@/lib/socket'
 import { SupportMessageBody } from '@/components/shared/SupportMessageBody'
 import { PhotoDialog } from '@/components/ui/photo-dialog'
+import { useSupportAttachments } from '@/hooks/useSupportAttachments'
 import {
   SupportAvatar,
   SupportContactLine,
@@ -109,6 +112,22 @@ export default function DriverSupportDetailPage({ supportRequestId }: { supportR
   // Full-size preview for embedded attachment thumbnails
   const [photoDialogOpen, setPhotoDialogOpen] = useState(false)
   const [photoDialogSrc, setPhotoDialogSrc] = useState('')
+
+  // Photos mid-conversation: compress → upload to the user-scoped
+  // /uploads/support-attachment endpoint → thumbnail chips in the composer.
+  // The URLs ride inside the message text as an [Attachments] block (there
+  // is no attachments column on SupportRequest); SupportMessageBody lifts
+  // them back out as tappable thumbnails on every chat surface.
+  const {
+    attachments,
+    isUploading: isUploadingAttachment,
+    inputRef: photoInputRef,
+    openPicker,
+    handleChosen: handleAttachmentChosen,
+    removeAttachment,
+    clearAttachments,
+    buildAttachmentBlock,
+  } = useSupportAttachments()
   const { theme, setTheme } = useTheme()
   const user = getUser()
 
@@ -152,6 +171,18 @@ export default function DriverSupportDetailPage({ supportRequestId }: { supportR
     setPhotoDialogOpen(true)
   }
 
+  // ── The opening message must show exactly once ──
+  // createContactRequest persists the original text twice: on the ticket
+  // itself (message) AND as the conversation's first note. The note copy
+  // already renders as a regular chat bubble below, so rendering the
+  // ticket-level "opening bubble" too duplicated the first message on
+  // every role's conversation screen. When the thread carries the original
+  // text as a note, the opening bubble stays hidden (the message still
+  // renders once — as a message); a thread whose first note is missing
+  // keeps the bubble so the text never disappears.
+  const showOpeningBubble =
+    !!request?.message && !(request.notes ?? []).some((n) => n.message === request.message)
+
   // Reply mutation
   const replyMutation = useCreate<ReplySupportRequestPayload, ReplySupportRequestResponse>(
     `${import.meta.env.VITE_API_URL}/api/supportRequests/${requestId}/reply`,
@@ -159,6 +190,7 @@ export default function DriverSupportDetailPage({ supportRequestId }: { supportR
       onSuccess: () => {
         toast.success('Reply sent', { description: 'Your message has been added to the conversation.' })
         setReplyMessage('')
+        clearAttachments()
         refetch()
       },
       onError: (error: any) => {
@@ -177,12 +209,15 @@ export default function DriverSupportDetailPage({ supportRequestId }: { supportR
     toast.success(`${theme === 'dark' ? 'Light' : 'Dark'} mode activated`)
   }
 
+  // Reply — text and/or attached photos; the photo URLs are embedded into
+  // the message text as an [Attachments] block at send time.
   const handleReply = () => {
-    if (!replyMessage.trim()) {
-      toast.error('Message required', { description: 'Please enter your reply.' })
+    const text = replyMessage.trim()
+    if (!text && attachments.length === 0) {
+      toast.error('Message required', { description: 'Write a message or attach a photo.' })
       return
     }
-    replyMutation.mutate({ message: replyMessage.trim() })
+    replyMutation.mutate({ message: text + buildAttachmentBlock() })
   }
 
   // ── Chat-app shell helpers (the SAME UX as the admin conversation) ──
@@ -202,7 +237,7 @@ export default function DriverSupportDetailPage({ supportRequestId }: { supportR
   const handleComposerKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
       e.preventDefault()
-      if (!replyMutation.isPending && replyMessage.trim()) handleReply()
+      if (!replyMutation.isPending && !isUploadingAttachment && (replyMessage.trim() || attachments.length > 0)) handleReply()
     }
   }
 
@@ -399,7 +434,12 @@ export default function DriverSupportDetailPage({ supportRequestId }: { supportR
                 )}
 
                 {/* Original request = the thread's first bubble — the
-                    driver's own message, WhatsApp-style. */}
+                    driver's own message, WhatsApp-style — but ONLY when the
+                    notes don't already carry the same text: the creation
+                    flow writes the opening message into the notes as the
+                    first chat message too, so rendering both copies showed
+                    the same text twice. */}
+                {showOpeningBubble && (
                 <div className="flex items-end gap-2 justify-end">
                   <div className="max-w-[75%] rounded-2xl px-4 py-3 shadow-sm bg-lime-500 text-slate-950 rounded-br-md">
                     <div className="flex items-center gap-2 mb-1">
@@ -417,6 +457,7 @@ export default function DriverSupportDetailPage({ supportRequestId }: { supportR
                     />
                   </div>
                 </div>
+                )}
 
                 {/* Conversation notes — same bubbles as before, now inside
                     the scrolling chat screen */}
@@ -526,30 +567,79 @@ export default function DriverSupportDetailPage({ supportRequestId }: { supportR
                 chrome. Enter sends, Shift+Enter adds a line. A closed or
                 resolved request gets the notice instead. */}
             {request.status !== 'CLOSED' && request.status !== 'RESOLVED' ? (
-              <div className="relative z-20 shrink-0 mt-2 rounded-2xl border bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-sm p-2 flex items-end gap-2">
-                <Textarea
-                  ref={composerRef}
-                  value={replyMessage}
-                  onChange={(e) => {
-                    setReplyMessage(e.target.value)
-                    autoGrowComposer()
-                  }}
-                  onKeyDown={handleComposerKeyDown}
-                  placeholder="Type your message..."
-                  rows={1}
-                  aria-label="Message"
-                  className="flex-1 min-h-[40px] max-h-32 resize-none rounded-xl border-0 shadow-none focus-visible:ring-0 dark:bg-transparent"
+              <div className="relative z-20 shrink-0 mt-2 rounded-2xl border bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-sm p-2">
+                {/* Hidden file picker for the attach button */}
+                <input
+                  ref={photoInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={handleAttachmentChosen}
                 />
-                <Button
-                  onClick={handleReply}
-                  disabled={replyMutation.isPending || !replyMessage.trim()}
-                  size="icon"
-                  aria-label="Send message"
-                  title="Send"
-                  className="h-9 w-9 shrink-0 rounded-xl bg-lime-500 text-slate-950 hover:bg-lime-600"
-                >
-                  <Send className="w-4 h-4" />
-                </Button>
+                {/* Pending photo chips — tap to preview, ✕ to remove */}
+                {(attachments.length > 0 || isUploadingAttachment) && (
+                  <div className="flex flex-wrap gap-2 px-1 pb-2">
+                    {attachments.map((url, idx) => (
+                      <div key={url} className="relative">
+                        <img
+                          src={url}
+                          alt={`Attachment ${idx + 1}`}
+                          onClick={() => openAttachmentPreview(url)}
+                          className="h-12 w-12 object-cover rounded-lg border border-slate-200 dark:border-slate-700 cursor-pointer hover:opacity-80 transition-opacity"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => removeAttachment(idx)}
+                          className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-slate-900 dark:bg-white text-white dark:text-slate-900 flex items-center justify-center shadow hover:bg-red-500 dark:hover:bg-red-500 dark:hover:text-white transition"
+                          aria-label="Remove attachment"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      </div>
+                    ))}
+                    {isUploadingAttachment && (
+                      <div className="h-12 w-12 rounded-lg border-2 border-dashed border-slate-300 dark:border-slate-600 flex items-center justify-center text-slate-400">
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      </div>
+                    )}
+                  </div>
+                )}
+                <div className="flex items-end gap-2">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={openPicker}
+                    disabled={isUploadingAttachment || replyMutation.isPending}
+                    aria-label="Attach a photo"
+                    title="Attach a photo"
+                    className="h-9 w-9 shrink-0 rounded-xl text-slate-500 hover:text-slate-900 hover:bg-slate-100 dark:text-slate-400 dark:hover:text-white dark:hover:bg-slate-800 transition"
+                  >
+                    <ImagePlus className="w-4 h-4" />
+                  </Button>
+                  <Textarea
+                    ref={composerRef}
+                    value={replyMessage}
+                    onChange={(e) => {
+                      setReplyMessage(e.target.value)
+                      autoGrowComposer()
+                    }}
+                    onKeyDown={handleComposerKeyDown}
+                    placeholder="Type your message..."
+                    rows={1}
+                    aria-label="Message"
+                    className="flex-1 min-h-[40px] max-h-32 resize-none rounded-xl border-0 shadow-none focus-visible:ring-0 dark:bg-transparent"
+                  />
+                  <Button
+                    onClick={handleReply}
+                    disabled={replyMutation.isPending || isUploadingAttachment || (!replyMessage.trim() && attachments.length === 0)}
+                    size="icon"
+                    aria-label="Send message"
+                    title="Send"
+                    className="h-9 w-9 shrink-0 rounded-xl bg-lime-500 text-slate-950 hover:bg-lime-600"
+                  >
+                    <Send className="w-4 h-4" />
+                  </Button>
+                </div>
               </div>
             ) : (
               <div className="shrink-0 mt-2 p-4 rounded-2xl bg-emerald-50 dark:bg-emerald-900/10 border border-emerald-100 dark:border-emerald-900/30 flex gap-3">

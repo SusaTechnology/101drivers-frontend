@@ -20,6 +20,8 @@ import {
   XCircle,
   Gavel,
   HelpCircle,
+  ImagePlus,
+  Loader2,
   Truck,
   User,
   Calendar,
@@ -33,6 +35,7 @@ import { useSocketEvent } from '@/hooks/useSocket'
 import { socketJoinSupport, socketLeaveSupport } from '@/lib/socket'
 import { SupportMessageBody } from '@/components/shared/SupportMessageBody'
 import { PhotoDialog } from '@/components/ui/photo-dialog'
+import { useSupportAttachments } from '@/hooks/useSupportAttachments'
 import {
   SupportAvatar,
   SupportContactLine,
@@ -141,6 +144,22 @@ export default function DealerSupportDetail({ supportRequestId }: DealerSupportD
   const [photoDialogOpen, setPhotoDialogOpen] = useState(false)
   const [photoDialogSrc, setPhotoDialogSrc] = useState('')
 
+  // Photos mid-conversation: compress → upload to the user-scoped
+  // /uploads/support-attachment endpoint → thumbnail chips in the composer.
+  // The URLs ride inside the message text as an [Attachments] block (there
+  // is no attachments column on SupportRequest); SupportMessageBody lifts
+  // them back out as tappable thumbnails on every chat surface.
+  const {
+    attachments,
+    isUploading: isUploadingAttachment,
+    inputRef: photoInputRef,
+    openPicker,
+    handleChosen: handleAttachmentChosen,
+    removeAttachment,
+    clearAttachments,
+    buildAttachmentBlock,
+  } = useSupportAttachments()
+
   // Determine customer type from roles array (NOT userType — that field
   // doesn't exist on the user object, so this was always false before).
   const isPrivateCustomer = user?.roles?.includes('PRIVATE_CUSTOMER') ?? false
@@ -198,6 +217,7 @@ export default function DealerSupportDetail({ supportRequestId }: DealerSupportD
       onSuccess: () => {
         toast.success('Reply sent', { description: 'Your message has been added to the conversation.' })
         setReplyMessage('')
+        clearAttachments()
         refetch()
       },
       onError: (error: any) => {
@@ -223,12 +243,15 @@ export default function DealerSupportDetail({ supportRequestId }: DealerSupportD
     toast.success(`${theme === 'dark' ? 'Light' : 'Dark'} mode activated`)
   }
 
+  // Reply — text and/or attached photos; the photo URLs are embedded into
+  // the message text as an [Attachments] block at send time.
   const handleReply = () => {
-    if (!replyMessage.trim()) {
-      toast.error('Message required', { description: 'Please enter your message.' })
+    const text = replyMessage.trim()
+    if (!text && attachments.length === 0) {
+      toast.error('Message required', { description: 'Write a message or attach a photo.' })
       return
     }
-    replyMutation.mutate({ message: replyMessage.trim() })
+    replyMutation.mutate({ message: text + buildAttachmentBlock() })
   }
 
   // Header
@@ -388,6 +411,16 @@ export default function DealerSupportDetail({ supportRequestId }: DealerSupportD
   // Public notes only (filter out internal notes for non-admin)
   const publicNotes = supportData.notes?.filter(note => !note.isInternal) || []
 
+  // The opening message must show exactly once: createContactRequest writes
+  // the original text both on the ticket AND as the conversation's first
+  // note — the note copy renders as a regular chat bubble below, so the
+  // "Original Request" card duplicated it. When the thread already carries
+  // the original text as a note, the ticket-level card stays hidden (the
+  // message still renders once — as a message); a thread whose first note
+  // is missing keeps the card so the text never disappears.
+  const showOpeningBubble =
+    !!supportData.message && !publicNotes.some((n) => n.message === supportData.message)
+
   // Viewport-locked chat layout: the page itself never scrolls — only the
   // message thread does — so the composer stays pinned at the bottom of the
   // screen at all times, WhatsApp-style. No Footer on this page.
@@ -453,7 +486,12 @@ export default function DealerSupportDetail({ supportRequestId }: DealerSupportD
             ref={scrollRef}
             className="flex-1 min-h-0 overflow-y-auto px-4 sm:px-5 py-4 space-y-3 bg-slate-100/70 dark:bg-slate-900/50"
           >
-            {/* Original request shown as the first message in the thread */}
+            {/* Original request shown as the first message in the thread —
+                but ONLY when the notes don't already carry the same text:
+                the creation flow writes the opening message into the notes
+                as the first chat message too, so rendering both copies
+                showed the same text twice. */}
+            {showOpeningBubble && (
             <div className="flex justify-start">
               <div className="max-w-[85%] rounded-2xl rounded-bl-md px-4 py-3 shadow-sm bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
                 <div className="flex flex-wrap items-center gap-2 mb-1">
@@ -474,6 +512,7 @@ export default function DealerSupportDetail({ supportRequestId }: DealerSupportD
                 />
               </div>
             </div>
+            )}
 
                   {publicNotes.map((note) => {
                     // Explicitly check each role — no "else" fallback
@@ -564,14 +603,61 @@ export default function DealerSupportDetail({ supportRequestId }: DealerSupportD
           {/* WhatsApp-style composer — lives inside the chat panel */}
           {supportData.status !== 'CLOSED' && supportData.status !== 'RESOLVED' ? (
             <div className="shrink-0 border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-3">
+              {/* Hidden file picker for the attach button */}
+              <input
+                ref={photoInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={handleAttachmentChosen}
+              />
+              {/* Pending photo chips — tap to preview, ✕ to remove */}
+              {(attachments.length > 0 || isUploadingAttachment) && (
+                <div className="flex flex-wrap gap-2 pb-2">
+                  {attachments.map((url, idx) => (
+                    <div key={url} className="relative">
+                      <img
+                        src={url}
+                        alt={`Attachment ${idx + 1}`}
+                        onClick={() => openAttachmentPreview(url)}
+                        className="h-12 w-12 object-cover rounded-lg border border-slate-200 dark:border-slate-700 cursor-pointer hover:opacity-80 transition-opacity"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => removeAttachment(idx)}
+                        className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-slate-900 dark:bg-white text-white dark:text-slate-900 flex items-center justify-center shadow hover:bg-red-500 dark:hover:bg-red-500 dark:hover:text-white transition"
+                        aria-label="Remove attachment"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    </div>
+                  ))}
+                  {isUploadingAttachment && (
+                    <div className="h-12 w-12 rounded-lg border-2 border-dashed border-slate-300 dark:border-slate-600 flex items-center justify-center text-slate-400">
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    </div>
+                  )}
+                </div>
+              )}
               <div className="flex items-end gap-2">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={openPicker}
+                  disabled={isUploadingAttachment || replyMutation.isPending}
+                  aria-label="Attach a photo"
+                  title="Attach a photo"
+                  className="h-10 w-10 shrink-0 rounded-full text-slate-500 hover:text-slate-900 hover:bg-slate-100 dark:text-slate-400 dark:hover:text-white dark:hover:bg-slate-800 transition"
+                >
+                  <ImagePlus className="h-4 w-4" />
+                </Button>
                 <Textarea
                   value={replyMessage}
                   onChange={(e) => setReplyMessage(e.target.value)}
                   onKeyDown={(e) => {
-                    if (e.key === 'Enter' && !e.shiftKey) {
+                    if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
                       e.preventDefault()
-                      handleReply()
+                      if (!replyMutation.isPending && !isUploadingAttachment && (replyMessage.trim() || attachments.length > 0)) handleReply()
                     }
                   }}
                   placeholder="Type a message..."
@@ -580,7 +666,7 @@ export default function DealerSupportDetail({ supportRequestId }: DealerSupportD
                 />
                 <Button
                   onClick={handleReply}
-                  disabled={replyMutation.isPending || !replyMessage.trim()}
+                  disabled={replyMutation.isPending || isUploadingAttachment || (!replyMessage.trim() && attachments.length === 0)}
                   size="icon"
                   aria-label="Send reply"
                   className="h-11 w-11 shrink-0 rounded-full bg-lime-500 text-slate-950 hover:bg-lime-600 shadow-lg shadow-lime-500/25"

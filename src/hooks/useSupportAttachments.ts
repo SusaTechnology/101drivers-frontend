@@ -79,6 +79,12 @@ export function useSupportAttachments() {
     setAttachments((prev) => prev.filter((_, i) => i !== index))
   }
 
+  // Reset the whole chip list — the conversation composers call this once a
+  // message goes out so the sent photos don't ride into the next reply.
+  const clearAttachments = () => {
+    setAttachments([])
+  }
+
   const openPreview = (url: string) => {
     setDialogSrc(url)
     setDialogOpen(true)
@@ -105,6 +111,7 @@ export function useSupportAttachments() {
     openPicker,
     handleChosen,
     removeAttachment,
+    clearAttachments,
     openPreview,
     setDialogOpen,
     buildAttachmentBlock,
