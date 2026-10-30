@@ -1,6 +1,6 @@
 // components/pages/admin-user-detail.tsx
 // Admin User Detail Page - Real API Integration
-import React, { useState, useCallback, useEffect, useMemo } from 'react';
+import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { Link, useNavigate } from '@tanstack/react-router';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -134,7 +134,7 @@ import {
   formatDateTime,
   getInitials,
 } from '@/types/users';
-import type { AdminUserDetail, AdminUpdateUserRequest, AdminInviteStatus } from '@/types/users';
+import type { AdminUserDetail, AdminUpdateUserRequest, AdminInviteStatus, AdminAction } from '@/types/users';
 import { RequestMeetingDialog } from '@/components/shared/RequestMeetingDialog';
 import { effectiveAdminStatus } from '@/lib/adminStatus';
 import { ServiceAreaBadge } from '@/components/admin/ServiceAreaBadge';
@@ -313,29 +313,84 @@ function KpiCard({
 }
 
 /**
+ * Human label for an audit-trail row. Most actions map 1:1 to their enum
+ * (DRIVER_APPROVE → "Driver approved"). The invite is logged as OTHER with
+ * the resulting driver status in afterJson (driverApproval.engine
+ * .inviteDriver), so the status disambiguates what OTHER actually did.
+ */
+function adminActionLabel(a: AdminAction): string {
+  const status = a.afterJson?.status;
+  switch (a.action) {
+    case 'DRIVER_APPROVE':
+      return 'Driver approved';
+    case 'DRIVER_SUSPEND':
+      return 'Driver suspended';
+    case 'DRIVER_UNSUSPEND':
+      return 'Driver unsuspended';
+    case 'DRIVER_HOLD':
+      return 'Driver put on hold';
+    case 'DRIVER_RELEASE':
+      return 'Driver hold released';
+    case 'DRIVER_MEETING_REQUEST':
+      return 'Meeting requested';
+    case 'USER_DISABLE':
+      return 'User disabled';
+    case 'USER_ENABLE':
+      return 'User enabled';
+    case 'DEALER_APPROVE':
+      return 'Dealer approved';
+    case 'DEALER_REJECT':
+      return 'Dealer rejected';
+    case 'OTHER':
+      if (status === 'INVITED') return 'Driver invited';
+      if (status === 'ON_HOLD') return 'Driver put on hold';
+      if (status === 'REJECTED') return 'Driver rejected';
+      if (status === 'SUSPENDED') return 'Driver suspended';
+      if (status) return `Driver status → ${status}`;
+      return 'Record updated';
+    default:
+      return a.action.replace(/_/g, ' ');
+  }
+}
+
+/**
  * Internal Notes — admin-only scratchpad on the Driver Profile page.
  * Backed by the standalone DriverInternalNote table (never a Driver
- * column), so no driver-facing endpoint can ever return it. Saves on
- * blur or via the small Save button; the driver never sees this card.
+ * column), so no driver-facing endpoint can ever return it.
+ *
+ * The saved note is SHOWN as a message — the input field only exists while
+ * editing (pre-filled with the saved text), and saving returns to the
+ * message view on the same spot. With no note saved yet the card shows an
+ * empty state and an "Add note" button.
  */
 function DriverInternalNotesCard({
   userId,
   initialNotes,
+  updatedAt,
 }: {
   userId: string;
   initialNotes: string | null;
+  updatedAt: string | null;
 }) {
-  const [draft, setDraft] = useState<string>(initialNotes ?? '');
   const [savedValue, setSavedValue] = useState<string>(initialNotes ?? '');
+  const [draft, setDraft] = useState<string>(initialNotes ?? '');
+  const [editing, setEditing] = useState<boolean>(false);
   const saveNotes = useSaveDriverInternalNotes();
 
   const dirty = draft !== savedValue;
+  const hasNote = savedValue.trim().length > 0;
 
-  // Server value wins after any refetch that brings different notes
-  // (lifecycle actions elsewhere on the page refetch the detail payload).
+  // Server value wins whenever a refetch brings DIFFERENT notes (lifecycle
+  // actions elsewhere on the page refetch the detail payload). Saving does
+  // NOT refetch (onSuccessInvalidate: false) — the local state above is
+  // what shows right after Save. Never clobbers an edit in progress.
+  const lastInitialRef = useRef(initialNotes);
   useEffect(() => {
+    if (initialNotes === lastInitialRef.current) return;
+    lastInitialRef.current = initialNotes;
     setDraft(initialNotes ?? '');
     setSavedValue(initialNotes ?? '');
+    setEditing(false);
   }, [initialNotes]);
 
   const persist = () => {
@@ -343,17 +398,14 @@ function DriverInternalNotesCard({
     saveNotes.mutate(
       { pathParams: { id: userId }, notes: draft },
       {
-        onSuccess: () => setSavedValue(draft),
+        onSuccess: () => {
+          setSavedValue(draft);
+          setEditing(false); // back to the message view, same spot
+        },
         onError: () => toast.error('Could not save internal notes'),
       }
     );
   };
-
-  const statusText = saveNotes.isPending
-    ? 'Saving…'
-    : dirty
-      ? 'Unsaved changes'
-      : 'Saved';
 
   return (
     <Card className="border-slate-200 dark:border-slate-800 shadow-lg overflow-hidden">
@@ -369,27 +421,74 @@ function DriverInternalNotesCard({
         </div>
       </CardHeader>
       <CardContent className="p-6 sm:p-7 space-y-3">
-        <Textarea
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          onBlur={persist}
-          rows={6}
-          placeholder="Private context for the admin team — call notes, decisions, follow-ups…"
-          className="rounded-xl min-h-[140px]"
-        />
-        <div className="flex items-center justify-between">
-          <span className="text-xs text-slate-400">{statusText}</span>
-          <Button
-            size="sm"
-            variant="outline"
-            className="rounded-xl"
-            disabled={!dirty || saveNotes.isPending}
-            onClick={persist}
-          >
-            <Save className="w-4 h-4 mr-1" />
-            Save
-          </Button>
-        </div>
+        {editing ? (
+          <>
+            <Textarea
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              rows={6}
+              autoFocus
+              placeholder="Private context for the admin team — call notes, decisions, follow-ups…"
+              className="rounded-xl min-h-[140px]"
+            />
+            <div className="flex items-center justify-end gap-2">
+              <Button
+                size="sm"
+                variant="outline"
+                className="rounded-xl"
+                disabled={saveNotes.isPending}
+                onClick={() => {
+                  setDraft(savedValue);
+                  setEditing(false);
+                }}
+              >
+                Cancel
+              </Button>
+              <Button
+                size="sm"
+                className="rounded-xl"
+                disabled={!dirty || saveNotes.isPending}
+                onClick={persist}
+              >
+                <Save className="w-4 h-4 mr-1" />
+                {saveNotes.isPending ? 'Saving…' : 'Save'}
+              </Button>
+            </div>
+          </>
+        ) : (
+          <>
+            {hasNote ? (
+              <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50 p-4">
+                <p className="whitespace-pre-wrap text-sm leading-relaxed text-slate-700 dark:text-slate-300">
+                  {savedValue}
+                </p>
+              </div>
+            ) : (
+              <div className="rounded-xl border border-dashed border-slate-300 dark:border-slate-700 p-4">
+                <p className="text-sm text-slate-400">
+                  No internal notes yet — click “Add note” to write one.
+                </p>
+              </div>
+            )}
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-slate-400">
+                {updatedAt ? `Last updated ${formatDateTime(updatedAt)}` : ''}
+              </span>
+              <Button
+                size="sm"
+                variant="outline"
+                className="rounded-xl"
+                onClick={() => {
+                  setDraft(savedValue);
+                  setEditing(true);
+                }}
+              >
+                <Edit className="w-4 h-4 mr-1" />
+                {hasNote ? 'Edit' : 'Add note'}
+              </Button>
+            </div>
+          </>
+        )}
       </CardContent>
     </Card>
   );
@@ -1877,13 +1976,16 @@ export default function AdminUserDetailPage({ userId }: AdminUserDetailPageProps
                 </CardContent>
               </Card>
 
-              {/* Admin-only Internal Notes — saved on blur or via the Save
-                  button; stored server-side in DriverInternalNote (never on
-                  Driver), so the driver can never see it. */}
+              {/* Admin-only Internal Notes — the saved note shows as a
+                  message; Edit swaps in a pre-filled field on the same
+                  spot, Save returns the message. Stored server-side in
+                  DriverInternalNote (never on Driver), so the driver can
+                  never see it. */}
               {user.driver && (
                 <DriverInternalNotesCard
                   userId={user.id}
                   initialNotes={user.driver.internalNotes ?? null}
+                  updatedAt={user.driver.internalNotesUpdatedAt ?? null}
                 />
               )}
               </div>
@@ -2822,7 +2924,10 @@ export default function AdminUserDetailPage({ userId }: AdminUserDetailPageProps
                             Action
                           </TableHead>
                           <TableHead className="text-[11px] font-black uppercase tracking-widest text-slate-500">
-                            Actor Type
+                            Admin
+                          </TableHead>
+                          <TableHead className="text-[11px] font-black uppercase tracking-widest text-slate-500">
+                            Email
                           </TableHead>
                           <TableHead className="text-[11px] font-black uppercase tracking-widest text-slate-500">
                             Reason
@@ -2837,11 +2942,18 @@ export default function AdminUserDetailPage({ userId }: AdminUserDetailPageProps
                             </TableCell>
                             <TableCell className="px-5 py-4">
                               <Badge variant="outline" className="text-xs font-bold">
-                                {action.action}
+                                {adminActionLabel(action)}
                               </Badge>
                             </TableCell>
-                            <TableCell className="px-5 py-4 text-sm text-slate-600 dark:text-slate-400">
-                              {action.actorType}
+                            <TableCell className="px-5 py-4 text-sm font-bold text-slate-700 dark:text-slate-300">
+                              {action.actor
+                                ? action.actor.fullName
+                                : action.actorType === 'SYSTEM'
+                                  ? 'System'
+                                  : '—'}
+                            </TableCell>
+                            <TableCell className="px-5 py-4 text-sm font-mono text-slate-600 dark:text-slate-400">
+                              {action.actor?.email || '—'}
                             </TableCell>
                             <TableCell className="px-5 py-4 text-sm text-slate-600 dark:text-slate-400">
                               {action.reason || '—'}

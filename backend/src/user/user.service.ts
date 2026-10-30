@@ -1593,10 +1593,19 @@ async getAdminUserDetail(id: string): Promise<any> {
   ] = await Promise.all([
     this.prisma.adminAuditLog.findMany({
       where: {
-        OR: [{ actorUserId: id }, { userId: id }],
+        OR: [
+          { actorUserId: id },
+          { userId: id },
+          // Driver/customer lifecycle rows (invite, approve, hold, meeting
+          // request, suspend…) are written with driverId/customerId and NO
+          // userId — without these branches the audit table on a driver or
+          // dealer page missed exactly the actions that matter there.
+          ...(user.driver ? [{ driverId: user.driver.id }] : []),
+          ...(user.customer ? [{ customerId: user.customer.id }] : []),
+        ],
       },
       orderBy: { createdAt: "desc" },
-      take: 10,
+      take: 20,
       select: {
         id: true,
         action: true,
@@ -1607,6 +1616,12 @@ async getAdminUserDetail(id: string): Promise<any> {
         driverId: true,
         reason: true,
         createdAt: true,
+        // Invite is logged as OTHER with the resulting status in afterJson
+        // (driverApproval.engine.inviteDriver) — the detail page decodes it
+        // into a human label ("Driver invited").
+        afterJson: true,
+        // The acting admin, for the "Admin" / "Email" columns.
+        actor: { select: { fullName: true, email: true } },
       },
     }),
     this.prisma.notificationEvent.findMany({

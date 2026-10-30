@@ -523,6 +523,11 @@ export interface AdminAction {
   driverId: string | null;
   reason: string | null;
   createdAt: string;
+  /** Invite rows are logged as OTHER with the resulting driver status here
+   *  (driverApproval.engine.inviteDriver) — used for the human label. */
+  afterJson?: { status?: string } | null;
+  /** The acting admin (null when the system performed the action). */
+  actor: { fullName: string; email: string } | null;
 }
 
 // ==================== REQUEST BODIES ====================
