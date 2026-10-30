@@ -4,11 +4,16 @@
  *
  * The backend validates a month-derived access key from `?key=…` links
  * and answers with a signed, httpOnly 30-day cookie. Because that cookie
- * is invisible to JavaScript (and, cross-origin, so is any mirror), the
- * router asks the API once per page load whether the door is open:
+ * is invisible to JavaScript (and some browsers refuse cross-site
+ * cookies outright), the door proves it is open three ways, in order:
  *
  *   - `?key=` present  → POST /api/admin-gate/unlock { key }
- *   - otherwise        → GET  /api/admin-gate/status
+ *                        (response also carries a signed token to store)
+ *   - mirror cookie    → admin_gate_ok=1, same-origin only, no network
+ *   - otherwise        → GET  /api/admin-gate/status — the API accepts
+ *                        the httpOnly cookie OR an x-admin-gate-token
+ *                        header with the stored token (cookie-blocked
+ *                        browsers still get through)
  *
  * Both endpoints are public and return no admin data — they only open or
  * refuse the door. Any failure means "locked", and the router bounces to
@@ -56,6 +61,54 @@ function shouldEarlyUnlock(pathname: string): boolean {
   );
 }
 
+/**
+ * Signed gate token — the fallback credential for browsers that block
+ * the cross-site gate cookie (iOS PWA standalone, Safari ITP, third-
+ * party cookies off). The unlock response returns the SAME signed value
+ * the cookie carries; the API validates either, so the door stays open
+ * across reloads even with zero cookies.
+ */
+const GATE_TOKEN_STORAGE_KEY = "admin_gate_token";
+
+function storeGateToken(token: unknown): void {
+  if (typeof token !== "string" || token.length === 0) return;
+  try {
+    window.localStorage.setItem(GATE_TOKEN_STORAGE_KEY, token);
+  } catch {
+    // Storage unavailable (private mode…) — the cookie remains primary.
+  }
+}
+
+function storedGateToken(): string | null {
+  try {
+    return window.localStorage.getItem(GATE_TOKEN_STORAGE_KEY);
+  } catch {
+    return null;
+  }
+}
+
+function clearGateToken(): void {
+  try {
+    window.localStorage.removeItem(GATE_TOKEN_STORAGE_KEY);
+  } catch {
+    // Ignore.
+  }
+}
+
+/**
+ * Same-origin deployments also get a JS-readable mirror cookie next to
+ * the httpOnly one — if it is present, the httpOnly one is too, and the
+ * door is open without touching the network.
+ */
+function hasMirrorCookie(): boolean {
+  return (
+    typeof document !== "undefined" &&
+    document.cookie
+      .split(";")
+      .some((entry) => entry.trim() === "admin_gate_ok=1")
+  );
+}
+
 let unlocked = false;
 let pendingUnlock: Promise<boolean> | null = null;
 
@@ -66,14 +119,30 @@ function postUnlock(key: string): Promise<boolean> {
     credentials: "include",
     body: JSON.stringify({ key }),
   })
-    .then((response) => {
+    .then(async (response) => {
       if (response.ok) {
+        try {
+          const body = (await response.json()) as { gateToken?: unknown };
+          storeGateToken(body.gateToken);
+        } catch {
+          // No JSON body — the cookie may still have landed.
+        }
         unlocked = true;
         return true;
       }
+      // Visible in DevTools for the owner: 502 = API down, 404 = the
+      // backend predates the gate module, 401 = wrong/expired key. All
+      // mean "locked" to a stranger — nothing sensitive is revealed.
+      console.warn(`[admin-gate] unlock rejected (HTTP ${response.status})`);
       return false;
     })
-    .catch(() => false);
+    .catch((error: unknown) => {
+      console.warn(
+        "[admin-gate] unlock unreachable:",
+        error instanceof Error ? error.message : error
+      );
+      return false;
+    });
 }
 
 if (typeof window !== "undefined") {
@@ -113,13 +182,28 @@ export async function ensureAdminGateUnlocked(
     if (ok) return true;
   }
 
+  // Same-origin mirror cookie: door open without touching the network.
+  if (hasMirrorCookie()) {
+    unlocked = true;
+    return true;
+  }
+
   try {
+    const headers: Record<string, string> = {};
+    const token = storedGateToken();
+    if (token) headers["x-admin-gate-token"] = token;
     const response = await fetch(STATUS_ENDPOINT, {
       credentials: "include",
+      headers,
     });
     if (response.ok) {
       unlocked = true;
       return true;
+    }
+    if (response.status === 401) {
+      // The server saw the token AND the cookie and rejected both — the
+      // stored token is stale (expired / rotated secret). Drop it.
+      clearGateToken();
     }
   } catch {
     // Network error — treat as locked.

@@ -1704,3 +1704,49 @@ Stage Summary:
   30-day cookie, and flows straight into sign-in and the dashboard.
   Resent invites behave the same. Month rollover is covered by the
   current+previous-month grace.
+
+Task ID: 28
+Agent: main agent (Super Z)
+Task: fix — the gate cookie never persisted on 101drivers.com (Domain mismatch) + signed-token fallback so the door survives cookie-blocked browsers
+
+Work Log:
+- USER REPORT: with the key from admin-gate:key the admin-signin URL
+  still bounced to the landing page, and (the requirement) once the
+  cookie is set, /auth/admin-signin WITHOUT the key must keep working.
+  It never did on 101drivers.com — root cause found in the shared
+  cookie options: getCookieOptionsFromRequest pins Domain=.techbee.et
+  on every https response. A Set-Cookie whose Domain doesn't match the
+  responding host is SILENTLY DROPPED by browsers, so even a 200 unlock
+  never left a cookie behind and every reload probed a locked door.
+- BACKEND (admin-gate.controller.ts): gate cookies are now HOST-ONLY —
+  the domain attribute is stripped from the shared options for the two
+  gate cookies only (auth cookies untouched). A host-only cookie set by
+  whatever host serves /api is always accepted and always echoed back
+  to that same host — correct on every deployment shape.
+  - unlock now ALSO returns the signed value in the body: { ok, gateToken }.
+  - status accepts the httpOnly cookie OR an x-admin-gate-token header
+    carrying that same signed value (isCookieValid validates either —
+    same <expiryMs>.<hmac>, same TTL cap, same kill switch).
+  - cors-cookie.util.ts: x-admin-gate-token (+capitalized) added to the
+    CORS allowedHeaders, next to the existing x-refresh-token fallback
+    (same browser limitation, same solution pattern).
+- FRONTEND (adminGate.ts): unlock stores gateToken in localStorage;
+  the status probe sends it as x-admin-gate-token; a same-origin
+  admin_gate_ok=1 mirror cookie now SHORT-CIRCUITS the status probe
+  (the controller comment always promised this, the code never did it);
+  a 401 on status clears a stale token. Unlock failures now console.warn
+  the HTTP status ([admin-gate] unlock rejected (HTTP 502/404/401)) so
+  the owner can self-diagnose in DevTools — 502 API down, 404 backend
+  predates the gate module, 401 key mismatch — without weakening the
+  gate for strangers (all three still bounce to landing).
+- NOT changed: ADMIN_GATE_SECRET handling, key derivation, month grace,
+  JWT + AdminGuard data protection. The gate remains a UI-privacy layer.
+- Gates: FE tsc 131 = baseline, vite build green (18.7s), backend tsc
+  2 = baseline, nest build OK. NOTE for deploy: backend must be rebuilt
+  AND restarted (new controller + CORS header list); FE hard refresh.
+
+Stage Summary:
+- On 101drivers.com the cookie now actually lands (host-only), and even
+  browsers that refuse the cookie stay unlocked via the signed token —
+  so "cookie set → /auth/admin-signin without the key" finally behaves
+  as designed. Unlock failures log their HTTP status in the console.

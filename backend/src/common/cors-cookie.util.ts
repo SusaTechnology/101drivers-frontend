@@ -52,6 +52,11 @@ export function configureCors(app: INestApplication) {
       // mode, Safari ITP, Chrome with third-party cookies disabled).
       "x-refresh-token",
       "X-Refresh-Token",
+      // Admin-gate token fallback: same story as the refresh cookie — the
+      // SPA presents the signed gate value it stored at unlock time when
+      // the browser refuses the cross-site gate cookie.
+      "x-admin-gate-token",
+      "X-Admin-Gate-Token",
     ],
   });
 }

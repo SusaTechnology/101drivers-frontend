@@ -46,7 +46,16 @@ export class AdminGateController {
       throw new UnauthorizedException("Invalid access key");
     }
 
-    const options = getCookieOptionsFromRequest(req);
+    // HOST-ONLY gate cookies — deliberately NOT the shared auth options'
+    // Domain=.techbee.et. A Set-Cookie whose Domain doesn't match the
+    // responding host (e.g. an /api proxy on 101drivers.com) is SILENTLY
+    // DROPPED by the browser, so the door would relock on every reload.
+    // The gate cookie only ever needs to travel back to the API host that
+    // set it — a host-only cookie does exactly that, on every shape of
+    // deployment. Policy is otherwise the shared one (httpOnly/secure/
+    // sameSite/maxAge).
+    const { domain: _gateCookieDomain, ...options } =
+      getCookieOptionsFromRequest(req);
     const { name, value, maxAgeMs } = this.adminGateService.issueCookie();
 
     // The real gate — httpOnly, JavaScript never sees it.
@@ -60,16 +69,38 @@ export class AdminGateController {
       maxAge: maxAgeMs,
     });
 
-    return { ok: true };
+    // Token fallback for browsers that refuse even a correct cross-site
+    // cookie (iOS PWA standalone, Safari ITP, third-party cookies off —
+    // the same limitation that already forced the x-refresh-token header):
+    // the SPA keeps this signed value in localStorage and presents it as
+    // an x-admin-gate-token header on GET /status. It is the SAME signed
+    // "<expiry>.<hmac>" value the cookie carries — nothing new to verify.
+    return { ok: true, gateToken: value };
   }
 
-  /** Is the gate cookie present and valid? 200 = open, 401 = locked. */
+  /**
+   * Is the gate credential present and valid? 200 = open, 401 = locked.
+   * Two accepted credentials, whichever the browser managed to keep:
+   *   1. the httpOnly admin_gate cookie (primary), or
+   *   2. the x-admin-gate-token header carrying the signed value the SPA
+   *      stored at unlock time (fallback for cookie-blocked browsers).
+   */
   @Get("status")
   status(@Req() req: Request) {
     const cookies = (
       req as unknown as { cookies?: Record<string, string | undefined> }
     ).cookies;
-    if (!this.adminGateService.isCookieValid(cookies?.[ADMIN_GATE_COOKIE])) {
+    const headers = (
+      req as unknown as { headers?: Record<string, unknown> }
+    ).headers;
+    const headerToken = headers?.["x-admin-gate-token"];
+
+    const valid =
+      this.adminGateService.isCookieValid(cookies?.[ADMIN_GATE_COOKIE]) ||
+      (typeof headerToken === "string" &&
+        this.adminGateService.isCookieValid(headerToken));
+
+    if (!valid) {
       throw new UnauthorizedException("Admin gate is locked");
     }
     return { ok: true };
