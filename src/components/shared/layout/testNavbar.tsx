@@ -32,10 +32,11 @@ import React, {
   useState,
   type ReactNode,
 } from 'react';
-import { Link } from '@tanstack/react-router';
+import { Link, useRouter, useRouterState } from '@tanstack/react-router';
 import { cn } from '@/lib/utils';
 import { Menu, ChevronLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { trackAdminPath, previousAdminPath } from '@/lib/navHistory';
 import { MobileMenuDrawer } from './MobileMenuDrawer';
 import { AppSidebar } from './app-sidebar';
 
@@ -91,6 +92,36 @@ export function Navbar({
 }: NavbarProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
+
+  // ── Global Back button — "take me to the page I came from" ──────────
+  // Every admin page renders this Navbar, so tracking the route here
+  // covers the whole admin surface with zero per-page wiring.
+  const router = useRouter();
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
+
+  useEffect(() => {
+    trackAdminPath(pathname);
+  }, [pathname]);
+
+  const prevPath = previousAdminPath(pathname);
+  // In-app memory first; the browser session history is the fallback
+  // (covers a reload that wiped the in-app stack).
+  const canGoBack =
+    prevPath !== null ||
+    (typeof window !== 'undefined' && window.history.length > 1);
+
+  const handleBack = useCallback(() => {
+    const prev = previousAdminPath(pathname);
+    if (prev) {
+      router.history.push(prev); // in-app: exactly the page before this one
+      return;
+    }
+    if (typeof window !== 'undefined' && window.history.length > 1) {
+      window.history.back(); // reload case: the browser remembers
+      return;
+    }
+    router.history.push('/admin-dashboard'); // last resort: admin home
+  }, [pathname, router]);
 
   const navSlotRef = useRef<HTMLDivElement>(null);
   const navRef = useRef<HTMLElement>(null);
@@ -155,6 +186,21 @@ export function Navbar({
               the AppSidebar owns navigation, so the top bar keeps just the
               brand + actions — the ERP shell layout. */}
           <div className="flex items-center gap-2 sm:gap-3 flex-1 min-w-0">
+            {/* Global back — EVERY admin page, all breakpoints. Goes to the
+                page the user actually came from (in-app route memory,
+                browser history as fallback). */}
+            <Button
+              variant="outline"
+              size="icon"
+              className="w-11 h-11 rounded-2xl shrink-0"
+              onClick={handleBack}
+              disabled={!canGoBack}
+              aria-label="Go back to the previous page"
+              title={prevPath ? `Back to ${prevPath}` : 'Back'}
+            >
+              <ChevronLeft className="w-5 h-5 text-primary" />
+            </Button>
+
             {/* Hamburger — rendered only while the nav does not fit */}
             <Button
               variant="outline"
