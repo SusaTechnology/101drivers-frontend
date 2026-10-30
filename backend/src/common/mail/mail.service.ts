@@ -2,6 +2,8 @@ import { Injectable, Logger } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import * as nodemailer from "nodemailer";
 
+import { AdminGateService } from "../../admin-gate/admin-gate.service";
+
 export type VerificationAudience =
   | "DRIVER"
   | "BUSINESS_CUSTOMER"
@@ -16,7 +18,10 @@ export class MailService {
   private readonly appDomain: string;
   private readonly smtpConfigured: boolean;
 
-  constructor(private readonly configService: ConfigService) {
+  constructor(
+    private readonly configService: ConfigService,
+    private readonly adminGateService: AdminGateService
+  ) {
     const host = this.configService.get<string>("SMTP_HOST");
     const port = Number(this.configService.get<string>("SMTP_PORT") ?? 587);
     const secure =
@@ -249,9 +254,26 @@ export class MailService {
   }): Promise<void> {
     const normalizedEmail = params.toEmail.trim().toLowerCase();
     const displayName = params.fullName?.trim() || "there";
+
+    // The admin UI sits behind the shared-secret gate (src/admin-gate):
+    // an /admin* URL without a valid gate cookie is bounced to the landing
+    // page. Carrying the current month's key on the invite link means the
+    // new admin's 30-day gate cookie lands on their very first click — the
+    // invited link IS the gate link, no extra "access URL" step to explain.
+    // If the gate secret is not configured the invite still goes out, just
+    // without the key (the gate key can be shared separately).
+    let gateKey: string | null = null;
+    try {
+      gateKey = this.adminGateService.monthKey();
+    } catch (error) {
+      this.logger.warn(
+        "Admin invite sent WITHOUT a gate key — admin gate secret is not configured.",
+        (error as Error).message
+      );
+    }
     const setupUrl = `${this.appDomain}/auth/accept-invite?token=${encodeURIComponent(
       params.token
-    )}`;
+    )}${gateKey ? `&key=${encodeURIComponent(gateKey)}` : ""}`;
 
     const subject = "Set up your 101 Drivers admin account";
 

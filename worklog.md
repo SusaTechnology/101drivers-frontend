@@ -1665,3 +1665,42 @@ Stage Summary:
   URL typed without them redirects to the public landing page. The key
   rotates by itself every month; one env change kills everything. Admin
   DATA remains protected by the existing JWT + role guards.
+
+Task ID: 27
+Agent: main agent (Super Z)
+Task: admin invite emails now carry the gate key — the invite link IS the gate link
+
+Work Log:
+- USER ASK: instead of sharing the keyed admin URL separately, the
+  invite email for a NEW admin should carry the key itself — one click
+  for the invitee, zero extra steps to explain.
+- BACKEND (one change point covers both flows): MailService now injects
+  AdminGateService (MailModule imports the leaf AdminGateModule — no
+  cycle). sendAdminInviteEmail appends `&key=<current month key>` to the
+  setup URL it builds — both the button href and the plain-text fallback
+  link, and BOTH call sites (inviteAdmin + resendInvite) go through this
+  builder. If the gate secret is missing the invite still goes out,
+  just keyless (warn logged) — email delivery must not depend on the
+  gate config.
+- FRONTEND: the early unlock in adminGate.ts previously fired only on
+  GATED paths, but /auth/accept-invite is intentionally public — so a
+  key on the invite link would have been ignored and the new admin
+  would have bounced to landing right after setting their password.
+  New EARLY_UNLOCK_PREFIXES = ["/auth/accept-invite"]: a ?key= there
+  fires the same module-eval unlock POST, the 30-day cookie lands on
+  the very first visit, and the post-setup navigate("/auth/admin-
+  signin") passes the gate via the in-memory flag (fresh loads pass via
+  the cookie). The invite page itself stays public for everyone.
+- SANITY-CHECKED with ts-node against the real service: 32-char key
+  validates, wrong-length and garbage rejected, the invite URL
+  round-trips its key through URL encoding, issued cookie validates.
+  Without a secret the service fails closed (Unauthorized) — re-tested
+  with ADMIN_GATE_SECRET set. Gates: backend tsc 2 = baseline, nest
+  build OK, FE tsc 131 = baseline, vite build green (19s).
+
+Stage Summary:
+- Inviting an admin now needs no separate gate step: the setup email's
+  "Set up my account" link unlocks the door on first click, sets the
+  30-day cookie, and flows straight into sign-in and the dashboard.
+  Resent invites behave the same. Month rollover is covered by the
+  current+previous-month grace.

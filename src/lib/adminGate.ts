@@ -40,6 +40,22 @@ export function isAdminGatePath(pathname: string): boolean {
   return GATED_ADMIN_PREFIXES.some((prefix) => pathname.startsWith(prefix));
 }
 
+/**
+ * Paths that are NOT gated but whose ?key= should still open the door.
+ * The admin invite email carries the current month's gate key on the
+ * setup link, so the new admin's 30-day cookie lands on this very first
+ * visit — before they ever reach a gated admin screen. The invite page
+ * itself stays public (a visitor without the key can still look at it).
+ */
+const EARLY_UNLOCK_PREFIXES = ["/auth/accept-invite"];
+
+function shouldEarlyUnlock(pathname: string): boolean {
+  return (
+    isAdminGatePath(pathname) ||
+    EARLY_UNLOCK_PREFIXES.some((prefix) => pathname.startsWith(prefix))
+  );
+}
+
 let unlocked = false;
 let pendingUnlock: Promise<boolean> | null = null;
 
@@ -62,7 +78,7 @@ function postUnlock(key: string): Promise<boolean> {
 
 if (typeof window !== "undefined") {
   const key = new URLSearchParams(window.location.search).get("key");
-  if (key && isAdminGatePath(window.location.pathname)) {
+  if (key && shouldEarlyUnlock(window.location.pathname)) {
     pendingUnlock = postUnlock(key);
   }
 }
