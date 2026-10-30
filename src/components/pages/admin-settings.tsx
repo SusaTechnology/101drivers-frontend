@@ -61,6 +61,7 @@ import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { AppSidebar } from '@/components/shared/layout/app-sidebar';
+import { AdminBackButton } from '@/components/shared/layout/AdminBackButton';
 import { navItems } from '@/lib/items/navItems';
 
 // Mock config data
@@ -475,6 +476,9 @@ export default function AdminSettingsHubPage() {
                 <Moon className="w-5 h-5" />
               )}
             </Button>
+
+            {/* The SAME back button every admin page has (right hemisphere). */}
+            <AdminBackButton />
 
             <Button
               onClick={handleSignOut}

@@ -29,12 +29,10 @@
 
 // @ts-nocheck
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { useNavigate } from '@tanstack/react-router';
 import { GoogleMap, Polygon, useJsApiLoader } from '@react-google-maps/api';
 import { toast } from 'sonner';
 import {
   MapPinned,
-  ArrowLeft,
   Loader2,
   Edit3,
   Save,
@@ -46,6 +44,7 @@ import {
   Info,
 } from 'lucide-react';
 import { AppSidebar } from '@/components/shared/layout/app-sidebar';
+import { AdminBackButton } from '@/components/shared/layout/AdminBackButton';
 import { navItems } from '@/lib/items/navItems';
 
 import { Button } from '@/components/ui/button';
@@ -125,7 +124,6 @@ function pathsToCoords(paths) {
 }
 
 export default function AdminServiceAreaPage() {
-  const navigate = useNavigate();
   const queryClient = useQueryClient();
 
   // ── Google Maps ──
@@ -306,9 +304,6 @@ export default function AdminServiceAreaPage() {
       {/* Top bar */}
       <header className="sticky top-0 z-20 border-b border-slate-200 dark:border-slate-800 bg-white/90 dark:bg-slate-900/90 backdrop-blur">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4 flex items-center gap-4">
-          <Button variant="outline" size="sm" className="rounded-xl" onClick={() => navigate({ to: '/admin-config' })}>
-            <ArrowLeft className="w-4 h-4 mr-1" /> Back
-          </Button>
           <div className="flex-1">
             <h1 className="text-lg font-black text-slate-900 dark:text-white flex items-center gap-2">
               <MapPinned className="w-5 h-5 text-emerald-500" />
@@ -323,6 +318,10 @@ export default function AdminServiceAreaPage() {
               The green pickup area — a driver&apos;s ZIP inside this polygon is eligible for first-level review. Badges are informational; status stays manual.
             </p>
           </div>
+
+          {/* The SAME back button every admin page has (right hemisphere) —
+              replaces the old hardcoded "Back" to /admin-config. */}
+          <AdminBackButton />
         </div>
       </header>
 

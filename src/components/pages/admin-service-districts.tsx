@@ -1,13 +1,11 @@
 // @ts-nocheck
 import React, { useState, useEffect, useCallback } from 'react';
-import { Link, useNavigate } from '@tanstack/react-router';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { useJsApiLoader } from '@react-google-maps/api';
 import { GOOGLE_MAPS_LIBRARIES, GOOGLE_MAPS_SCRIPT_ID } from '@/lib/google-maps-config';
 import {
   MapPin,
-  ArrowLeft,
   Trash2,
   Edit3,
   Power,
@@ -49,10 +47,10 @@ import {
   type ServiceDistrict,
 } from '@/hooks/useAdminServiceDistricts';
 import { AppSidebar } from '@/components/shared/layout/app-sidebar';
+import { AdminBackButton } from '@/components/shared/layout/AdminBackButton';
 import { navItems } from '@/lib/items/navItems';
 
 export default function AdminServiceDistrictsPage() {
-  const navigate = useNavigate();
   const [mounted, setMounted] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [districtToDelete, setDistrictToDelete] = useState<ServiceDistrict | null>(null);
@@ -162,14 +160,6 @@ export default function AdminServiceDistrictsPage() {
       <header className="sticky top-0 z-50 bg-white/85 dark:bg-slate-950/85 backdrop-blur-md border-b border-slate-200 dark:border-slate-800">
         <div className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 h-14 lg:h-16 flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <Button
-              variant="ghost"
-              size="icon"
-              className="rounded-xl"
-              onClick={() => navigate({ to: '/admin-config' })}
-            >
-              <ArrowLeft className="h-5 w-5" />
-            </Button>
             <div>
               <h1 className="text-lg font-black flex items-center gap-2">
                 <MapPin className="h-5 w-5 text-primary" />
@@ -189,6 +179,10 @@ export default function AdminServiceDistrictsPage() {
                 {inactiveCount} inactive
               </Badge>
             )}
+
+            {/* The SAME back button every admin page has (right hemisphere) —
+                replaces the old hardcoded arrow to /admin-config. */}
+            <AdminBackButton />
           </div>
         </div>
       </header>
