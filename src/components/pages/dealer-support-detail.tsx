@@ -1,6 +1,7 @@
 // Dealer Support Request Detail Page
 import React, { useState, useEffect, useRef } from 'react'
 import { Link, useNavigate, useLocation } from '@tanstack/react-router'
+import { useQueryClient } from '@tanstack/react-query'
 import { useTheme } from '@/lib/theme'
 import { toast } from 'sonner'
 import { Card, CardHeader, CardTitle } from '@/components/ui/card'
@@ -210,8 +211,15 @@ export default function DealerSupportDetail({ supportRequestId }: DealerSupportD
     setPhotoDialogOpen(true)
   }
 
-  // Reply mutation
-  const replyMutation = useCreate<ReplySupportRequestPayload, ReplySupportRequestResponse>(
+  // Reply mutation — after a reply the "my requests" list previews are
+  // stale (the list query caches for 5 minutes), so the list page would
+  // show the OLD last message when the dealer navigates back. Invalidate
+  // every /supportRequests/ query (list + counters) alongside refetch().
+  const queryClient = useQueryClient()
+  // TData is the RESPONSE type (what onSuccess receives), TVariables the
+  // payload (what mutate takes) — the swapped order made every mutate()
+  // call a pre-existing tsc error.
+  const replyMutation = useCreate<ReplySupportRequestResponse, ReplySupportRequestPayload>(
     `${import.meta.env.VITE_API_URL}/api/supportRequests/${id}/reply`,
     {
       onSuccess: () => {
@@ -219,6 +227,12 @@ export default function DealerSupportDetail({ supportRequestId }: DealerSupportD
         setReplyMessage('')
         clearAttachments()
         refetch()
+        queryClient.invalidateQueries({
+          predicate: (q) =>
+            Array.isArray(q.queryKey) &&
+            typeof q.queryKey[1] === 'string' &&
+            q.queryKey[1].includes('/supportRequests/'),
+        })
       },
       onError: (error: any) => {
         toast.error('Failed to send reply', { description: error.message || 'Please try again.' })
@@ -425,7 +439,13 @@ export default function DealerSupportDetail({ supportRequestId }: DealerSupportD
   // message thread does — so the composer stays pinned at the bottom of the
   // screen at all times, WhatsApp-style. No Footer on this page.
   return (
-    <div className="h-dvh overflow-hidden bg-slate-50 dark:bg-slate-950 flex flex-col">
+    <div data-viewport-lock className="h-dvh overflow-hidden bg-slate-50 dark:bg-slate-950 flex flex-col">
+      {/* data-viewport-lock zeroes the body's PWA min-height (styles.css) so
+          the document is EXACTLY the viewport — on screens shorter than
+          884px the old body floor added ~180px of dead page scroll under
+          this locked chat frame. The page itself never scrolls: the message
+          thread is the only scroller and the composer stays pinned at the
+          bottom (WhatsApp-style). */}
       <Header />
 
       <main className="flex-1 min-h-0 w-full max-w-[1000px] mx-auto px-4 sm:px-6 lg:px-8 py-5 flex flex-col">

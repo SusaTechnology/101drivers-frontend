@@ -1,6 +1,7 @@
 // Driver Issue Report Page - Updated with real API
 import React, { useState, useEffect } from 'react'
 import { Link, useNavigate, useLocation } from '@tanstack/react-router'
+import { useQueryClient } from '@tanstack/react-query'
 import { cn } from '@/lib/utils'
 import { useTheme } from '@/lib/theme'
 import { toast } from 'sonner'
@@ -157,12 +158,23 @@ export default function DriverIssueReportPage() {
 
   // Create support request mutation — TData is the RESPONSE type (what
   // onSuccess receives), TVariables the payload (what mutate takes).
+  // onSuccess invalidates every /supportRequests/ query BEFORE navigating:
+  // the list pages cache their /my response for 5 minutes, so without this
+  // the ticket just created is missing from "My Support Requests" when the
+  // driver comes back from the conversation (exactly the stale-list bug).
+  const queryClient = useQueryClient()
   const createSupportMutation = useCreate<CreateSupportRequestResponse, CreateSupportRequestPayload>(
     `${import.meta.env.VITE_API_URL}/api/supportRequests/contact`,
     {
       onSuccess: (data) => {
         toast.success('Report submitted', {
           description: 'Operations team has been notified. Opening the conversation…',
+        })
+        queryClient.invalidateQueries({
+          predicate: (q) =>
+            Array.isArray(q.queryKey) &&
+            typeof q.queryKey[1] === 'string' &&
+            q.queryKey[1].includes('/supportRequests/'),
         })
         // Land the driver straight in the new ticket's conversation — the
         // topic they just created IS that chat's opening message, and every

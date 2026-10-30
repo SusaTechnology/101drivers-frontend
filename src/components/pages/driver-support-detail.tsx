@@ -1,6 +1,7 @@
 // Driver Support Detail Page - View individual support request
 import React, { useState, useEffect, useRef } from 'react'
 import { Link, useNavigate, useLocation } from '@tanstack/react-router'
+import { useQueryClient } from '@tanstack/react-query'
 import { useTheme } from '@/lib/theme'
 import { toast } from 'sonner'
 import { Card, CardContent } from '@/components/ui/card'
@@ -183,8 +184,15 @@ export default function DriverSupportDetailPage({ supportRequestId }: { supportR
   const showOpeningBubble =
     !!request?.message && !(request.notes ?? []).some((n) => n.message === request.message)
 
-  // Reply mutation
-  const replyMutation = useCreate<ReplySupportRequestPayload, ReplySupportRequestResponse>(
+  // Reply mutation — after a reply the "my requests" list previews are
+  // stale (the list query caches for 5 minutes), so the list page would
+  // show the OLD last message when the driver navigates back. Invalidate
+  // every /supportRequests/ query (list + counters) alongside refetch().
+  const queryClient = useQueryClient()
+  // TData is the RESPONSE type (what onSuccess receives), TVariables the
+  // payload (what mutate takes) — the swapped order made every mutate()
+  // call a pre-existing tsc error.
+  const replyMutation = useCreate<ReplySupportRequestResponse, ReplySupportRequestPayload>(
     `${import.meta.env.VITE_API_URL}/api/supportRequests/${requestId}/reply`,
     {
       onSuccess: () => {
@@ -192,6 +200,12 @@ export default function DriverSupportDetailPage({ supportRequestId }: { supportR
         setReplyMessage('')
         clearAttachments()
         refetch()
+        queryClient.invalidateQueries({
+          predicate: (q) =>
+            Array.isArray(q.queryKey) &&
+            typeof q.queryKey[1] === 'string' &&
+            q.queryKey[1].includes('/supportRequests/'),
+        })
       },
       onError: (error: any) => {
         toast.error('Failed to send reply', { description: error.message || 'Please try again.' })
@@ -300,12 +314,19 @@ export default function DriverSupportDetailPage({ supportRequestId }: { supportR
   }
 
   return (
-    <div className="h-[calc(100dvh_-_4rem)] overflow-hidden flex flex-col bg-slate-50 dark:bg-slate-950 font-sans antialiased text-slate-900 dark:text-white">
+    <div data-viewport-lock className="h-dvh overflow-hidden flex flex-col bg-slate-50 dark:bg-slate-950 font-sans antialiased text-slate-900 dark:text-white">
       {/* Chat-app frame — the driver's own header (h-16 at every viewport)
-          is the top chrome, so the frame below it is exactly the viewport
-          minus the header. The page NEVER scrolls: the conversation screen
-          is the only scroller and the composer stays pinned at the bottom —
-          no scrolling to the end of the thread to find where to write. */}
+          is the top chrome and lives INSIDE this frame, so the frame is the
+          FULL viewport (h-dvh): header 4rem on top, the conversation takes
+          the rest, the composer lands exactly at the bottom of the screen.
+          (The old h-[calc(100dvh_-_4rem)] subtracted the header TWICE — it
+          left a dead 4rem strip under the composer.) data-viewport-lock
+          zeroes the body's PWA min-height (styles.css) so the document is
+          EXACTLY the viewport — on screens shorter than 884px the old body
+          floor added dead page scroll under the locked frame. The page
+          NEVER scrolls: the conversation screen is the only scroller and
+          the composer stays pinned at the bottom — no scrolling to the end
+          of the thread to find where to write. */}
       {/* Header */}
       <header className="shrink-0 sticky top-0 z-40 w-full bg-white/85 dark:bg-slate-950/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-800">
         <div className="max-w-[900px] mx-auto px-5 sm:px-6 h-16 flex items-center justify-between">

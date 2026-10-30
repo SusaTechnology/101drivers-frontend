@@ -239,6 +239,19 @@ html {
   text-size-adjust: 100%;
 }
 
+/* Viewport-locked chat screens (support conversation pages): the page
+   itself must NEVER scroll — only the message column and the detail
+   column do. The global PWA body min-height below (max(884px, 100dvh))
+   fights that: on any viewport shorter than 884px (laptops with browser
+   chrome, Windows 125% scaling) it forces the body taller than the
+   viewport-locked frame, leaving ~180px of dead scroll under the chat.
+   Any page that marks its root with [data-viewport-lock] opts the whole
+   document into an exact viewport-height body. Graceful degradation:
+   browsers without :has() simply keep the old body min-height. */
+body:has([data-viewport-lock]) {
+  min-height: 100dvh;
+}
+
 /* Scroll-lock compensation cancellation (the "page swings left/right when a
    dropdown opens" bug, round 2).
    Radix overlays (Select, Popover, Dialog, DropdownMenu) lock body scroll via

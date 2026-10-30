@@ -241,8 +241,13 @@ export default function AdminSupportDetailPage({ supportRequestId }: { supportRe
   const showOpeningBubble =
     !!request?.message && !(request.notes ?? []).some((n) => n.message === request.message)
 
-  // Reply mutation
-  const replyMutation = useCreate<ReplySupportRequestPayload, ReplySupportRequestResponse>(
+  // Mutations — TData is the RESPONSE type (what onSuccess receives),
+  // TVariables the payload (what mutate takes); the swapped order made every
+  // mutate() call a pre-existing tsc error. Each onSuccess also invalidates
+  // every /supportRequests/ query: the socket pings only reach the OTHER
+  // party's room, so the admin list page would otherwise keep its cached
+  // (stale) previews for 5 minutes after the admin replies/changes status.
+  const replyMutation = useCreate<ReplySupportRequestResponse, ReplySupportRequestPayload>(
     `${import.meta.env.VITE_API_URL}/api/supportRequests/${requestId}/reply`,
     {
       onSuccess: () => {
@@ -250,6 +255,12 @@ export default function AdminSupportDetailPage({ supportRequestId }: { supportRe
         setReplyMessage('')
         clearAttachments()
         refetch()
+        queryClient.invalidateQueries({
+          predicate: (q) =>
+            Array.isArray(q.queryKey) &&
+            typeof q.queryKey[1] === 'string' &&
+            q.queryKey[1].includes('/supportRequests/'),
+        })
       },
       onError: (error: any) => {
         toast.error('Failed to send reply', { description: error.message || 'Please try again.' })
@@ -258,13 +269,19 @@ export default function AdminSupportDetailPage({ supportRequestId }: { supportRe
   )
 
   // Internal note mutation
-  const internalNoteMutation = useCreate<AddInternalNotePayload, AddInternalNoteResponse>(
+  const internalNoteMutation = useCreate<AddInternalNoteResponse, AddInternalNotePayload>(
     `${import.meta.env.VITE_API_URL}/api/supportRequests/${requestId}/internal-note`,
     {
       onSuccess: () => {
         toast.success('Note added', { description: 'Internal note has been added.' })
         setInternalNote('')
         refetch()
+        queryClient.invalidateQueries({
+          predicate: (q) =>
+            Array.isArray(q.queryKey) &&
+            typeof q.queryKey[1] === 'string' &&
+            q.queryKey[1].includes('/supportRequests/'),
+        })
       },
       onError: (error: any) => {
         toast.error('Failed to add note', { description: error.message || 'Please try again.' })
@@ -273,13 +290,19 @@ export default function AdminSupportDetailPage({ supportRequestId }: { supportRe
   )
 
   // Change status mutation
-  const changeStatusMutation = useCreate<ChangeSupportStatusPayload, ChangeSupportStatusResponse>(
+  const changeStatusMutation = useCreate<ChangeSupportStatusResponse, ChangeSupportStatusPayload>(
     `${import.meta.env.VITE_API_URL}/api/supportRequests/${requestId}/status`,
     {
       onSuccess: () => {
         toast.success('Status updated', { description: 'Request status has been changed.' })
         setNewStatus('')
         refetch()
+        queryClient.invalidateQueries({
+          predicate: (q) =>
+            Array.isArray(q.queryKey) &&
+            typeof q.queryKey[1] === 'string' &&
+            q.queryKey[1].includes('/supportRequests/'),
+        })
       },
       onError: (error: any) => {
         toast.error('Failed to update status', { description: error.message || 'Please try again.' })
@@ -399,19 +422,23 @@ export default function AdminSupportDetailPage({ supportRequestId }: { supportRe
   }
 
   return (
-    <div className="min-h-[calc(100dvh_-_4rem)] lg:h-[calc(100dvh_-_5rem)] lg:min-h-0 lg:overflow-hidden flex flex-col bg-background-light dark:bg-background-dark font-sans antialiased text-slate-900 dark:text-white">
+    <div data-viewport-lock className="min-h-[calc(100dvh_-_4rem)] lg:h-[calc(100dvh_-_5rem)] lg:min-h-0 lg:overflow-hidden flex flex-col bg-background-light dark:bg-background-dark font-sans antialiased text-slate-900 dark:text-white">
       {/* Header */}
 
       {/* Chat-workspace shell. The navbar is persistent shell chrome ABOVE
           this page (AdminShell in the router root), so the frame's height is
           the viewport minus the navbar (h-16 mobile / h-20 desktop) — the
           old lg:h-dvh made the document 100dvh+80px: a dead scroll that cut
-          the composer's bottom below the fold. Desktop: the page NEVER
-          scrolls — the two columns own their own scrolling (chat screen
-          inside the main column, the whole aside on the right). Mobile: the
-          conversation is a bounded chat frame — strip fixed at its spot,
-          composer pinned at the viewport bottom, messages scrolling between
-          them — and the aside sits below the fold (window-scroll to it). */}
+          the composer's bottom below the fold. data-viewport-lock zeroes the
+          body's PWA min-height (styles.css) so the document is EXACTLY the
+          viewport: on screens shorter than 884px the old body floor added
+          ~180px of dead page scroll under the locked frame. Desktop: the
+          page NEVER scrolls — the two columns own their own scrolling (chat
+          screen inside the main column, the whole aside on the right).
+          Mobile: the conversation is a bounded chat frame — strip fixed at
+          its spot, composer pinned at the viewport bottom, messages
+          scrolling between them — and the aside sits below the fold
+          (window-scroll to it). */}
       <main className="w-full max-w-[1400px] mx-auto px-4 lg:px-5 py-3 lg:py-4 flex-1 lg:min-h-0 flex flex-col">
         {isLoading || isPlaceholderData ? (
           <div className="space-y-4">
@@ -433,7 +460,15 @@ export default function AdminSupportDetailPage({ supportRequestId }: { supportRe
             </CardContent>
           </Card>
         ) : (
-          <div className="flex-1 lg:min-h-0 grid grid-cols-1 lg:grid-cols-3 gap-4">
+          <div className="flex-1 lg:min-h-0 grid grid-cols-1 lg:grid-cols-3 lg:grid-rows-[minmax(0,1fr)] gap-4">
+            {/* lg:grid-rows-[minmax(0,1fr)] pins the single desktop row to the
+                frame's height. Without it the row is CONTENT-sized: a long
+                thread or a long aside inflates the row past the frame, the
+                grid overflows the root's clip and pushes the composer below
+                the fold — the exact "page scrolls / composer disappears"
+                bug. minmax(0,1fr) makes the row exact, so the aside's
+                lg:overflow-y-auto has a real bound and the chat column's
+                flex chain finally has the definite height it needs. */}
             {/* Main column — chat app. Bounded on ALL viewports so the
                 composer always lands at the bottom of the screen (no
                 scrolling to find where to write): on mobile the column's

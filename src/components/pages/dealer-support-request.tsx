@@ -1,6 +1,7 @@
 // Dealer Support Request Page
 import React, { useState, useEffect } from 'react'
 import { Link, useNavigate, useLocation } from '@tanstack/react-router'
+import { useQueryClient } from '@tanstack/react-query'
 import { useTheme } from '@/lib/theme'
 import { toast } from 'sonner'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -112,13 +113,25 @@ export default function DealerSupportRequest() {
     enabled: !!deliveryId,
   })
 
-  // Create support request mutation
-  const createSupportMutation = useCreate<CreateSupportRequestPayload, CreateSupportRequestResponse>(
+  // Create support request mutation — TData is the RESPONSE type (what
+  // onSuccess receives), TVariables the payload (what mutate takes).
+  // onSuccess invalidates every /supportRequests/ query BEFORE navigating:
+  // the list page caches its /my response for 5 minutes, so without this
+  // the ticket just created is missing from "My Support Requests" when the
+  // dealer navigates back (the same stale-list bug the driver flow had).
+  const queryClient = useQueryClient()
+  const createSupportMutation = useCreate<CreateSupportRequestResponse, CreateSupportRequestPayload>(
     `${import.meta.env.VITE_API_URL}/api/supportRequests/contact`,
     {
       onSuccess: (data) => {
         toast.success('Support request created', {
           description: 'We will get back to you shortly.',
+        })
+        queryClient.invalidateQueries({
+          predicate: (q) =>
+            Array.isArray(q.queryKey) &&
+            typeof q.queryKey[1] === 'string' &&
+            q.queryKey[1].includes('/supportRequests/'),
         })
         // Navigate to support detail or list
         navigate({ to: '/dealer-support-detail', state: { id: data.id } })
