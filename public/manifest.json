@@ -67,9 +67,13 @@
   "start_url": "/?source=pwa",
   "display": "standalone",
   "orientation": "portrait-primary",
-  "theme_color": "#a3e635",
-  "background_color": "#ffffff",
-  "categories": ["business", "logistics", "transportation"],
+  "theme_color": "#f8fafc",
+  "background_color": "#f8fafc",
+  "categories": [
+    "business",
+    "logistics",
+    "transportation"
+  ],
   "screenshots": [],
   "shortcuts": [
     {
@@ -77,14 +81,24 @@
       "short_name": "Dealer",
       "description": "Access your dealer dashboard",
       "url": "/auth/dealer-signin?userType=dealer",
-      "icons": [{ "src": "/icons/icon-96x96.png", "sizes": "96x96" }]
+      "icons": [
+        {
+          "src": "/icons/icon-96x96.png",
+          "sizes": "96x96"
+        }
+      ]
     },
     {
       "name": "Driver Portal",
       "short_name": "Driver",
       "description": "Access your driver portal",
       "url": "/driver-signin",
-      "icons": [{ "src": "/icons/icon-96x96.png", "sizes": "96x96" }]
+      "icons": [
+        {
+          "src": "/icons/icon-96x96.png",
+          "sizes": "96x96"
+        }
+      ]
     }
   ],
   "related_applications": [],

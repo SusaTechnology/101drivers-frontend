@@ -32,8 +32,12 @@
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="format-detection" content="telephone=no" />
     
-    <!-- Theme Colors -->
-    <meta name="theme-color" content="#a3e635" media="(prefers-color-scheme: light)" />
+    <!-- Theme Colors — MUST match the app theme (--background-light /
+         --background-dark), NOT the lime accent. In an installed PWA Android
+         tints BOTH system bars with theme-color, including the navigation
+         bar at the very bottom UNDER the app's bottom bar — lime here read
+         as a mystery green strip under the driver bottom nav. -->
+    <meta name="theme-color" content="#f8fafc" media="(prefers-color-scheme: light)" />
     <meta name="theme-color" content="#0f172a" media="(prefers-color-scheme: dark)" />
     <meta name="msapplication-TileColor" content="#a3e635" />
     

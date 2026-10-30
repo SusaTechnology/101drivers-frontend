@@ -164,7 +164,14 @@
   body {
     @apply bg-background text-foreground font-sans antialiased;
     letter-spacing: -0.011em;
-    min-height: max(884px, 100dvh);
+    /* min-height: 100dvh — NEVER taller than the viewport. The old template
+       value max(884px, 100dvh) made the DOCUMENT ~30-130px scrollable on
+       every phone shorter than 884 CSS px, so one unconsumed swipe slid the
+       whole app frame (in-flow headers, e.g. the driver map page's app bar)
+       off its position while fixed bottom navs stayed put. Every page that
+       needs fill already carries min-h-screen; nothing may rely on body
+       being taller than the screen. */
+    min-height: 100dvh;
   }
 
   h1,
@@ -197,6 +204,18 @@
 }
 .safe-area-pb {
   padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* Installed-PWA overscroll lock: no pull-to-refresh, no rubber-band, no
+   scroll chaining to the document. In standalone mode the app owns the full
+   viewport, so an edge swipe must never drag the page (that read as "the map
+   page's app bar will not stay fixed"). Scoped to display-mode: standalone
+   so the normal browser keeps native pull-to-refresh on the public site. */
+@media all and (display-mode: standalone) {
+  html,
+  body {
+    overscroll-behavior: none;
+  }
 }
 
 /* Fast taps on iOS (Safari + installed PWA).
