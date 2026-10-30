@@ -39,6 +39,7 @@ import { Button } from '@/components/ui/button';
 import { AdminBackButton } from './AdminBackButton';
 import { MobileMenuDrawer } from './MobileMenuDrawer';
 import { AppSidebar } from './app-sidebar';
+import { pageHeading } from '@/lib/items/pageHeading';
 
 export interface NavItem {
   label: string;
@@ -96,6 +97,13 @@ export function Navbar({
   useEffect(() => {
     setMenuOpen(false);
   }, [pathname]);
+
+  // "Where am I" heading (left hemisphere, next to the brand mark):
+  // gray breadcrumb sub-header over the bold page title. Derived from the
+  // pathname INSIDE this persistent shell — updates live on navigation,
+  // zero per-page wiring, no remount. (pageTitle, not title — the prop is
+  // the drawer's "Admin" label.)
+  const { crumb, title: pageTitle } = pageHeading(pathname);
 
   // The global Back button lives in the RIGHT hemisphere (last item of the
   // actions cluster, pinned nearest the right edge) and is the SAME
@@ -183,6 +191,34 @@ export function Navbar({
             </Button>
 
             {brand && <div className="flex items-center shrink-0">{brand}</div>}
+
+            {/* Vertical rule between the brand mark and the heading block
+                (hidden on the smallest screens where space is tight). */}
+            {brand && (
+              <div
+                className="hidden sm:block w-px h-9 bg-slate-200 dark:bg-slate-800 shrink-0"
+                aria-hidden="true"
+              />
+            )}
+
+            {/* Breadcrumb + page title — the "where am I" block, at the
+                brand's place in the left hemisphere. Gray sub-header line =
+                the breadcrumb path ("ADMIN / USERS"), bold line = the page
+                we are on. flex-1 min-w-0 so long titles truncate instead of
+                pushing the measured nav slot around — the slot measurement
+                simply sees the space that is left, so the existing
+                collapse/expand logic is unchanged. */}
+            <div
+              className="flex flex-col justify-center min-w-0 flex-1 gap-0.5"
+              data-testid="admin-page-heading"
+            >
+              <span className="text-[10px] sm:text-[11px] font-semibold uppercase tracking-widest text-slate-400 dark:text-slate-500 truncate leading-none">
+                {crumb}
+              </span>
+              <span className="text-sm sm:text-base font-extrabold text-slate-900 dark:text-white truncate leading-tight">
+                {pageTitle}
+              </span>
+            </div>
 
             {/* The slot IS the available space: flex-1 min-w-0. The nav
                 keeps its natural width (w-max) inside so overflow is
