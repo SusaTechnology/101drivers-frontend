@@ -341,7 +341,7 @@ export default function AdminSupportDetailPage({ supportRequestId }: { supportRe
   // as every other admin page; only the content area is the notice card.
   if (!requestId) {
     return (
-      <div className="min-h-screen bg-background-light dark:bg-background-dark font-sans antialiased text-slate-900 dark:text-white">
+      <div className="min-h-[calc(100dvh_-_4rem)] lg:min-h-[calc(100dvh_-_5rem)] bg-background-light dark:bg-background-dark font-sans antialiased text-slate-900 dark:text-white">
         <div className="flex items-center justify-center p-6">
           <Card className="w-full max-w-md border-slate-200 dark:border-slate-800">
             <CardContent className="p-6 text-center">
@@ -364,13 +364,19 @@ export default function AdminSupportDetailPage({ supportRequestId }: { supportRe
   }
 
   return (
-    <div className="min-h-dvh lg:h-dvh lg:overflow-hidden flex flex-col bg-background-light dark:bg-background-dark font-sans antialiased text-slate-900 dark:text-white">
+    <div className="min-h-[calc(100dvh_-_4rem)] lg:h-[calc(100dvh_-_5rem)] lg:min-h-0 lg:overflow-hidden flex flex-col bg-background-light dark:bg-background-dark font-sans antialiased text-slate-900 dark:text-white">
       {/* Header */}
 
-      {/* Chat-workspace shell: on desktop the page NEVER scrolls — the two
-          columns below own their own scrolling (chat screen inside the main
-          column, the whole aside on the right). On mobile it degrades to a
-          normal scrolling page. */}
+      {/* Chat-workspace shell. The navbar is persistent shell chrome ABOVE
+          this page (AdminShell in the router root), so the frame's height is
+          the viewport minus the navbar (h-16 mobile / h-20 desktop) — the
+          old lg:h-dvh made the document 100dvh+80px: a dead scroll that cut
+          the composer's bottom below the fold. Desktop: the page NEVER
+          scrolls — the two columns own their own scrolling (chat screen
+          inside the main column, the whole aside on the right). Mobile: the
+          conversation is a bounded chat frame — strip fixed at its spot,
+          composer pinned at the viewport bottom, messages scrolling between
+          them — and the aside sits below the fold (window-scroll to it). */}
       <main className="w-full max-w-[1400px] mx-auto px-4 lg:px-5 py-3 lg:py-4 flex-1 lg:min-h-0 flex flex-col">
         {isLoading || isPlaceholderData ? (
           <div className="space-y-4">
@@ -393,15 +399,18 @@ export default function AdminSupportDetailPage({ supportRequestId }: { supportRe
           </Card>
         ) : (
           <div className="flex-1 lg:min-h-0 grid grid-cols-1 lg:grid-cols-3 gap-4">
-            {/* Main column — chat app. The column never scrolls: a compact
-                chat-app header strip on top, the conversation screen takes
-                the rest (the only scroller), the composer pinned at the
-                bottom inside the surface. */}
-            <section className="lg:col-span-2 lg:min-h-0 flex flex-col">
+            {/* Main column — chat app. Bounded on ALL viewports so the
+                composer always lands at the bottom of the screen (no
+                scrolling to find where to write): on mobile the column's
+                height is the viewport minus navbar + page padding; on lg it
+                stretches to the grid cell. The column itself never scrolls:
+                header strip on top, the conversation screen takes the rest
+                (the only scroller), the composer pinned at the bottom. */}
+            <section className="h-[calc(100dvh_-_5.5rem)] lg:h-auto lg:col-span-2 lg:min-h-0 flex flex-col">
               {/* Chat-app header — "a little smaller than the navbar" strip
                   with the same content the old header cards had: identity,
                   subject, status + priority pills, refresh. */}
-              <div className="shrink-0 h-14 flex items-center gap-2.5 pl-1.5 pr-2 rounded-2xl border bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-sm">
+              <div className="relative z-20 shrink-0 h-14 flex items-center gap-2.5 pl-1.5 pr-2 rounded-2xl border bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-sm">
                 <Link
                   to="/admin-support-list"
                   aria-label="Back to support list"
@@ -451,7 +460,7 @@ export default function AdminSupportDetailPage({ supportRequestId }: { supportRe
                   the ONLY scroller in this column. */}
               <div
                 ref={chatScrollRef}
-                className="flex-1 min-h-[45vh] lg:min-h-0 mt-3 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-950/40 overflow-y-auto p-3 sm:p-4 space-y-3"
+                className="flex-1 min-h-0 mt-3 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-950/40 overflow-y-auto p-3 sm:p-4 space-y-3"
               >
                 {/* Original request = the thread's first bubble (the
                     standalone "Original Request" card is gone — its content
@@ -594,7 +603,7 @@ export default function AdminSupportDetailPage({ supportRequestId }: { supportRe
                   input (placeholder only) and the send button. Enter sends,
                   Shift+Enter adds a line. */}
               {request.status !== 'CLOSED' ? (
-                <div className="shrink-0 mt-2 rounded-2xl border bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-sm p-2 flex items-end gap-2">
+                <div className="relative z-20 shrink-0 mt-2 rounded-2xl border bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-sm p-2 flex items-end gap-2">
                   <Textarea
                     ref={composerRef}
                     value={replyMessage}
@@ -620,7 +629,7 @@ export default function AdminSupportDetailPage({ supportRequestId }: { supportRe
                   </Button>
                 </div>
               ) : (
-                <div className="shrink-0 mt-2 rounded-2xl border bg-slate-50 dark:bg-slate-900/60 border-slate-200 dark:border-slate-800 px-4 py-3 text-center text-xs font-semibold text-slate-400">
+                <div className="relative z-20 shrink-0 mt-2 rounded-2xl border bg-slate-50 dark:bg-slate-900/60 border-slate-200 dark:border-slate-800 px-4 py-3 text-center text-xs font-semibold text-slate-400">
                   This request is closed — change the status to reopen the conversation.
                 </div>
               )}

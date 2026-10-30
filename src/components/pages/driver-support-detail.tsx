@@ -1,9 +1,9 @@
 // Driver Support Detail Page - View individual support request
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { Link, useNavigate, useLocation } from '@tanstack/react-router'
 import { useTheme } from '@/lib/theme'
 import { toast } from 'sonner'
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
@@ -13,7 +13,6 @@ import {
   ArrowLeft,
   Menu,
   X,
-  Headphones,
   Package,
   CreditCard,
   XCircle,
@@ -25,7 +24,7 @@ import {
   AlertCircle,
   CheckCircle,
   Send,
-  Reply,
+  RefreshCw,
   Inbox,
   Home,
   Car,
@@ -46,6 +45,7 @@ import {
   type SupportRequestDetail,
   type SupportRequestCategory,
   type SupportRequestStatus,
+  type SupportRequestPriority,
   type ReplySupportRequestPayload,
   type ReplySupportRequestResponse,
 } from '@/types/support'
@@ -78,6 +78,14 @@ const statusColors: Record<SupportRequestStatus, string> = {
   IN_PROGRESS: 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300',
   RESOLVED: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300',
   CLOSED: 'bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-300',
+}
+
+// Priority colors — same mapping the admin conversation strip uses
+const priorityColors: Record<SupportRequestPriority, string> = {
+  LOW: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300',
+  NORMAL: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300',
+  HIGH: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300',
+  URGENT: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300',
 }
 
 // Bottom navigation items
@@ -114,6 +122,7 @@ export default function DriverSupportDetailPage({ supportRequestId }: { supportR
     isPlaceholderData,
     error,
     refetch,
+    isFetching,
   } = useDataQuery<SupportRequestDetail>({
     apiEndPoint: `${import.meta.env.VITE_API_URL}/api/supportRequests/${requestId}/detail`,
     noFilter: true,
@@ -176,6 +185,41 @@ export default function DriverSupportDetailPage({ supportRequestId }: { supportR
     replyMutation.mutate({ message: replyMessage.trim() })
   }
 
+  // ── Chat-app shell helpers (the SAME UX as the admin conversation) ──
+  // The conversation lives in its own scrolling screen, so new history must
+  // scroll THAT screen to the bottom — WhatsApp behavior. Container
+  // scrollTop (not scrollIntoView) so nothing else ever jumps.
+  const chatScrollRef = useRef<HTMLDivElement>(null)
+  const composerRef = useRef<HTMLTextAreaElement>(null)
+  const notesCount = request?.notes?.length ?? 0
+  useEffect(() => {
+    const el = chatScrollRef.current
+    if (el) el.scrollTop = el.scrollHeight
+  }, [notesCount, requestId])
+
+  // Chat convention: Enter sends, Shift+Enter adds a line, IME composition
+  // (the pause while typing CJK/emoji suggestions) never triggers a send.
+  const handleComposerKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
+      e.preventDefault()
+      if (!replyMutation.isPending && replyMessage.trim()) handleReply()
+    }
+  }
+
+  // Auto-grow the composer with its content (capped), and shrink it back
+  // once a sent message clears the field.
+  const autoGrowComposer = () => {
+    const el = composerRef.current
+    if (!el) return
+    el.style.height = 'auto'
+    el.style.height = `${Math.min(el.scrollHeight, 132)}px`
+  }
+  useEffect(() => {
+    if (replyMessage === '' && composerRef.current) {
+      composerRef.current.style.height = ''
+    }
+  }, [replyMessage])
+
   // Format date
   const formatDate = (isoString: string) => {
     const date = new Date(isoString)
@@ -221,9 +265,14 @@ export default function DriverSupportDetailPage({ supportRequestId }: { supportR
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 font-sans antialiased text-slate-900 dark:text-white">
+    <div className="h-[calc(100dvh_-_4rem)] overflow-hidden flex flex-col bg-slate-50 dark:bg-slate-950 font-sans antialiased text-slate-900 dark:text-white">
+      {/* Chat-app frame — the driver's own header (h-16 at every viewport)
+          is the top chrome, so the frame below it is exactly the viewport
+          minus the header. The page NEVER scrolls: the conversation screen
+          is the only scroller and the composer stays pinned at the bottom —
+          no scrolling to the end of the thread to find where to write. */}
       {/* Header */}
-      <header className="sticky top-0 z-40 w-full bg-white/85 dark:bg-slate-950/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-800">
+      <header className="shrink-0 sticky top-0 z-40 w-full bg-white/85 dark:bg-slate-950/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-800">
         <div className="max-w-[900px] mx-auto px-5 sm:px-6 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Link
@@ -261,7 +310,7 @@ export default function DriverSupportDetailPage({ supportRequestId }: { supportR
         </div>
       </header>
 
-      <main className="max-w-[900px] mx-auto px-5 sm:px-6 py-6 pb-28 space-y-6">
+      <main className="max-w-[900px] mx-auto w-full px-5 sm:px-6 py-3 flex-1 min-h-0 flex flex-col">
         {isLoading || isPlaceholderData ? (
           <>
             <Skeleton className="h-40 w-full rounded-3xl" />
@@ -279,88 +328,100 @@ export default function DriverSupportDetailPage({ supportRequestId }: { supportR
           </Card>
         ) : (
           <>
-            {/* Request header */}
-            <Card className="border-slate-200 dark:border-slate-800 shadow-lg">
-              <CardContent className="p-6 sm:p-7">
-                <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
-                  <div className="flex items-start gap-4">
-                    <div className="w-14 h-14 rounded-2xl bg-lime-500/15 flex items-center justify-center shrink-0 text-lime-500">
-                      {categoryIcons[request.category]}
-                    </div>
-                    <div>
-                      <Badge className={cn("font-bold mb-2", statusColors[request.status])}>
-                        {request.status.replace('_', ' ')}
-                      </Badge>
-                      <h1 className="text-xl font-black text-slate-900 dark:text-white">
-                        {request.subject}
-                      </h1>
-                      <div className="flex flex-wrap items-center gap-2 mt-2">
-                        <span className="text-xs text-slate-500 dark:text-slate-400">
-                          {categoryLabels[request.category]}
-                        </span>
-                        <span className="text-slate-300 dark:text-slate-600">•</span>
-                        <span className="text-xs text-slate-500 dark:text-slate-400">
-                          Created {formatDate(request.createdAt)} at {formatTime(request.createdAt)}
-                        </span>
-                      </div>
-                    </div>
+            {/* Chat-app column — the SAME conversation UI the admin support
+                screen uses: a compact header strip fixed at its spot under
+                the page header, the conversation screen as the ONLY scroller
+                between the strip and the composer, and the composer pinned
+                at the bottom of the screen (no scrolling to find where to
+                write). z-index on both fixed parts so messages never paint
+                over them. */}
+            <section className="flex-1 min-h-0 flex flex-col">
+              {/* Chat-app header strip — identity icon, subject, category +
+                  date line, status + priority pills, refresh. */}
+              <div className="relative z-20 shrink-0 h-14 flex items-center gap-2.5 pl-1.5 pr-2 rounded-2xl border bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-sm">
+                <div className="w-9 h-9 shrink-0 rounded-xl bg-lime-500/15 flex items-center justify-center text-lime-500">
+                  {categoryIcons[request.category]}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <h1 className="truncate text-sm font-bold leading-tight text-slate-900 dark:text-white">
+                    {request.subject}
+                  </h1>
+                  <div className="flex items-center gap-1.5 truncate text-[10px] font-semibold text-slate-400">
+                    <span className="truncate">{categoryLabels[request.category]}</span>
+                    <span aria-hidden>•</span>
+                    <span className="whitespace-nowrap">
+                      Created {formatDate(request.createdAt)} at {formatTime(request.createdAt)}
+                    </span>
                   </div>
                 </div>
+                <Badge className={cn("shrink-0 px-2 py-0 text-[9px] font-bold", statusColors[request.status])}>
+                  {request.status.replace('_', ' ')}
+                </Badge>
+                <Badge variant="outline" className={cn("shrink-0 px-2 py-0 text-[9px] font-bold", priorityColors[request.priority])}>
+                  {request.priority}
+                </Badge>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => refetch()}
+                  disabled={isFetching}
+                  aria-label="Refresh"
+                  title="Refresh"
+                  className="h-8 w-8 shrink-0 rounded-xl"
+                >
+                  <RefreshCw className={cn("w-4 h-4", isFetching && "animate-spin")} />
+                </Button>
+              </div>
 
-                {/* Related delivery */}
+              {/* The conversation screen — takes everything between the
+                  header strip and the composer and is the ONLY scroller in
+                  the column (the window itself never scrolls). */}
+              <div
+                ref={chatScrollRef}
+                className="flex-1 min-h-0 mt-3 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-950/40 overflow-y-auto p-3 sm:p-4 space-y-3"
+              >
+                {/* Related delivery — scrolls with the conversation */}
                 {request.delivery && (
-                  <div className="mt-4 p-4 rounded-2xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
-                    <div className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Related Delivery</div>
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <div className="font-bold text-slate-900 dark:text-white">
+                  <div className="p-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
+                    <div className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1.5">Related Delivery</div>
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="min-w-0">
+                        <div className="font-bold text-sm text-slate-900 dark:text-white">
                           #{request.delivery.id.slice(-6).toUpperCase()}
                         </div>
-                        <div className="text-sm text-slate-600 dark:text-slate-400">
+                        <div className="text-xs text-slate-600 dark:text-slate-400 truncate">
                           {request.delivery.pickupAddress?.split(',')[0]} → {request.delivery.dropoffAddress?.split(',')[0]}
                         </div>
                       </div>
-                      <Badge variant="outline">{request.delivery.status}</Badge>
+                      <Badge variant="outline" className="shrink-0">{request.delivery.status}</Badge>
                     </div>
                   </div>
                 )}
-              </CardContent>
-            </Card>
 
-            {/* Original message */}
-            <Card className="border-slate-200 dark:border-slate-800">
-              <CardHeader className="pb-3">
-                <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-xl bg-lime-500/15 flex items-center justify-center text-lime-500">
-                    <Headphones className="h-4 w-4" />
-                  </div>
-                  <div>
-                    <CardTitle className="text-base font-bold">Your Request</CardTitle>
-                    <CardDescription className="text-xs">
-                      {formatDate(request.createdAt)} at {formatTime(request.createdAt)}
-                    </CardDescription>
+                {/* Original request = the thread's first bubble — the
+                    driver's own message, WhatsApp-style. */}
+                <div className="flex items-end gap-2 justify-end">
+                  <div className="max-w-[75%] rounded-2xl px-4 py-3 shadow-sm bg-lime-500 text-slate-950 rounded-br-md">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="text-[10px] font-black uppercase tracking-wide text-slate-800/70">
+                        You
+                      </span>
+                      <span className="text-[10px] text-slate-700/60">
+                        {formatTime(request.createdAt)}
+                      </span>
+                    </div>
+                    <SupportMessageBody
+                      message={request.message}
+                      proseClassName="text-slate-900"
+                      onOpenImage={openAttachmentPreview}
+                    />
                   </div>
                 </div>
-              </CardHeader>
-              <CardContent>
-                <SupportMessageBody
-                  message={request.message}
-                  proseClassName="text-slate-700 dark:text-slate-300"
-                  onOpenImage={openAttachmentPreview}
-                />
-              </CardContent>
-            </Card>
 
-            {/* Conversation notes — WhatsApp-style chat */}
-            {request.notes && request.notes.length > 0 && (
-              <Card className="border-slate-200 dark:border-slate-800">
-                <CardHeader>
-                  <CardTitle className="text-base font-bold flex items-center gap-2">
-                    <Reply className="h-4 w-4" />
-                    Conversation ({request.notes.filter(n => !n.isInternal).length})
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3">
+                {/* Conversation notes — same bubbles as before, now inside
+                    the scrolling chat screen */}
+                {request.notes && request.notes.length > 0 && (
+                  <div className="space-y-3">
                   {request.notes.map((note) => {
                     if (note.isInternal) {
                       return (
@@ -456,51 +517,42 @@ export default function DriverSupportDetailPage({ supportRequestId }: { supportR
                       </div>
                     )
                   })}
-                </CardContent>
-              </Card>
-            )}
-
-            {/* Reply form - only if not closed */}
-            {request.status !== 'CLOSED' && request.status !== 'RESOLVED' && (
-              <Card className="border-slate-200 dark:border-slate-800">
-                <CardHeader>
-                  <CardTitle className="text-base font-bold">Add Reply</CardTitle>
-                  <CardDescription>
-                    Add more information or respond to Operations team.
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <Textarea
-                    value={replyMessage}
-                    onChange={(e) => setReplyMessage(e.target.value)}
-                    placeholder="Type your reply here..."
-                    rows={4}
-                    className="rounded-2xl"
-                  />
-                  <div className="flex justify-end gap-3">
-                    <Button
-                      variant="outline"
-                      onClick={() => setReplyMessage('')}
-                      className="rounded-2xl"
-                    >
-                      Clear
-                    </Button>
-                    <Button
-                      onClick={handleReply}
-                      disabled={replyMutation.isPending || !replyMessage.trim()}
-                      className="rounded-2xl bg-lime-500 text-slate-950 hover:bg-lime-600 font-bold gap-2"
-                    >
-                      {replyMutation.isPending ? 'Sending...' : 'Send Reply'}
-                      <Send className="w-4 h-4" />
-                    </Button>
                   </div>
-                </CardContent>
-              </Card>
-            )}
+                )}
+              </div>
 
-            {/* Status info */}
-            {(request.status === 'RESOLVED' || request.status === 'CLOSED') && (
-              <div className="p-4 rounded-2xl bg-emerald-50 dark:bg-emerald-900/10 border border-emerald-100 dark:border-emerald-900/30 flex gap-3">
+            {/* Composer — pinned at the bottom of the screen (inside the
+                chat column), WhatsApp-style: input + send, no "Add Reply"
+                chrome. Enter sends, Shift+Enter adds a line. A closed or
+                resolved request gets the notice instead. */}
+            {request.status !== 'CLOSED' && request.status !== 'RESOLVED' ? (
+              <div className="relative z-20 shrink-0 mt-2 rounded-2xl border bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-sm p-2 flex items-end gap-2">
+                <Textarea
+                  ref={composerRef}
+                  value={replyMessage}
+                  onChange={(e) => {
+                    setReplyMessage(e.target.value)
+                    autoGrowComposer()
+                  }}
+                  onKeyDown={handleComposerKeyDown}
+                  placeholder="Type your message..."
+                  rows={1}
+                  aria-label="Message"
+                  className="flex-1 min-h-[40px] max-h-32 resize-none rounded-xl border-0 shadow-none focus-visible:ring-0 dark:bg-transparent"
+                />
+                <Button
+                  onClick={handleReply}
+                  disabled={replyMutation.isPending || !replyMessage.trim()}
+                  size="icon"
+                  aria-label="Send message"
+                  title="Send"
+                  className="h-9 w-9 shrink-0 rounded-xl bg-lime-500 text-slate-950 hover:bg-lime-600"
+                >
+                  <Send className="w-4 h-4" />
+                </Button>
+              </div>
+            ) : (
+              <div className="shrink-0 mt-2 p-4 rounded-2xl bg-emerald-50 dark:bg-emerald-900/10 border border-emerald-100 dark:border-emerald-900/30 flex gap-3">
                 <CheckCircle className="h-5 w-5 text-emerald-500 shrink-0" />
                 <div className="text-sm text-emerald-900 dark:text-emerald-200">
                   <span className="font-bold">This request has been {request.status.toLowerCase()}.</span>
@@ -508,6 +560,7 @@ export default function DriverSupportDetailPage({ supportRequestId }: { supportR
                 </div>
               </div>
             )}
+            </section>
           </>
         )}
       </main>
