@@ -452,13 +452,20 @@ export default function AdminCmsPage() {
     );
 
     return (
-      <div className="min-h-screen lg:h-[100dvh] lg:overflow-hidden flex flex-col bg-background-light dark:bg-background-dark">
+      <div className="min-h-[calc(100dvh_-_4rem)] lg:h-[calc(100dvh_-_5rem)] lg:min-h-0 lg:overflow-hidden flex flex-col bg-background-light dark:bg-background-dark">
 
-        {/* Action bar — fixed in view at all times: on small screens it sticks
-            under the navbar while the page scrolls; on the desktop split it is
-            the frame's first row and both panes scroll BENEATH it (the window
-            itself never scrolls). */}
-        <div className="sticky top-16 lg:top-20 z-30 shrink-0 px-4 sm:px-6 py-2 bg-background-light/95 dark:bg-background-dark/95 backdrop-blur border-b border-slate-200 dark:border-slate-800 flex flex-wrap items-center justify-between gap-2">
+        {/* Action bar — fixed in view at all times. The navbar is persistent
+            shell chrome rendered ABOVE this page (AdminShell in the router
+            root), so this frame's height is the viewport minus the navbar
+            (h-16 mobile / h-20 desktop) — the old lg:h-[100dvh] left an 80px
+            dead scroll and cut the panes' bottom. Small screens: the bar
+            sticks under that navbar while the page scrolls. Desktop split:
+            the bar is a PLAIN first row of the frame and both panes scroll
+            BENEATH it — sticky must not apply here, because the frame is the
+            nearest scroll container (lg:overflow-hidden) and the sticky
+            top-20 offset would push the bar 80px DOWN into the panes,
+            floating it mid-screen over the content. */}
+        <div className="sticky top-16 lg:static z-30 shrink-0 px-4 sm:px-6 py-2 bg-background-light/95 dark:bg-background-dark/95 backdrop-blur border-b border-slate-200 dark:border-slate-800 flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <Button type="button" variant="ghost" size="sm" onClick={closeEditor} className="text-xs">
               <ArrowLeft className="h-4 w-4" /> Back
@@ -551,7 +558,7 @@ export default function AdminCmsPage() {
 
   // ── List view ──
   return (
-    <div className="min-h-screen bg-background-light dark:bg-background-dark">
+    <div className="min-h-[calc(100dvh_-_4rem)] lg:min-h-[calc(100dvh_-_5rem)] bg-background-light dark:bg-background-dark">
       <main className="max-w-[1200px] mx-auto px-6 py-6">
         {/* Header */}
         <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
