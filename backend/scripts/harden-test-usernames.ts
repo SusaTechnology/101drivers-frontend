@@ -6,9 +6,10 @@
 //
 // Why: the seeded accounts log in with trivially guessable names
 // ("admin", "driver", "private", ...) — anyone who tries admin/admin or
-// driver/driver gets in. This script rotates those login names to
-// <hint>-<8 random hex chars> (e.g. drv-3fa9c241) so the accounts stay
-// usable for the team but are no longer guessable.
+// driver/driver gets in. This script rotates those login names to 16
+// fully random characters (e.g. 9f3be2c81a70d4c6) — NO prefix, NO hint,
+// no pattern: nothing about the name predicts which account is behind
+// it, what role it has, or even that it was machine-generated.
 //
 // The 7 accounts it touches (matched by EMAIL — emails never change):
 //   admin    admin@101drivers.techbee.et
@@ -27,7 +28,7 @@
 // Usage (from the backend folder):
 //   npx ts-node scripts/harden-test-usernames.ts                # dry-run: show the plan
 //   npx ts-node scripts/harden-test-usernames.ts --yes          # APPLY (rotate the names)
-//   npx ts-node scripts/harden-test-usernames.ts --regenerate --yes   # throw the old plan away, generate a fresh set, apply
+//   npx ts-node scripts/harden-test-usernames.ts --regenerate --yes   # throw the plan away, generate a fresh set, apply (re-rotates accounts already carrying an older rotation)
 //   npx ts-node scripts/harden-test-usernames.ts --revert --yes       # restore the ORIGINAL simple names from the plan
 //
 // Safety rails:
@@ -36,10 +37,11 @@
 //   - The UPDATE payload is { username } and nothing else — email and
 //     password are physically not in the write.
 //   - Uniqueness is checked before every write (collisions get a fresh
-//     suffix, 20 tries — practically impossible with 32-bit suffixes).
+//     draw, 20 tries — practically impossible on a 64-bit space).
 //   - If an account's current username is NEITHER the original simple
-//     name NOR the planned new one (someone renamed it by hand), the
-//     script SKIPS it and says so instead of overwriting.
+//     name, NOR a name this script planned before, NOR the planned new
+//     one (someone renamed it by hand), the script SKIPS it and says so
+//     instead of overwriting.
 //   - Idempotent: running --yes twice is a no-op the second time.
 //   - --revert restores the original names, so the whole operation is
 //     reversible.
@@ -61,14 +63,16 @@ dotenv.config({ path: path.resolve(__dirname, "../../.env"), override: false });
 const prisma = new PrismaClient();
 
 // ── the ONLY accounts this script may ever touch ──────────────────────────
+// NOTE: no prefixes, no hints — a generated login name carries zero
+// information about the account behind it.
 const TARGETS = [
-  { label: "admin",    email: "admin@101drivers.techbee.et",            prefix: "adm"  },
-  { label: "private",  email: "private.customer@101drivers.techbee.et", prefix: "prv"  },
-  { label: "business", email: "business.customer@101drivers.techbee.et",prefix: "biz"  },
-  { label: "dealer2",  email: "dealer2@101drivers.techbee.et",          prefix: "dlr2" },
-  { label: "driver",   email: "driver@101drivers.techbee.et",           prefix: "drv"  },
-  { label: "driver2",  email: "driver2@101drivers.techbee.et",          prefix: "drv2" },
-  { label: "driver3",  email: "driver3@101drivers.techbee.et",          prefix: "drv3" },
+  { label: "admin",    email: "admin@101drivers.techbee.et" },
+  { label: "private",  email: "private.customer@101drivers.techbee.et" },
+  { label: "business", email: "business.customer@101drivers.techbee.et" },
+  { label: "dealer2",  email: "dealer2@101drivers.techbee.et" },
+  { label: "driver",   email: "driver@101drivers.techbee.et" },
+  { label: "driver2",  email: "driver2@101drivers.techbee.et" },
+  { label: "driver3",  email: "driver3@101drivers.techbee.et" },
 ] as const;
 
 const MAP_FILE = path.join(__dirname, "test-username-map.local.json");
@@ -82,10 +86,14 @@ type PlanEntry = {
 };
 
 type PlanFile = {
+  version: number;
   note: string;
   generatedAt: string;
   entries: PlanEntry[];
 };
+
+/** Plans written by older versions of this script are treated as stale. */
+const PLAN_VERSION = 2;
 
 // ── CLI flags (same style as send-invite-approval-emails.ts) ──────────────
 const argv = process.argv.slice(2);
@@ -100,13 +108,34 @@ const ORIGINALS: Record<string, string> = Object.fromEntries(
   TARGETS.map((t) => [t.email, t.label])
 );
 
-function readPlan(): PlanFile | null {
+/**
+ * Returns the usable plan plus the names the PREVIOUS plan wanted (even a
+ * stale one). Those previous names stay "acceptable current values" so an
+ * account already carrying an older rotation — e.g. the retired
+ * hint-prefixed format — can be rotated again without tripping the
+ * conflict guard or needing a manual rename first.
+ */
+function readPlans(): {
+  plan: PlanFile | null;
+  previousNames: Record<string, string>;
+} {
   try {
     const raw = JSON.parse(fs.readFileSync(MAP_FILE, "utf8")) as PlanFile;
-    if (!Array.isArray(raw?.entries) || raw.entries.length === 0) return null;
-    return raw;
+    if (!Array.isArray(raw?.entries) || raw.entries.length === 0) {
+      return { plan: null, previousNames: {} };
+    }
+    const previousNames = Object.fromEntries(
+      raw.entries.map((e) => [e.email, e.newUsername])
+    );
+    if (raw.version !== PLAN_VERSION) {
+      // Written by an older version of this script (hint-prefixed names).
+      // Obsolete — a fresh fully-random plan will be generated, but the
+      // old names remain accepted so the rotation can simply re-apply.
+      return { plan: null, previousNames };
+    }
+    return { plan: raw, previousNames };
   } catch {
-    return null;
+    return { plan: null, previousNames: {} };
   }
 }
 
@@ -114,17 +143,21 @@ function writePlan(plan: PlanFile): void {
   fs.writeFileSync(MAP_FILE, JSON.stringify(plan, null, 2) + "\n");
 }
 
-/** <prefix>-<8 hex chars> — unguessable, but the hint keeps the team oriented. */
-function generateUsername(prefix: string, taken: Set<string>): string {
+/**
+ * 16 random hex characters (64 bits of entropy) — completely opaque.
+ * Nothing in the name hints at which account it belongs to, so there is
+ * nothing to predict, enumerate or profile.
+ */
+function generateUsername(taken: Set<string>): string {
   for (let attempt = 0; attempt < 20; attempt++) {
-    const candidate = `${prefix}-${randomBytes(4).toString("hex")}`;
+    const candidate = randomBytes(8).toString("hex");
     if (!taken.has(candidate)) {
       taken.add(candidate);
       return candidate;
     }
   }
-  // 20 collisions on 2^32 is absurd; fail loudly rather than loop forever.
-  throw new Error(`could not generate a unique username for prefix "${prefix}"`);
+  // 20 collisions on a 64-bit space is absurd; fail loudly rather than loop forever.
+  throw new Error("could not generate a unique username after 20 tries");
 }
 
 /** Reserve usernames that ALREADY exist in the DB so we never collide. */
@@ -142,27 +175,39 @@ async function main(): Promise<void> {
   );
 
   const taken = await buildTakenSet();
-  let plan = readPlan();
+  let { plan, previousNames } = readPlans();
 
   if (REGENERATE && plan) {
-    console.log(`--regenerate: discarding the saved plan in ${path.basename(MAP_FILE)}\n`);
+    console.log(
+      `--regenerate: discarding the saved plan in ${path.basename(MAP_FILE)}\n` +
+        `(its names stay accepted as "current", so accounts rotated with it can be rotated again)\n`
+    );
     plan = null;
   }
 
   // ── Load or build the plan ──────────────────────────────────────────────
   if (!plan) {
+    if (Object.keys(previousNames).length > 0) {
+      console.log(
+        `the saved plan used the retired hint-prefixed format (adm-/drv-/biz-…).\n` +
+          `generating a fully random set instead — accounts still carrying those\n` +
+          `old names will simply be rotated again (same passwords, same emails).\n`
+      );
+    }
     const entries: PlanEntry[] = TARGETS.map((t) => ({
       email: t.email,
       label: t.label,
       originalUsername: t.label,
-      newUsername: generateUsername(t.prefix, taken),
+      newUsername: generateUsername(taken),
       appliedAt: null,
     }));
     plan = {
+      version: PLAN_VERSION,
       note:
-        "New login names for the seed/test accounts. " +
-        "Passwords and emails are NOT changed by the script. " +
-        "Delete this file and re-run without --yes to regenerate a fresh set.",
+        "New login names for the seed/test accounts — fully random, nothing in " +
+        "a name hints at the account behind it. Passwords and emails are NOT " +
+        "changed by the script. Delete this file and re-run without --yes to " +
+        "regenerate a fresh set.",
       generatedAt: new Date().toISOString(),
       entries,
     };
