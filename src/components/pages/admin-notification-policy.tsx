@@ -45,7 +45,6 @@ import {
   Gavel,
   TrendingUp as PriceChange,
   Calendar as CalendarMonth,
-  ArrowLeft as ArrowBack,
   BellOff as NotificationsOff,
   BellMinus as NotificationsPaused,
   Gauge as Speed,
@@ -96,6 +95,7 @@ import {
 import { Kbd } from "@/components/ui/kbd";
 import { performSignOut } from '@/lib/tanstack/dataQuery';
 import { AppSidebar } from '@/components/shared/layout/app-sidebar';
+import { AdminBackButton } from '@/components/shared/layout/AdminBackButton';
 import { navItems } from '@/lib/items/navItems';
 
 // Form schemas
@@ -737,13 +737,10 @@ export default function AdminNotificationPolicyPage() {
               )}
             </Button>
 
-            <Link
-              to="/admin-config"
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 transition text-sm font-extrabold text-slate-700 dark:text-slate-200"
-            >
-              <ArrowBack className="w-4 h-4 text-primary" />
-              Back
-            </Link>
+            {/* The SAME back button every admin page has (right hemisphere
+                of the header) — goes to the page the user came from, not a
+                hardcoded destination. */}
+            <AdminBackButton />
 
             <Button
               onClick={handleSignOut}

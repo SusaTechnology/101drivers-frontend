@@ -32,11 +32,11 @@ import React, {
   useState,
   type ReactNode,
 } from 'react';
-import { Link, useRouter, useRouterState } from '@tanstack/react-router';
+import { Link } from '@tanstack/react-router';
 import { cn } from '@/lib/utils';
-import { Menu, ChevronLeft } from 'lucide-react';
+import { Menu } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { trackAdminPath, previousAdminPath } from '@/lib/navHistory';
+import { AdminBackButton } from './AdminBackButton';
 import { MobileMenuDrawer } from './MobileMenuDrawer';
 import { AppSidebar } from './app-sidebar';
 
@@ -60,10 +60,6 @@ interface NavbarProps {
   onSignOut?: () => void; // for the drawer
   logo?: string; // optional logo for the drawer
   title?: string; // optional title for the drawer
-  back?: {
-    to: string;
-    label?: string;
-  };
   className?: string;
   children?: ReactNode;
 }
@@ -86,42 +82,17 @@ export function Navbar({
   onSignOut,
   logo = '/assets/101drivers-logo.jpg',
   title = 'Admin',
-  back,
   className,
   children,
 }: NavbarProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
 
-  // ── Global Back button — "take me to the page I came from" ──────────
-  // Every admin page renders this Navbar, so tracking the route here
-  // covers the whole admin surface with zero per-page wiring.
-  const router = useRouter();
-  const pathname = useRouterState({ select: (s) => s.location.pathname });
-
-  useEffect(() => {
-    trackAdminPath(pathname);
-  }, [pathname]);
-
-  const prevPath = previousAdminPath(pathname);
-  // In-app memory first; the browser session history is the fallback
-  // (covers a reload that wiped the in-app stack).
-  const canGoBack =
-    prevPath !== null ||
-    (typeof window !== 'undefined' && window.history.length > 1);
-
-  const handleBack = useCallback(() => {
-    const prev = previousAdminPath(pathname);
-    if (prev) {
-      router.history.push(prev); // in-app: exactly the page before this one
-      return;
-    }
-    if (typeof window !== 'undefined' && window.history.length > 1) {
-      window.history.back(); // reload case: the browser remembers
-      return;
-    }
-    router.history.push('/admin-dashboard'); // last resort: admin home
-  }, [pathname, router]);
+  // The global Back button lives in the RIGHT hemisphere (last item of the
+  // actions cluster, pinned nearest the right edge) and is the SAME
+  // component on every admin page — <AdminBackButton />. Route tracking
+  // happens inside it, so pages render nothing extra and no page can grow
+  // its own divergent back button.
 
   const navSlotRef = useRef<HTMLDivElement>(null);
   const navRef = useRef<HTMLElement>(null);
@@ -186,21 +157,6 @@ export function Navbar({
               the AppSidebar owns navigation, so the top bar keeps just the
               brand + actions — the ERP shell layout. */}
           <div className="flex items-center gap-2 sm:gap-3 flex-1 min-w-0">
-            {/* Global back — EVERY admin page, all breakpoints. Goes to the
-                page the user actually came from (in-app route memory,
-                browser history as fallback). */}
-            <Button
-              variant="outline"
-              size="icon"
-              className="w-11 h-11 rounded-2xl shrink-0"
-              onClick={handleBack}
-              disabled={!canGoBack}
-              aria-label="Go back to the previous page"
-              title={prevPath ? `Back to ${prevPath}` : 'Back'}
-            >
-              <ChevronLeft className="w-5 h-5 text-primary" />
-            </Button>
-
             {/* Hamburger — rendered only while the nav does not fit */}
             <Button
               variant="outline"
@@ -278,7 +234,9 @@ export function Navbar({
             <div className="hidden md:block shrink-0">{children}</div>
           )}
 
-          {/* Right section: actions + back button */}
+          {/* Right section: actions + the global back button (right
+              hemisphere, pinned nearest the right edge on EVERY admin
+              page — identical everywhere). */}
           <div className="flex items-center gap-1 sm:gap-2 shrink-0">
             {actions.map((action) => (
               <React.Fragment key={action.key}>
@@ -286,15 +244,7 @@ export function Navbar({
               </React.Fragment>
             ))}
 
-            {back && (
-              <Link
-                to={back.to}
-                className="hidden sm:inline-flex items-center gap-2 px-4 py-2 rounded-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 transition text-sm font-extrabold text-slate-700 dark:text-slate-200"
-              >
-                <ChevronLeft className="w-4 h-4 text-primary" />
-                {back.label || 'Back'}
-              </Link>
-            )}
+            <AdminBackButton />
           </div>
         </div>
       </header>

@@ -151,36 +151,72 @@ export function AppSidebar({ items }: { items: AppSidebarItem[] }) {
       className="hidden lg:flex fixed left-0 top-0 bottom-0 z-40 flex-col border-r border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 transition-[width] duration-200 ease-in-out"
       style={{ width: collapsed ? SIDEBAR_WIDTH_COLLAPSED : SIDEBAR_WIDTH_EXPANDED }}
     >
-      {/* Brand */}
+      {/* Brand row — the collapse toggle lives HERE, on the same row,
+          pinned to the right end of the logo (ERP convention). When the
+          rail is collapsed, the row is one button: the logo by default and
+          the expand icon on hover, and clicking it EXPANDS the sidebar
+          instead of navigating. */}
       <div
         className={cn(
           'flex h-16 shrink-0 items-center border-b border-slate-200 dark:border-slate-800',
-          collapsed ? 'justify-center px-2' : 'gap-2.5 px-4'
+          collapsed ? 'justify-center px-2' : 'justify-between gap-1 pl-4 pr-2'
         )}
       >
-        <Link
-          to="/admin-dashboard"
-          title="101 Drivers — Admin Console"
-          className="flex min-w-0 items-center gap-2.5"
-        >
-          <span className="h-9 w-9 shrink-0 overflow-hidden rounded-xl border border-slate-200 bg-black dark:border-slate-700">
-            <img
-              src="/assets/101drivers-logo.jpg"
-              alt="101 Drivers"
-              className="h-full w-full object-cover"
-            />
-          </span>
-          {!collapsed && (
-            <span className="min-w-0">
-              <span className="block truncate text-sm font-black leading-tight text-slate-900 dark:text-white">
-                101 Drivers
-              </span>
-              <span className="block text-[10px] font-bold uppercase leading-tight tracking-widest text-slate-400">
-                Admin Console
-              </span>
+        {collapsed ? (
+          <button
+            type="button"
+            onClick={toggle}
+            aria-expanded={false}
+            aria-label="Expand sidebar"
+            title="Expand sidebar (Ctrl/Cmd+B)"
+            className="group relative flex h-10 w-10 items-center justify-center rounded-xl transition-colors hover:bg-slate-100 dark:hover:bg-slate-800"
+          >
+            <span className="h-9 w-9 overflow-hidden rounded-xl border border-slate-200 bg-black transition-opacity group-hover:opacity-0 dark:border-slate-700">
+              <img
+                src="/assets/101drivers-logo.jpg"
+                alt="101 Drivers"
+                className="h-full w-full object-cover"
+              />
             </span>
-          )}
-        </Link>
+            {/* Expand icon — replaces the logo while hovered */}
+            <PanelLeftOpen className="absolute h-[18px] w-[18px] text-primary opacity-0 transition-opacity group-hover:opacity-100" />
+          </button>
+        ) : (
+          <>
+            <Link
+              to="/admin-dashboard"
+              title="101 Drivers — Admin Console"
+              className="flex min-w-0 items-center gap-2.5"
+            >
+              <span className="h-9 w-9 shrink-0 overflow-hidden rounded-xl border border-slate-200 bg-black dark:border-slate-700">
+                <img
+                  src="/assets/101drivers-logo.jpg"
+                  alt="101 Drivers"
+                  className="h-full w-full object-cover"
+                />
+              </span>
+              <span className="min-w-0">
+                <span className="block truncate text-sm font-black leading-tight text-slate-900 dark:text-white">
+                  101 Drivers
+                </span>
+                <span className="block text-[10px] font-bold uppercase leading-tight tracking-widest text-slate-400">
+                  Admin Console
+                </span>
+              </span>
+            </Link>
+            {/* Collapse — same row as the logo, right end */}
+            <button
+              type="button"
+              onClick={toggle}
+              aria-expanded
+              aria-label="Collapse sidebar"
+              title="Collapse sidebar (Ctrl/Cmd+B)"
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-900 dark:hover:bg-slate-800 dark:hover:text-white"
+            >
+              <PanelLeftClose className="h-[18px] w-[18px]" />
+            </button>
+          </>
+        )}
       </div>
 
       {/* Navigation — active rows get the lime accent bar on the left edge,
@@ -247,30 +283,6 @@ export function AppSidebar({ items }: { items: AppSidebarItem[] }) {
           })}
         </ul>
       </nav>
-
-      {/* Footer — the collapse toggle. Full row with a label when expanded;
-          icon-only when collapsed. Ctrl/Cmd+B does the same thing. */}
-      <div className="shrink-0 border-t border-slate-200 p-2 dark:border-slate-800">
-        <button
-          type="button"
-          onClick={toggle}
-          aria-expanded={!collapsed}
-          title={collapsed ? 'Expand sidebar (Ctrl/Cmd+B)' : 'Collapse sidebar (Ctrl/Cmd+B)'}
-          className={cn(
-            'flex w-full items-center rounded-xl text-sm font-semibold text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white',
-            collapsed ? 'h-10 justify-center' : 'gap-3 px-3 py-2.5'
-          )}
-        >
-          {collapsed ? (
-            <PanelLeftOpen className="h-[18px] w-[18px]" />
-          ) : (
-            <>
-              <PanelLeftClose className="h-[18px] w-[18px] shrink-0" />
-              Collapse
-            </>
-          )}
-        </button>
-      </div>
     </aside>
   );
 }
