@@ -72,7 +72,7 @@ import { ContentController } from "./content/content.controller";
 import { CmsController } from "./cms/cms.controller";
 import { CmsService } from "./cms/cms.service";
 import { NotificationEventEngine } from "./domain/notificationEvent/notificationEvent.engine";
-import { MailService } from "./common/mail/mail.service";
+import { MailModule } from "./common/mail/mail.module";
 import { PostpaidBillingModule } from "./postpaidBilling/postpaidBilling.module";
 import { GeoModule } from "./geo/geo.module";
 @Module({
@@ -141,6 +141,11 @@ import { GeoModule } from "./geo/geo.module";
     AdminDashboardModule,
     ReportsModule,
     EmailVerificationModule,
+    // MailModule supplies the shared MailService for the root
+    // NotificationEventEngine and CmsService — a locally-registered
+    // MailService would crash DI (MailService requires AdminGateService,
+    // invisible from the root providers list).
+    MailModule,
     SupportRequestModule,
     SupportRequestNoteModule,
     GatewayModule,
@@ -169,7 +174,6 @@ import { GeoModule } from "./geo/geo.module";
   ],
   providers: [
     NotificationEventEngine,
-    MailService,
     CmsService,
     // Task 19: shared refund state-transition (webhook + reconciler) and
     // the self-healing sweep for refunds whose charge.refunded webhook

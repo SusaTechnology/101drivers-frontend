@@ -16,7 +16,7 @@ import { WeeklyPayoutScheduler } from "./weekly-payout.scheduler";
 import { NotificationEventEngine } from "../domain/notificationEvent/notificationEvent.engine";
 
 import { EmailVerificationService } from "src/auth/email-verification/email-verification.service";
-import { MailService } from "src/common/mail/mail.service";
+import { MailModule } from "src/common/mail/mail.module";
 import { PasswordService } from "../auth/password.service";
 import { DeliveryComplianceEngine } from "src/domain/deliveryCompliance/deliveryCompliance.engine";
 import { DeliveryEvidenceEngine } from "src/domain/deliveryEvidence/deliveryEvidence.engine";
@@ -39,6 +39,11 @@ import { DeliveryClosePenaltyEngine } from "src/domain/deliveryRequest/deliveryC
     // forwardRef breaks the circular chain (ReferralModule imports
     // DriverPayoutModule which imports DeliveryLogisticsModule).
     forwardRef(() => ReferralModule),
+    // MailModule supplies the shared MailService for NotificationEventEngine,
+    // EmailVerificationService and the lifecycle engines — a
+    // locally-registered MailService would crash DI (MailService requires
+    // AdminGateService, invisible from this context).
+    MailModule,
   ],
   providers: [
     GoogleMapsService,
@@ -50,7 +55,6 @@ import { DeliveryClosePenaltyEngine } from "src/domain/deliveryRequest/deliveryC
     WeeklyPayoutScheduler,
     NotificationEventEngine,
     EmailVerificationService,
-    MailService,
     PasswordService,
     DeliveryComplianceEngine,
     DeliveryEvidenceEngine,

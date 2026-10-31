@@ -8,10 +8,10 @@ import { DisputeCaseDomain } from "src/domain/disputeCase/disputeCase.domain";
 import { DisputeCasePolicyService } from "src/domain/disputeCase/disputeCasePolicy.service";
 import { DisputeAdminEngine } from "../domain/disputeCase/disputeAdmin.engine";
 import { NotificationEventEngine } from "../domain/notificationEvent/notificationEvent.engine";
-import { MailService } from "../common/mail/mail.service";
+import { MailModule } from "../common/mail/mail.module";
 
 @Module({
-  imports: [DisputeCaseModuleBase, forwardRef(() => AuthModule)],
+  imports: [DisputeCaseModuleBase, forwardRef(() => AuthModule), MailModule],
   controllers: [DisputeCaseController],
   providers: [
     DisputeCaseService,
@@ -21,11 +21,11 @@ import { MailService } from "../common/mail/mail.service";
     DisputeAdminEngine,
     // DisputeAdminEngine injects NotificationEventEngine to send real
     // dispute notifications (queueAndSend) instead of raw prisma rows.
-    // MailService is the engine's own dependency — both are registered
-    // locally, matching the CustomerModule / DriverModule / SupportRequestModule
-    // pattern (PrismaModule & StripeModule are @Global so those resolve).
+    // MailModule (imported above) supplies the shared MailService the
+    // engine injects. A locally-registered MailService would crash DI:
+    // MailService now requires AdminGateService, and a local provider
+    // cannot see AdminGateModule from this context.
     NotificationEventEngine,
-    MailService,
   ],
   exports: [DisputeCaseService],
 })

@@ -10,7 +10,7 @@ import { DriverPolicyService } from "src/domain/driver/driverPolicy.service";
 import { DriverDomain } from "src/domain/driver/driver.domain";
 import { DriverApprovalEngine } from "src/domain/driver/driverApproval.engine";
 import { NotificationEventEngine } from "src/domain/notificationEvent/notificationEvent.engine";
-import { MailService } from "src/common/mail/mail.service";
+import { MailModule } from "src/common/mail/mail.module";
 import { ReferralModule } from "../referral/referral.module";
 import { GeoModule } from "../geo/geo.module";
 
@@ -24,9 +24,13 @@ import { GeoModule } from "../geo/geo.module";
     DriverModuleBase,
     forwardRef(() => AuthModule),
     forwardRef(() => ReferralModule),
+    // MailModule supplies the shared MailService for NotificationEventEngine
+    // and DriverApprovalEngine — a locally-registered MailService would
+    // crash DI (MailService requires AdminGateService, invisible here).
+    MailModule,
   ],
   controllers: [DriverController, DriverOnboardingController, DriverOnboardingPublicController],
-  providers: [DriverService, DriverResolver, DriverDomain, DriverPolicyService, DriverApprovalEngine, NotificationEventEngine, MailService],
+  providers: [DriverService, DriverResolver, DriverDomain, DriverPolicyService, DriverApprovalEngine, NotificationEventEngine],
   exports: [DriverService],
 })
 export class DriverModule {}
