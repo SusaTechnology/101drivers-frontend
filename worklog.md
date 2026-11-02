@@ -1889,3 +1889,46 @@ Stage Summary:
   single-use email invite (no shared passwords, audit-logged); the
   legacy known-password admin-create path is gone, and the API now
   enforces the super-admin-only invite rule the UI always showed.
+
+---
+
+Task ID: 32
+Agent: main agent (Super Z)
+Task: MailModule re-exports AdminGateModule — MailService now boots
+inside every consuming module's DI context
+
+Work Log:
+- User boot log: "Nest can't resolve dependencies of the MailService
+  (ConfigService, ?) ... the argument AdminGateService at index [1] is
+  available in the DisputeCaseModule context."
+- Root cause: the previous DI fix (98646a64) made feature modules
+  import MailModule instead of registering MailService locally, and
+  MailModule imports AdminGateModule — but it only exported MailService.
+  In Nest, an imported module's exports are NOT transitive unless
+  re-exported, so when Nest instantiates MailService inside the
+  CONSUMING module's context, AdminGateService is unreachable one hop
+  down. DisputeCaseModule was just the first importer to load; all 11
+  MailModule importers shared the same latent crash.
+- Fix (one line + comment): MailModule exports: [MailService,
+  AdminGateModule]. Re-exporting the leaf gate module makes
+  AdminGateService visible to every module that imports MailModule —
+  the transitiveness 98646a64's commit message wrongly claimed already
+  existed.
+- Verification — full boot this time. The Task 31 bootstrap died at the
+  missing-sandbox-env wall (BCRYPT_SALT) BEFORE these modules loaded,
+  which is how this slipped through. Booted dist/main.js with inline
+  throwaway env (BCRYPT_SALT, JWT_SECRET_KEY, JWT_ACCESS_SECRET,
+  JWT_EXPIRATION, DB_URL — nothing written to the repo): 114 modules
+  initialized, custom DisputeCaseModule included, ZERO "can't resolve"
+  errors; MailService constructs (its SMTP-misconfig warn proves the
+  constructor + AdminGateService injection ran). The only remaining
+  error is PrismaClientInitializationError "Can't reach database
+  server" — the sandbox has no postgres; the app reaches the
+  DB-connect stage, i.e. ALL dependency injection completed.
+- Gates: nest build green; tsc unchanged at the 2 pre-existing spec
+  errors.
+
+Stage Summary:
+- The backend boots past the MailService/AdminGateService DI error in
+  every module; the invite-email + gate-key chain works wherever the
+  shared MailService is injected.
