@@ -250,29 +250,6 @@ export class UserAdminRequestMeetingDto {
   message!: string;
 }
 
-export class UserAdminCreateBodyDto {
-  @swagger.ApiProperty()
-  email!: string;
-
-  @swagger.ApiProperty()
-  username!: string;
-
-  @swagger.ApiProperty()
-  password!: string;
-
-  @swagger.ApiPropertyOptional()
-  fullName?: string | null;
-
-  @swagger.ApiPropertyOptional()
-  phone?: string | null;
-
-  @swagger.ApiPropertyOptional()
-  isActive?: boolean;
-
-  @swagger.ApiPropertyOptional()
-  actorUserId?: string | null;
-}
-
 /**
  * Body for POST /api/users/admin-invite.
  * The admin only supplies identity fields — NO password. The invitee

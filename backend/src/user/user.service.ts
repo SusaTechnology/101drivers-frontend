@@ -75,8 +75,9 @@ constructor(
     // createUser) must never accept credentials or a role from the client.
     // Strip them and substitute an unguessable random placeholder whose
     // bcrypt hash is stored in BOTH password columns (validateUser compares
-    // against `passwordHash ?? password`). Role assignment now happens only
-    // through the guarded admin endpoints (admin-create / admin-invite).
+    // against `passwordHash ?? password`). Role assignment now happens
+    // only through the guarded admin-invite endpoint (POST
+    // /api/users/admin-invite) — there is no other admin-creation path.
     const { password: _clientPassword, passwordHash: _clientHash, roles: _clientRoles, ...safeData } =
       args.data as Prisma.UserCreateInput & Record<string, unknown>;
 
@@ -2403,66 +2404,5 @@ async userLookupList(): Promise<
     roles: row.roles,
     isActive: row.isActive,
   }));
-}
-
-async adminCreateUser(input: {
-  email: string;
-  username: string;
-  password: string;
-  fullName?: string | null;
-  phone?: string | null;
-  isActive?: boolean;
-  actorUserId?: string | null;
-}): Promise<any> {
-  const plainPassword = this.trimRequiredString(input.password);
-  const passwordHash = await this.passwordService.hash(plainPassword);
-
-  const normalizedData = stripEmptyObjectsDeep(
-    this.normalizeCreateData({
-      email: input.email,
-      username: input.username,
-      // Consistent credential storage: bcrypt hash in BOTH columns —
-      // the legacy plaintext copy here was a security defect.
-      password: passwordHash,
-      passwordHash,
-      fullName: input.fullName ?? null,
-      phone: input.phone ?? null,
-      roles: EnumUserRoles.ADMIN,
-      isActive: input.isActive ?? true,
-      disabledAt: input.isActive === false ? new Date() : null,
-      disabledReason:
-        input.isActive === false ? "Created inactive by admin" : null, 
-    } as Prisma.UserCreateInput)
-  ) as Prisma.UserCreateInput;
-
-  await this.policy.beforeCreate(this.prisma as any, normalizedData);
-
-  const created = await this.prisma.user.create({
-    data: normalizedData,
-    select: { id: true },
-  });
-
-  // Admin invite creates a pending admin row — ping admin stat surfaces.
-  this.appEvents.emit(APP_EVENT.USER_STATS_CHANGED);
-
-  if (input.actorUserId) {
-    await this.prisma.adminAuditLog.create({
-      data: {
-        action:
-          input.isActive === false
-            ? EnumAdminAuditLogAction.USER_DISABLE
-            : EnumAdminAuditLogAction.OTHER,
-        actorUserId: input.actorUserId,
-        actorType: EnumAdminAuditLogActorType.USER,
-        userId: created.id,
-        reason:
-          input.isActive === false
-            ? "Admin user created as inactive"
-            : "Admin user created",
-      },
-    });
-  }
-
-  return this.getAdminUserDetail(created.id);
 }
 }

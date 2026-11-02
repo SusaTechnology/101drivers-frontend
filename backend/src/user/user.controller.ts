@@ -54,7 +54,6 @@ import {
   UserAdminActionDto,
   UserAdminApprovalActionDto,
   UserAdminRequestMeetingDto,
-  UserAdminCreateBodyDto,
   UserAdminListQueryDto,
   UserAdminUpdateBodyDto,
   UserInternalNotesBodyDto,
@@ -71,23 +70,6 @@ export class UserController extends UserControllerBase {
   ) {
     super(service, rolesBuilder);
   }
-@common.Post("admin-create")
-@swagger.ApiOkResponse({ type: Object })
-@common.UseGuards(AdminGuard)
-@nestAccessControl.UseRoles({
-  resource: "User",
-  action: "create",
-  possession: "any",
-})
-async adminCreateUser(
-  @common.Body() body: UserAdminCreateBodyDto
-): Promise<any> {
-  // AdminGuard enforces the ADMIN role on top of the ACL grant —
-  // creating administrators must never be reachable by other roles.
-  return this.service.adminCreateUser(body);
-}  
-
-
  @common.Get("/lookup/minimal")
 @swagger.ApiOkResponse({
   schema: {

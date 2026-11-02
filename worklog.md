@@ -1790,3 +1790,102 @@ Stage Summary:
   refreshes itself → you're on the login page. Afterwards plain URLs
   just work; without a valid cookie everything bounces to the landing
   page. No more white screens, no more redirect loops.
+
+---
+
+Task ID: 30
+Agent: main agent (Super Z)
+Task: driver PWA — theme-colored strip under the bottom nav + map page app bar drift
+
+Work Log:
+- User: "why does the color becomes green under the bottom bar... in pwa.
+  on driver" + "the app bar on the map page on the driver should be fixed
+  at its position now".
+- Green strip root cause: index.html light-mode theme-color was the LIME
+  accent #a3e635 (and manifest theme_color too). In an installed PWA,
+  Android tints both system bars with theme-color — including the system
+  navigation bar at the very bottom, UNDER the app's bottom nav — so the
+  driver app showed a lime/green strip below the white bottom bar. Fix:
+  theme colors now match the app theme (--background-light #f8fafc light,
+  #0f172a dark, unchanged); manifest theme_color #a3e635 -> #f8fafc and
+  background_color #ffffff -> #f8fafc (also matches the splash PNGs' and
+  boot shell's #f8fafc, so the launch handoff stays seamless). Tile color
+  stays lime (Windows start tile, not rendered on phones).
+- App bar drift root cause: styles.css body rule carried the initial-commit
+  template artifact min-height: max(884px, 100dvh) — on every phone
+  shorter than 884 CSS px the DOCUMENT was ~30-130px scrollable, so one
+  unconsumed swipe (header, safe-area strips, map edges) slid the whole
+  app frame — in-flow map app bar included — off its position while the
+  fixed bottom nav stayed put. Fix: body min-height: 100dvh (document can
+  never exceed the viewport; pages needing fill carry min-h-screen), plus
+  an installed-PWA overscroll lock (@media display-mode: standalone ->
+  html/body overscroll-behavior: none) killing pull-to-refresh and
+  rubber-band inside the app only — the regular browser keeps native PTR
+  on the public site.
+- Map page markup untouched: its header was already the top of a
+  non-scrolling h-full flex frame; it only moved because the DOCUMENT
+  under it scrolled.
+- Note for the user: meta theme-color applies on next app launch; the
+  manifest colors apply after the PWA is re-added (Android may cache the
+  old splash colors until then).
+- Gates: FE tsc 139 src errors = exact baseline (0 new); vite build green
+  (19.7s, sw stamped). Worklog left uncommitted per convention.
+
+Stage Summary:
+- The driver PWA no longer shows a lime system bar under the bottom nav
+  (theme-color now equals the app theme in both schemes), and the map
+  page's app bar stays pinned: the document can no longer scroll on
+  phones and the installed app ignores pull-to-refresh/rubber-band.
+
+---
+
+Task ID: 31
+Agent: main agent (Super Z)
+Task: administrators are registered ONLY via the invite flow — legacy
+password-based admin-create removed; invite/resend enforced super-admin-only
+
+Work Log:
+- User: "only admin can register and invite another admin. and push it
+  if it is not pushed to github until now."
+- Audited every path that can mint a User with roles=ADMIN:
+  1. adminInvite.service (invite + re-invite on resend) — the legit
+     flow: random placeholder credential, single-use 48h setup link,
+     invitee sets their own password.
+  2. user.service.adminCreateUser + POST /api/users/admin-create — the
+     LEGACY password form (the creating admin typed a password and
+     shared it out-of-band). Still live with NO frontend caller.
+     REMOVED: endpoint, service method and UserAdminCreateBodyDto —
+     the invite flow replaces it; minting admins with a credential the
+     creating admin knows defeats the no-shared-secrets model.
+  3. Generic POST /api/users + GraphQL createUser — already safe
+     (strips password/passwordHash/roles from client input, substitutes
+     an unguessable placeholder hash); its comment now points at
+     admin-invite as the only admin-creation path.
+  4. Public signups (driver, private + business customer) hardcode
+     non-ADMIN roles; the SPA has no admin-signup page at all.
+- Invite/resend permission aligned with the shipped UI: the admin UI
+  has always shown the Invite Admin button and the admin Resend action
+  to SUPER admins only (its comment even claimed the server rejects
+  regular admins) — but the capability registry had admins.invite /
+  admins.resendInvite = false, so any admin could invite through the
+  API. Flipped both to true and added SuperAdminGuard to
+  POST /api/users/admin-invite and POST /api/users/:id/admin-resend-invite
+  (the service already asserts the capability — same defense-in-depth
+  pattern as disable/enable/promote/demote).
+- Sandbox note: backend/node_modules was empty (recycled sandbox) —
+  reinstalled with --legacy-peer-deps (pre-existing @nestjs/websockets@11
+  vs @nestjs/core@10 peer conflict in the lockfile) + npx prisma
+  generate. Real bootstrap check: 55 modules initialized, including
+  DisputeCaseModuleBase and AdminGateModule, with zero "Nest can't
+  resolve" errors; the boot then stops at "BCRYPT_SALT is not defined"
+  because the sandbox has no backend/.env — environment, not code.
+- Gates: backend tsc = 2 errors (exact pre-existing baseline:
+  auth.service.spec.ts + token.service.spec.ts), nest build green.
+- This entry and the Task 30 entry above are committed together; Task
+  30's worklog text was left uncommitted by the previous stage.
+
+Stage Summary:
+- Admin accounts can only be created by a super admin through the
+  single-use email invite (no shared passwords, audit-logged); the
+  legacy known-password admin-create path is gone, and the API now
+  enforces the super-admin-only invite rule the UI always showed.
