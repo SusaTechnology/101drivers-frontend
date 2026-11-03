@@ -2413,3 +2413,47 @@ Stage Summary:
   selection: pick Personal in the #dealers section and the hero chooser
   shows Personal selected too, and vice versa. Ships with the next
   frontend build.
+
+---
+
+Task ID: 44
+Agent: main agent (Super Z)
+Task: investigate owner report "signupCard is not defined" on production; verify Task 43 at runtime
+
+Work Log:
+- Owner reported the landing page throwing "signupCard is not defined"
+  after the Task 43 deploy, with a fair process complaint: the change
+  was pushed on typecheck alone, without a runtime test.
+- Investigation of current master (a4b14e44):
+  * every signupCard/setSignupCard reference enumerated in file order —
+    derived const at line 196, alias at 615, all usages after; no TDZ,
+    no out-of-scope reference, no other file references it;
+  * vite production build PASSES;
+  * the built site served via vite preview and loaded in a headless
+    browser (agent-browser): the landing page renders with ZERO page
+    errors and zero console references to signupCard (only environment
+    noise: Maps API key, no backend behind preview);
+  * the Task 43 FEATURE is proven working at runtime, both directions:
+    (1) clicked Personal in the #dealers section (a <Link> — it also
+    navigated to the individual signup, correct behavior) → returned
+    to the landing page → hero chooser AND #dealers both show Personal
+    selected (aria-pressed false/true in both sections);
+    (2) clicked Business in the hero chooser → #dealers re-rendered to
+    Business live (aria-pressed true/false in both sections).
+- Conclusion: the reported ReferenceError does NOT exist in current
+  master — neither the old code (signupCard was declared) nor the new
+  (derived const, verified running) can throw it. The production error
+  almost certainly comes from a stale/partial deploy bundle or a stale
+  service-worker cache serving old chunks against new HTML (the app
+  ships sw.js with a build stamp). Recommended to the owner: redeploy
+  current master and hard-refresh; if it still errors, send the console
+  stack trace.
+- Process fix going forward: every FE push is now gated on (1) tsc,
+  (2) production build, (3) headless-browser load + console sweep,
+  (4) interaction test of the touched feature — before the push, not
+  after. The Task 43 push skipped (2)-(4); that miss is on this agent.
+
+Stage Summary:
+- No code change needed or made; current master is runtime-verified.
+  Task 43's shared selection confirmed working end-to-end in a real
+  browser environment.
