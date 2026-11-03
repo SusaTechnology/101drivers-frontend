@@ -13,13 +13,17 @@
  *   2. APPROVED drivers  (Driver.status = APPROVED)
  *        → the exact "Your driver application has been approved" email from
  *          DriverApprovalEngine.approve (templateCode "driver-approved").
- *   3. APPROVED dealers/customers (Customer.approvalStatus = APPROVED)
- *        → the exact approval email from CustomerApprovalEngine.approve
- *          (templateCode "dealer-approved"): BUSINESS copy carries the
- *          referral-code line + COO signature; PRIVATE copy is the generic
- *          one. Subject differs by customerType, exactly like the engine.
+ *
+ *   Scope rule (2026-11): ONLY the emails that actually carried a
+ *   101drivers.techbee.et link get re-sent — the campaign exists to fix
+ *   that wrong URL, so any email whose body contains no domain link is
+ *   left alone (no pointless re-mailing).
  *
  *   Deliberately NOT in scope:
+ *     - APPROVED dealers/customers (Customer.approvalStatus = APPROVED) —
+ *       their approval email ("Your business/customer account has been
+ *       approved") contains NO link at all, only text and the COO
+ *       signature, so there is no techbee.et URL in it to fix.
  *     - MEETING_REQUESTED drivers — their scheduling email is admin-composed
  *       and personal; there is no template to re-send (per ops: skip them).
  *     - WAITLISTED / PENDING_APPROVAL / REJECTED drivers and PENDING /
@@ -28,8 +32,8 @@
  *     - SUSPENDED drivers — no suspension email exists; re-sending the
  *       approval copy would contradict their status.
  *
- *   2026-11 domain-fix resend: every link these templates build now points
- *   at 101drivers.com; re-running the campaign re-emails everyone still in
+ *   2026-11 domain-fix resend: the two driver templates below now point at
+ *   101drivers.com; re-running the campaign re-emails everyone still in
  *   the in-scope statuses with the corrected URLs.
  *
  * ── Delivery pipeline ─────────────────────────────────────────────────────
@@ -52,7 +56,7 @@
  *   Flags:
  *     --dry-run                        list recipients + templates, send nothing
  *     --only=invited                   only the invited-driver email
- *     --only=approved                  only the approved (driver + dealer) emails
+ *     --only=approved                  only the approved-driver email
  *     --limit=N                        cap recipients (smoke test on the server first)
  *     --yes                            skip the interactive confirmation (live runs)
  *     --wait=180                       seconds for the FINAL settle pass (default 180)
@@ -133,13 +137,11 @@ const REPORT_DIR =
 
 type Category =
   | "INVITED_DRIVER"
-  | "APPROVED_DRIVER"
-  | "APPROVED_DEALER_BUSINESS"
-  | "APPROVED_DEALER_PRIVATE";
+  | "APPROVED_DRIVER";
 
 type Recipient = {
   category: Category;
-  refId: string; // driverId or customerId
+  refId: string; // driverId
   name: string;
   email: string | null;
   suspended: boolean;
@@ -283,64 +285,10 @@ function buildApprovedDriverEmail(fullName: string, approvedAt: Date | null) {
   };
 }
 
-/** CustomerApprovalEngine.approve — templateCode "dealer-approved" */
-function buildApprovedDealerEmail(customer: {
-  customerType: string | null;
-  businessName: string | null;
-  contactName: string | null;
-  userFullName: string | null;
-  postpaidEnabled: boolean;
-}) {
-  const isBusiness = customer.customerType === "BUSINESS";
-  const displayName =
-    customer.businessName || customer.contactName || customer.userFullName || "Customer";
-  const subject = isBusiness
-    ? "Your business account has been approved"
-    : "Your customer account has been approved";
-  const approvalLine = isBusiness
-    ? "Your business account has been approved."
-    : "Your customer account has been approved.";
-  const loginLine = isBusiness
-    ? "You can now log in and start creating delivery requests."
-    : "You can now log in and continue using your account.";
-  const postpaidLine = customer.postpaidEnabled
-    ? "Postpaid billing has been enabled for your account."
-    : "";
-
-  const body = isBusiness
-    ? [
-        `Hi ${displayName},`,
-        "",
-        approvalLine,
-        "",
-        `${loginLine} ${
-          customer.postpaidEnabled
-            ? "Postpaid billing has been enabled for your account."
-            : "All deliveries are prepaid. If you\u2019d like to negotiate a postpaid plan, just contact us."
-        }`,
-        "",
-        "You also have your own referral code, which you can customize.",
-        "",
-        "Welcome aboard.",
-        "",
-        "Best, Maz Siam",
-        "COO, 101 Drivers Inc.",
-        "Cell 3107293250",
-        "Whatsup 4243132168",
-        "maz@101drivers.com",
-      ].join("\n")
-    : [
-        `Hi ${displayName},`,
-        "",
-        approvalLine,
-        postpaidLine,
-        loginLine,
-      ]
-        .filter(Boolean)
-        .join("\n");
-
-  return { type: EnumNotificationEventType.DEALER_APPROVED, templateCode: "dealer-approved", subject, body };
-}
+/** CustomerApprovalEngine.approve — templateCode "dealer-approved"
+ *  REMOVED from this campaign (2026-11): that email contains NO link —
+ *  only text and the COO signature — so there was never a techbee.et URL
+ *  in it to fix. Approved customers are deliberately not re-emailed. */
 
 async function main() {
   console.log("=== 101 Drivers — invite / approval email campaign ===");
@@ -425,42 +373,8 @@ async function main() {
       });
       (recipients[recipients.length - 1] as any).approvedAt = d.approvedAt;
     }
-
-    const approvedDealers = await prisma.customer.findMany({
-      where: { approvalStatus: "APPROVED" },
-      select: {
-        id: true,
-        customerType: true,
-        businessName: true,
-        contactName: true,
-        contactEmail: true,
-        postpaidEnabled: true,
-        suspendedAt: true,
-        user: { select: { email: true, fullName: true } },
-      },
-    });
-    for (const c of approvedDealers) {
-      recipients.push({
-        category:
-          c.customerType === "BUSINESS"
-            ? "APPROVED_DEALER_BUSINESS"
-            : "APPROVED_DEALER_PRIVATE",
-        refId: c.id,
-        name: c.businessName || c.contactName || c.user?.fullName || "Customer",
-        email:
-          c.contactEmail?.trim().toLowerCase() ||
-          c.user?.email?.trim().toLowerCase() ||
-          null,
-        suspended: c.suspendedAt != null,
-        tokenRegenerated: false,
-      });
-      const r = recipients[recipients.length - 1] as any;
-      r.customerType = c.customerType;
-      r.postpaidEnabled = c.postpaidEnabled;
-      r.businessName = c.businessName;
-      r.contactName = c.contactName;
-      r.userFullName = c.user?.fullName ?? null;
-    }
+    // NO customer/dealer collection: their approval email has no link to
+    // fix (see the scope rule in the header).
   }
 
   let scoped = recipients;
@@ -486,9 +400,6 @@ async function main() {
   console.log("\n── recipients in scope ──");
   console.log(`  invited drivers            : ${countBy((r) => r.category === "INVITED_DRIVER")}`);
   console.log(`  approved drivers           : ${countBy((r) => r.category === "APPROVED_DRIVER")}`);
-  console.log(`  approved dealers (BUSINESS): ${countBy((r) => r.category === "APPROVED_DEALER_BUSINESS")}`);
-  console.log(`  approved dealers (PRIVATE) : ${countBy((r) => r.category === "APPROVED_DEALER_PRIVATE")}`);
-  console.log(`  (suspended-but-approved    : ${countBy((r) => r.suspended)} — still included, flagged)`);
   console.log(`  total                      : ${scoped.length}\n`);
 
   if (DRY_RUN) {
@@ -725,25 +636,6 @@ async function queueOne(
         payload: {
           campaignId: CAMPAIGN_ID,
           driverId: r.refId,
-          note: "Bulk approval re-send (campaign script)",
-        } as Prisma.InputJsonValue,
-      });
-    } else {
-      const tpl = buildApprovedDealerEmail({
-        customerType: (r as any).customerType ?? null,
-        businessName: (r as any).businessName ?? null,
-        contactName: (r as any).contactName ?? null,
-        userFullName: (r as any).userFullName ?? null,
-        postpaidEnabled: (r as any).postpaidEnabled ?? false,
-      });
-      queued = await engine.queueAndSend({
-        customerId: r.refId,
-        channel: EnumNotificationEventChannel.EMAIL,
-        toEmail: r.email!,
-        ...tpl,
-        payload: {
-          campaignId: CAMPAIGN_ID,
-          customerId: r.refId,
           note: "Bulk approval re-send (campaign script)",
         } as Prisma.InputJsonValue,
       });

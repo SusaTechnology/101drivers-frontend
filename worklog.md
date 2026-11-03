@@ -2074,3 +2074,39 @@ Stage Summary:
   (TS2554 gone), Nest DI resolves in all modules (the DisputeCaseModule
   boot error is dead), no techbee.et left in any user-facing URL. The
   campaign is ready to run on the server after the .env domain check.
+
+---
+
+Task ID: 36
+Agent: main agent (Super Z)
+Task: campaign re-send restricted to the emails that actually carried the techbee.et link
+
+Work Log:
+- User: the point of the re-send is to fix the wrong techbee.et URLs, so
+  only emails that contain a domain link should be re-sent — e.g. the
+  approved-driver and invited-driver emails, but NOT the customer
+  approval email, which has no domain in it.
+- Verified against the templates: buildInvitedDriverEmail embeds
+  https://<domain>/driver-onboarding-complete?token=… and
+  buildApprovedDriverEmail embeds https://<domain>/driver-signin — both
+  were sent with the wrong host, both stay in scope. The customer
+  approval email ("Your business/customer account has been approved",
+  business AND private copy) contains NO link at all — only text and the
+  COO signature — so there was never a techbee.et URL in it to fix.
+- Removed the whole customer path from
+  scripts/send-invite-approval-emails.ts: buildApprovedDealerEmail(),
+  the prisma.customer.findMany collection, the two APPROVED_DEALER_*
+  categories + Recipient fields, the scope-summary lines (incl. the
+  suspended-but-approved flag, which was dealer-only), and the
+  queueAndSend dealer branch. Header now documents the scope rule:
+  only link-bearing emails get re-sent. INVITED + APPROVED drivers
+  remain; MEETING_REQUESTED still excluded.
+- Gates: script compiles and runs under ts-node (reaches the SMTP
+  pre-check, aborts cleanly in the sandbox); remaining customer/dealer
+  mentions are documentation only.
+
+Stage Summary:
+- The campaign now re-emails exactly two groups — INVITED drivers and
+  APPROVED drivers — each with the corrected 101drivers.com link.
+  Approved customers are never re-emailed (their email had no URL to
+  fix). Dry-run, resume and rate-limit machinery unchanged.
