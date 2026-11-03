@@ -2278,3 +2278,56 @@ Stage Summary:
   expiry; the only invalidation paths are by-design (re-invite,
   completion). Invite copy restored to as-it-was; approval email keeps
   its link. No other changes.
+
+---
+
+Task ID: 41
+Agent: main agent (Super Z)
+Task: fix driver-signup rejection of tablets (iPadOS desktop-mode iPads)
+
+Work Log:
+- Owner reports an iPad/tablet user rejected at driver registration; UA:
+  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) ... Version/27.0.1
+  Safari/605.1.15" — the byte-for-byte macOS UA that iPadOS sends when
+  "Request Desktop Website" is on (the iPadOS 13+ default).
+- The gate is two independent checks that MUST agree (both documented as
+  such): the client gate (src/lib/device.ts shouldShowMobileOnlySignup —
+  touch-capable + Macintosh = iPad → shows the FORM) and the server
+  guard (backend/src/auth/guards/mobile-only-signup.guard.ts on
+  POST /auth/signup/driver — needs the x-device-touch: 1 header to tell
+  the desktop-mode iPad from a real Mac).
+- Root cause: the header was attached ONLY in the TanStack query-wrapper
+  fetcher (query-wrapper.tsx:66). The signup POST actually goes through
+  src/lib/tanstack/dataQuery.ts baseFetch (useDataMutation → baseFetch),
+  which set Content-Type + Authorization but NEVER the touch header.
+  Result: form shown → submitted → server sees no hint + "Macintosh" UA
+  → classifySignupUserAgent → BLOCKED DESKTOP_UA → 403 "Driver signup is
+  available on phones and tablets only…" + BlockedSignup row. The
+  comment in driverOnboarding.tsx:243 even claimed the server gets the
+  signal — it never did.
+- Proof with the owner's exact UA (classifySignupUserAgent):
+    header missing (bug)        → blocked DESKTOP_UA
+    header present (after fix)  → pass MOBILE_UA
+    real Mac (touch=0)          → still blocked DESKTOP_UA (design)
+    normal iPad UA              → pass MOBILE_UA (design)
+    Windows touchscreen + hint  → still blocked DESKTOP_TOUCH_UA (design)
+- Fix (one line + comment): baseFetch headers now start with
+  "x-device-touch": deviceTouchHint() (import from @/lib/device), same
+  convention as query-wrapper (per-request headers can override).
+  Covers signup, driver-verify-email and onboarding posts (all route
+  through baseFetch). Multipart uploads and the token-refresh fetch are
+  not gated and untouched.
+- Frontend typecheck: 137 pre-existing errors before and after, none in
+  dataQuery.ts / device.ts (verified via git stash A/B).
+- Sandbox note: this turn began with the local checkout rolled back to
+  09828203 (recycle artifact) — the fix was first committed there
+  (6f59c049), then re-applied onto current origin/master and the stray
+  base discarded. Uncommitted upload-file deletions found on disk were
+  discarded (origin still carries those files — never committed).
+
+Stage Summary:
+- Desktop-mode iPads (the default iPad configuration) can now complete
+  driver signup; every desktop/laptop class stays blocked exactly as
+  before. Fix ships to users with the next frontend build. Owner can
+  confirm the historical rejections on the admin metrics page
+  (BlockedSignup reasons, DESKTOP_UA, with this UA and attempted email).

@@ -11,6 +11,7 @@ import { socketConnect, socketDisconnect } from "@/lib/socket";
 import { fetchWithTimeout } from "@/lib/fetchWithTimeout";
 import { safeLocalStorage } from "@/lib/safeStorage";
 import { uploadTracker } from "@/lib/uploadFeedback";
+import { deviceTouchHint } from "@/lib/device";
 
 // ==================== TOKEN & USER MANAGEMENT ====================
 const ACCESS_TOKEN_KEY = "accessToken";
@@ -277,6 +278,14 @@ async function baseFetch<T>(
   const isFormData = typeof FormData !== "undefined" && options.body instanceof FormData;
   const headers: HeadersInit = {
     ...(isFormData ? {} : { "Content-Type": "application/json" }),
+    // Touch-capability hint for the signup device gate — the server uses it
+    // to tell an iPadOS desktop-mode iPad (touch-capable, UA says
+    // "Macintosh", allowed) apart from a real Mac (no touch, blocked).
+    // WITHOUT it every desktop-mode iPad was 403'd as DESKTOP_UA at
+    // POST /auth/signup/driver even though the client gate showed the
+    // form. See src/lib/device.ts; mirrors the query-wrapper fetcher.
+    // Per-request headers can still override.
+    "x-device-touch": deviceTouchHint(),
     ...options.headers,
   };
 
