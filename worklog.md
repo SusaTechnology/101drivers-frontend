@@ -2148,3 +2148,42 @@ Stage Summary:
   Dry-run, resume and rate-limit machinery untouched; once the inbox
   check passes, the live command stays
     npm run email:campaign -- --yes
+
+---
+
+Task ID: 38
+Agent: main agent (Super Z)
+Task: clarify test-mode semantics + confirm PENDING_APPROVAL drivers get nothing (no code change)
+
+Work Log:
+- Owner ran --test-to and received BOTH samples; asked why, since his own
+  account is PENDING_APPROVAL ("you are misleading drivers since they are
+  not approved").
+- Explained: test mode deliberately samples one email per in-scope
+  template, built from two DIFFERENT real drivers (first INVITED, first
+  APPROVED — printed in the output) and redirects both to the owner's
+  inbox. The owner's own status is never consulted; no driver receives
+  anything. The REAL blast already follows the one-email-per-status rule:
+  the recipient's DB status picks the template (INVITED → invitation
+  email, APPROVED → approval email); a driver cannot be in both statuses.
+- Verified in code for the pending-approval question: completeOnboarding
+  (driver.service.ts:692) requires INVITED status and stores license +
+  photos + SSN + address + selfie, sets status=PENDING_APPROVAL and
+  onboardingCompletedAt — owner's assumption ("pending approval = details
+  already entered") is CORRECT. Enumeration of every queueAndSend caller:
+  driver emails are only driver-invited / driver-approved /
+  driver-meeting-request (admin-composed, MEETING_REQUESTED). NO email is
+  sent when a driver reaches PENDING_APPROVAL.
+- Conclusion (no code change): there is no pending-approval email to
+  re-send, so PENDING_APPROVAL drivers correctly receive nothing from the
+  campaign even though they have an email on file — the invite link is
+  spent (the endpoint refuses re-completion) and the approval email would
+  mislead. They get the approval email from the LIVE flow at approve
+  time, which now carries the fixed 101drivers.com domain.
+- Tip surfaced for the owner: test a single template with
+  --test-to=<addr> --only=approved (or --only=invited).
+
+Stage Summary:
+- Behavior confirmed correct end-to-end: one email per driver, matched to
+  status; PENDING_APPROVAL excluded by design (no such email exists in
+  the system); test mode = owner-only samples. No code changes this task.
