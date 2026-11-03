@@ -12,13 +12,13 @@
 // it, what role it has, or even that it was machine-generated.
 //
 // The 7 accounts it touches (matched by EMAIL — emails never change):
-//   admin    admin@101drivers.techbee.et
-//   private  private.customer@101drivers.techbee.et
-//   business business.customer@101drivers.techbee.et
-//   dealer2  dealer2@101drivers.techbee.et
-//   driver   driver@101drivers.techbee.et
-//   driver2  driver2@101drivers.techbee.et
-//   driver3  driver3@101drivers.techbee.et
+//   admin    admin@101drivers.com
+//   private  private.customer@101drivers.com
+//   business business.customer@101drivers.com
+//   dealer2  dealer2@101drivers.com
+//   driver   driver@101drivers.com
+//   driver2  driver2@101drivers.com
+//   driver3  driver3@101drivers.com
 //
 // The new names are generated ONCE and saved to
 //   scripts/test-username-map.local.json   (gitignored — never commit it)
@@ -66,13 +66,13 @@ const prisma = new PrismaClient();
 // NOTE: no prefixes, no hints — a generated login name carries zero
 // information about the account behind it.
 const TARGETS = [
-  { label: "admin",    email: "admin@101drivers.techbee.et" },
-  { label: "private",  email: "private.customer@101drivers.techbee.et" },
-  { label: "business", email: "business.customer@101drivers.techbee.et" },
-  { label: "dealer2",  email: "dealer2@101drivers.techbee.et" },
-  { label: "driver",   email: "driver@101drivers.techbee.et" },
-  { label: "driver2",  email: "driver2@101drivers.techbee.et" },
-  { label: "driver3",  email: "driver3@101drivers.techbee.et" },
+  { label: "admin",    email: "admin@101drivers.com" },
+  { label: "private",  email: "private.customer@101drivers.com" },
+  { label: "business", email: "business.customer@101drivers.com" },
+  { label: "dealer2",  email: "dealer2@101drivers.com" },
+  { label: "driver",   email: "driver@101drivers.com" },
+  { label: "driver2",  email: "driver2@101drivers.com" },
+  { label: "driver3",  email: "driver3@101drivers.com" },
 ] as const;
 
 const MAP_FILE = path.join(__dirname, "test-username-map.local.json");

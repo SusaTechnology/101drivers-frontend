@@ -75,9 +75,11 @@ async function baseFetch(
   return resolveResponse(res);
 }
 async function refreshToken(tenantCode: string) {
-  const res = await fetch(
-    "https://api.techbee.et/api/auth/auth/refresh-token",
-    {
+  // Same API base every other client module uses (VITE_API_URL); no
+  // hardcoded deployment host — with the env unset this falls back to a
+  // same-origin /api path, which works behind the /api proxy shape.
+  const apiBase = (import.meta.env.VITE_API_URL as string | undefined) || "";
+  const res = await fetch(`${apiBase}/api/auth/auth/refresh-token`, {
       method: "GET",
       credentials: "include",
       headers: { "x-tenant-code": tenantCode },

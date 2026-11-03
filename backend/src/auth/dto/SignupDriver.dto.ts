@@ -14,7 +14,7 @@ import {
 } from "class-validator";
 
 export class SignupDriverDto {
-  @ApiProperty({ example: "driver1@101drivers.techbee.et" })
+  @ApiProperty({ example: "driver1@101drivers.com" })
   @IsEmail()
   email!: string;
 

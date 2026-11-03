@@ -5,13 +5,13 @@
 //  the database — WITHOUT any possibility of touching a real user.
 //
 //  The seeded identities (see scripts/seed/*.seed.ts) are:
-//      admin    / admin@101drivers.techbee.et           / password "admin"
-//      private  / private.customer@101drivers.techbee.et / password "private"
-//      business / business.customer@101drivers.techbee.et / password "business"
-//      dealer2  / dealer2@101drivers.techbee.et          / password "dealer2"
-//      driver   / driver@101drivers.techbee.et           / password "driver"
-//      driver2  / driver2@101drivers.techbee.et          / password "driver2"
-//      driver3  / driver3@101drivers.techbee.et          / password "driver3"
+//      admin    / admin@101drivers.com           / password "admin"
+//      private  / private.customer@101drivers.com / password "private"
+//      business / business.customer@101drivers.com / password "business"
+//      dealer2  / dealer2@101drivers.com          / password "dealer2"
+//      driver   / driver@101drivers.com           / password "driver"
+//      driver2  / driver2@101drivers.com          / password "driver2"
+//      driver3  / driver3@101drivers.com          / password "driver3"
 //
 //  TWO WAYS TO CLOSE THE HOLE (the credentials are hard-coded in the repo,
 //  so anyone with repo access can sign in with them):
@@ -126,13 +126,13 @@ type SeedIdentity = {
 };
 
 const SEED_ACCOUNTS: SeedIdentity[] = [
-  { username: "admin",    email: "admin@101drivers.techbee.et",            role: EnumUserRoles.ADMIN,             kind: "admin",    oldPassword: "admin" },
-  { username: "private",  email: "private.customer@101drivers.techbee.et", role: EnumUserRoles.PRIVATE_CUSTOMER,  kind: "customer", oldPassword: "private" },
-  { username: "business", email: "business.customer@101drivers.techbee.et", role: EnumUserRoles.BUSINESS_CUSTOMER, kind: "customer", oldPassword: "business" },
-  { username: "dealer2",  email: "dealer2@101drivers.techbee.et",          role: EnumUserRoles.BUSINESS_CUSTOMER, kind: "customer", oldPassword: "dealer2" },
-  { username: "driver",   email: "driver@101drivers.techbee.et",           role: EnumUserRoles.DRIVER,            kind: "driver",   oldPassword: "driver" },
-  { username: "driver2",  email: "driver2@101drivers.techbee.et",          role: EnumUserRoles.DRIVER,            kind: "driver",   oldPassword: "driver2" },
-  { username: "driver3",  email: "driver3@101drivers.techbee.et",          role: EnumUserRoles.DRIVER,            kind: "driver",   oldPassword: "driver3" },
+  { username: "admin",    email: "admin@101drivers.com",            role: EnumUserRoles.ADMIN,             kind: "admin",    oldPassword: "admin" },
+  { username: "private",  email: "private.customer@101drivers.com", role: EnumUserRoles.PRIVATE_CUSTOMER,  kind: "customer", oldPassword: "private" },
+  { username: "business", email: "business.customer@101drivers.com", role: EnumUserRoles.BUSINESS_CUSTOMER, kind: "customer", oldPassword: "business" },
+  { username: "dealer2",  email: "dealer2@101drivers.com",          role: EnumUserRoles.BUSINESS_CUSTOMER, kind: "customer", oldPassword: "dealer2" },
+  { username: "driver",   email: "driver@101drivers.com",           role: EnumUserRoles.DRIVER,            kind: "driver",   oldPassword: "driver" },
+  { username: "driver2",  email: "driver2@101drivers.com",          role: EnumUserRoles.DRIVER,            kind: "driver",   oldPassword: "driver2" },
+  { username: "driver3",  email: "driver3@101drivers.com",          role: EnumUserRoles.DRIVER,            kind: "driver",   oldPassword: "driver3" },
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────

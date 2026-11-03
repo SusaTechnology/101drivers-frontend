@@ -1932,3 +1932,56 @@ Stage Summary:
 - The backend boots past the MailService/AdminGateService DI error in
   every module; the invite-email + gate-key chain works wherever the
   shared MailService is injected.
+
+---
+
+Task ID: 33
+Agent: main agent (Super Z)
+Task: Domain migration — 101drivers.com everywhere, no techbee.et host
+left in the product
+
+Work Log:
+- Directive: "do not use 101drivers.techbee.et anywhere; use
+  101drivers.com". The user's message wrote "101drvers.com" (no i);
+  the domain already used across the codebase (SEO tags in index.html,
+  the gate-cookie fix) is 101drivers.com — used that and flagged it.
+- ~50 references replaced. Bulk string swap 101drivers.techbee.et →
+  101drivers.com in 16 files: all seed scripts plus delete-seeded-users
+  and harden-test-usernames (kept email-consistent with each other),
+  send-invite-approval-emails APP_DOMAIN fallback, Stripe FRONTEND_URL
+  fallbacks, mail.service link fallback, ops@ support routing,
+  driverApproval onboarding link, Swagger dto examples, help page
+  mailto links, PublicTrackPage displayed domain.
+- Semantic edits (a blind swap would have broken auth):
+  1. cors-cookie.util.ts — CORS allowlist now .com + www + localhost
+     only; the auth-cookie Domain was HARDCODED ".techbee.et", the
+     exact silently-dropped-cookie bug class the host-only gate-cookie
+     fix solved. Now env-driven via authCookieDomain(): ROOT_DOMAIN
+     env with "101drivers.com" default.
+  2. auth.service.ts logout — ROOT_DOMAIN fallback techbee.et →
+     101drivers.com so cookie-clearing candidates match the set side.
+  3. query-wrapper.tsx — the SPA's one hardcoded
+     https://api.techbee.et refresh-token URL now uses VITE_API_URL
+     (the same base adminGate/cms/analytics already use) with a
+     same-origin fallback when unset.
+  4. upload.service.ts — CDN host cdn.techbee.et → cdn.101drivers.com
+     (affects new uploads; existing DB rows keep their old URLs).
+  5. admin-gate.controller.ts comment updated to the new shared-domain
+     wording.
+- Deploy requirements given to the user: set ROOT_DOMAIN=101drivers.com
+  in the backend env; rebuild the frontend bundle (old dist/assets
+  still carry api.techbee.et); make sure cdn.101drivers.com resolves.
+- Sandbox recycle hit twice mid-task: rolled HEAD back to 0982820,
+  deleted tracked backend/src/upload/* and node_modules, and a stash
+  pop conflicted on the stale base. Recovered by fetch + reset --hard
+  origin/master and reapplying edits deterministically; verified the
+  feb3010f mail.module re-export intact before continuing.
+- Gates: backend tsc = 2 baseline spec errors; nest build green (dist
+  now techbee-free); vite build green; git grep techbee (excl. worklog
+  history) = zero.
+
+Stage Summary:
+- The product references only 101drivers.com now — seeds, emails,
+  Stripe, onboarding links, CDN, CORS, auth-cookie domains and the
+  SPA's refresh endpoint. Old worklog history deliberately keeps its
+  original text.

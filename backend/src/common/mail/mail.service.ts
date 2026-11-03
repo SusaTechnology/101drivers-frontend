@@ -44,7 +44,7 @@ export class MailService {
     this.appDomain =
       this.normalizeBaseUrl(
         this.configService.get<string>("101_DOMAIN") ??
-          "https://101drivers.techbee.et"
+          "https://101drivers.com"
       );
 
     if (!host || !user || !pass) {

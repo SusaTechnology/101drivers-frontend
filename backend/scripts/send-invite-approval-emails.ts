@@ -204,7 +204,7 @@ function loadPreviouslySent(reportPath: string): Set<string> {
 }
 
 // ── Templates: verbatim copies of the system's own emails ─────────────────
-const appDomain = (process.env.APP_DOMAIN || "101drivers.techbee.et").replace(
+const appDomain = (process.env.APP_DOMAIN || "101drivers.com").replace(
   /^https?:\/\//,
   ""
 );

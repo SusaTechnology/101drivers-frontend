@@ -22,7 +22,7 @@ export class UploadService {
   getDeliveryEvidencePublicBaseUrl(): string {
     return (
       this.configService.get<string>("DRIVERS_MEDIA_BASE_URL") ??
-      "https://cdn.techbee.et/101-drivers"
+      "https://cdn.101drivers.com/101-drivers"
     );
   }
 
@@ -205,7 +205,7 @@ buildAppSettingPublicUrl(input: {
   const base =
     (
       this.configService.get<string>("DRIVERS_MEDIA_BASE_URL") ??
-      "https://cdn.techbee.et/101-drivers"
+      "https://cdn.101drivers.com/101-drivers"
     ).replace(/\/+$/, "");
 
   return `${base}/app-settings/${input.scope}/${input.filename}`;
@@ -241,7 +241,7 @@ buildAppSettingPublicUrl(input: {
     const base =
       (
         this.configService.get<string>("DRIVERS_MEDIA_BASE_URL") ??
-        "https://cdn.techbee.et/101-drivers"
+        "https://cdn.101drivers.com/101-drivers"
       ).replace(/\/+$/, "");
     return `${base}/support/${input.userId}/${input.filename}`;
   }
@@ -268,7 +268,7 @@ buildAppSettingPublicUrl(input: {
     const base =
       (
         this.configService.get<string>("DRIVERS_MEDIA_BASE_URL") ??
-        "https://cdn.techbee.et/101-drivers"
+        "https://cdn.101drivers.com/101-drivers"
       ).replace(/\/+$/, "");
     return `${base}/driver-selfie/${filename}`;
   }

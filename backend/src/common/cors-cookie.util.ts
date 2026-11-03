@@ -7,18 +7,29 @@ import { CookieOptions } from "express";
 /**
  * Explicit allowlist of production frontend origins.
  *
- * The API serves BOTH deployed frontends:
- *   - https://101drivers.techbee.et  (original deployment)
- *   - https://101drivers.com         (current primary domain)
- * plus localhost for development. Without this list in the repo, a backend
- * deploy would fall back to whatever configuration the server happens to
- * carry — the .com frontend must never be an afterthought here.
+ * The production frontend lives on 101drivers.com (www included);
+ * localhost is allowed for development. Without this list in the repo, a
+ * backend deploy would fall back to whatever configuration the server
+ * happens to carry — the .com frontend must never be an afterthought here.
  */
 const ALLOWED_CORS_ORIGINS = new Set<string>([
-  "https://101drivers.techbee.et",
   "https://101drivers.com",
   "https://www.101drivers.com",
 ]);
+
+/**
+ * Shared auth-cookie domain — the ROOT_DOMAIN env var when set, otherwise
+ * the 101drivers.com primary. Cookies carrying a Domain that does not
+ * match the responding host are SILENTLY DROPPED by browsers, so this
+ * must always match where the API actually runs (set ROOT_DOMAIN on any
+ * non-default deployment).
+ */
+function authCookieDomain(): string {
+  const root = (process.env.ROOT_DOMAIN || "101drivers.com")
+    .toLowerCase()
+    .replace(/^https?:\/\//, "");
+  return `.${root}`;
+}
 
 export function configureCors(app: INestApplication) {
   app.use(cookieParser());
@@ -69,7 +80,7 @@ export function getCookieOptions(isSecureEnv = false): CookieOptions {
     httpOnly: true,
     secure: isHttps,
     sameSite: (isHttps ? "none" : "lax") as "none" | "lax",
-    domain: isHttps ? ".techbee.et" : undefined,
+    domain: isHttps ? authCookieDomain() : undefined,
     path: "/",
     maxAge: 30 * 24 * 60 * 60 * 1000,
   };
@@ -92,7 +103,7 @@ export function getCookieOptionsFromRequest(req: {
     httpOnly: true,
     secure: isHttps,
     sameSite: (isHttps ? "none" : "lax") as "none" | "lax",
-    domain: isHttps ? ".techbee.et" : undefined,
+    domain: isHttps ? authCookieDomain() : undefined,
     path: "/",
     maxAge: 30 * 24 * 60 * 60 * 1000,
   };

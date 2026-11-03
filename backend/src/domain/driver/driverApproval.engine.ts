@@ -919,7 +919,7 @@ export class DriverApprovalEngine {
           "This is a reminder to complete your driver application with 101 Drivers.",
           "Please visit the link below to finish your onboarding:",
           "",
-          `https://${(process.env.APP_DOMAIN || "101drivers.techbee.et").replace(/^https?:\/\//, "")}/driver-onboarding-complete?token=${onboardingToken}`,
+          `https://${(process.env.APP_DOMAIN || "101drivers.com").replace(/^https?:\/\//, "")}/driver-onboarding-complete?token=${onboardingToken}`,
           "",
           "You will need to provide the following:",
           "",

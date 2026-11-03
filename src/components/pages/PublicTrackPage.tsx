@@ -672,7 +672,7 @@ export default function PublicTrackPage({ token }: PublicTrackPageProps) {
         <footer className="mt-10 text-center">
           <Link to="/" className="inline-flex items-center gap-2 text-sm font-bold text-slate-500 hover:text-lime-500 transition-colors">
             <MapPin className="h-4 w-4" />
-            101drivers.techbee.et
+            101drivers.com
           </Link>
           <p className="text-xs text-slate-400 mt-2">Powered by 101 Drivers Inc.</p>
         </footer>
