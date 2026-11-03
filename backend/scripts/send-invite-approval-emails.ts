@@ -51,9 +51,18 @@
  *   Exit code 0 = every queued email SENT; 1 = any FAILED/timeout/abort.
  *
  * ── Usage ─────────────────────────────────────────────────────────────────
+ *   npx ts-node scripts/send-invite-approval-emails.ts --test-to=me@mydomain.com  # 1. check
  *   npx ts-node scripts/send-invite-approval-emails.ts --dry-run
- *   npx ts-node scripts/send-invite-approval-emails.ts --yes            # live
+ *   npx ts-node scripts/send-invite-approval-emails.ts --yes            # 2. live
  *   Flags:
+ *     --test-to=me@mydomain.com        TEST MODE: send ONE real invited-driver
+ *                                      email + ONE real approved-driver email
+ *                                      (built from real driver records, real
+ *                                      onboarding tokens/links) to this
+ *                                      address ONLY — no real recipient is
+ *                                      emailed and no driver data is touched.
+ *                                      No --yes needed. Check your inbox,
+ *                                      then run the live command.
  *     --dry-run                        list recipients + templates, send nothing
  *     --only=invited                   only the invited-driver email
  *     --only=approved                  only the approved-driver email
@@ -118,6 +127,12 @@ const DRY_RUN = flag("dry-run") === "true";
 const ONLY = flag("only") as "invited" | "approved" | undefined;
 const LIMIT = Number(flag("limit") ?? 0) || 0;
 const ASSUME_YES = flag("yes") === "true";
+// TEST MODE — redirect sample emails to the owner's inbox (see header).
+const TEST_TO = (flag("test-to") ?? "").trim().toLowerCase() || null;
+if (TEST_TO && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(TEST_TO)) {
+  console.error(`--test-to "${TEST_TO}" does not look like an email address.`);
+  process.exit(1);
+}
 const WAIT_SECONDS = Number(flag("wait") ?? 180) || 180;
 // rate-limit resilience — see the "Rate limits" note in the header
 const RETRY_FROM = flag("retry-failed-from");
@@ -331,7 +346,7 @@ async function main() {
     });
     for (const d of invited) {
       let tokenRegenerated = false;
-      if (!DRY_RUN && !d.onboardingToken && d.user?.email) {
+      if (!DRY_RUN && !TEST_TO && !d.onboardingToken && d.user?.email) {
         // INVITED drivers always get a token at invite time; regenerate only if missing.
         const token = randomBytes(32).toString("hex");
         await prisma.driver.update({
@@ -395,6 +410,68 @@ async function main() {
 
   if (LIMIT > 0) scoped = scoped.slice(0, LIMIT);
 
+  // ── TEST MODE: --test-to=me@mydomain.com ────────────────────────────────
+  // Sends ONE real invited-driver email + ONE real approved-driver email to
+  // TEST_TO so the sender/subject/body/link can be checked in a real inbox
+  // BEFORE the real blast. Uses real driver records (the ledger driverId is
+  // an FK, and the onboarding link must carry a live token) but redirects
+  // delivery to TEST_TO — no real recipient is emailed, no driver data is
+  // mutated, and no --yes is needed since the only destination is TEST_TO.
+  if (TEST_TO) {
+    console.log(`\n── TEST MODE ── every email below goes to ${TEST_TO} ONLY ──`);
+    const testScoped: Recipient[] = [];
+    if (SEND_INVITED) {
+      const d = await prisma.driver.findFirst({
+        where: { status: "INVITED", onboardingToken: { not: null } },
+        select: { id: true, onboardingToken: true, user: { select: { fullName: true } } },
+      });
+      if (d) {
+        const r: Recipient = {
+          category: "INVITED_DRIVER",
+          refId: d.id,
+          name: d.user?.fullName || "Driver",
+          email: TEST_TO,
+          suspended: false,
+          tokenRegenerated: false,
+        };
+        (r as any).onboardingToken = d.onboardingToken;
+        (r as any).testRun = true;
+        testScoped.push(r);
+        console.log(`  sample INVITED email   ← built from real driver ${d.id} (${r.name})`);
+      } else {
+        console.log("  no INVITED driver with an onboarding token — invited sample skipped");
+      }
+    }
+    if (SEND_APPROVED) {
+      const d = await prisma.driver.findFirst({
+        where: { status: "APPROVED" },
+        select: { id: true, approvedAt: true, user: { select: { fullName: true } } },
+      });
+      if (d) {
+        const r: Recipient = {
+          category: "APPROVED_DRIVER",
+          refId: d.id,
+          name: d.user?.fullName || "Driver",
+          email: TEST_TO,
+          suspended: false,
+          tokenRegenerated: false,
+        };
+        (r as any).approvedAt = d.approvedAt;
+        (r as any).testRun = true;
+        testScoped.push(r);
+        console.log(`  sample APPROVED email  ← built from real driver ${d.id} (${r.name})`);
+      } else {
+        console.log("  no APPROVED driver — approved sample skipped");
+      }
+    }
+    if (testScoped.length === 0) {
+      console.error("TEST MODE found no in-scope drivers to sample — nothing to send.");
+      await prisma.$disconnect();
+      process.exit(1);
+    }
+    scoped = testScoped;
+  }
+
   // ── Scope summary ───────────────────────────────────────────────────────
   const countBy = (fn: (r: Recipient) => boolean) => scoped.filter(fn).length;
   console.log("\n── recipients in scope ──");
@@ -415,8 +492,10 @@ async function main() {
     return;
   }
 
-  // ── Live confirmation ───────────────────────────────────────────────────
-  if (!ASSUME_YES && process.stdin.isTTY) {
+  // ── Live confirmation (skipped in TEST MODE — only TEST_TO is emailed) ──
+  if (TEST_TO) {
+    console.log("TEST MODE: skipping confirmation — the only destination is " + TEST_TO);
+  } else if (!ASSUME_YES && process.stdin.isTTY) {
     const ok = await new Promise<boolean>((resolve) => {
       process.stdout.write(`Type SEND to email ${scoped.length} recipients: `);
       process.stdin.once("data", (d) => resolve(String(d).trim() === "SEND"));
@@ -623,7 +702,9 @@ async function queueOne(
         payload: {
           campaignId: CAMPAIGN_ID,
           driverId: r.refId,
-          note: "Bulk invite re-send (campaign script)",
+          note: (r as any).testRun
+            ? "TEST send — sample redirected to owner (campaign script)"
+            : "Bulk invite re-send (campaign script)",
         } as Prisma.InputJsonValue,
       });
     } else if (r.category === "APPROVED_DRIVER") {
@@ -636,7 +717,9 @@ async function queueOne(
         payload: {
           campaignId: CAMPAIGN_ID,
           driverId: r.refId,
-          note: "Bulk approval re-send (campaign script)",
+          note: (r as any).testRun
+            ? "TEST send — sample redirected to owner (campaign script)"
+            : "Bulk approval re-send (campaign script)",
         } as Prisma.InputJsonValue,
       });
     }

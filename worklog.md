@@ -2110,3 +2110,41 @@ Stage Summary:
   APPROVED drivers — each with the corrected 101drivers.com link.
   Approved customers are never re-emailed (their email had no URL to
   fix). Dry-run, resume and rate-limit machinery unchanged.
+
+---
+
+Task ID: 37
+Agent: main agent (Super Z)
+Task: --test-to flag — check the campaign emails in the owner's inbox before the real blast
+
+Work Log:
+- User: "I want the script to check by sending it to my email first" — a
+  test-send mode with its own command.
+- Checked prisma/schema.prisma first: NotificationEvent.driverId is a real
+  FK to Driver, so a synthetic "test driver" row would violate the
+  constraint. Design: --test-to=<email> picks the FIRST real INVITED
+  driver (with a live onboarding token) and the FIRST real APPROVED
+  driver, builds their real emails (real tokens → the onboarding link in
+  the sample actually works), and redirects delivery to the given
+  address. No real recipient is emailed, no driver data is mutated (the
+  token-regeneration path is disabled in test mode), and the --yes gate
+  is skipped because the only possible destination is TEST_TO.
+- Implementation in scripts/send-invite-approval-emails.ts: TEST_TO flag
+  parsed + regex-validated at startup (bad address = instant exit); test
+  branch replaces the scoped recipient list right before the scope
+  summary (so --limit/--retry-failed-from cannot damage it); ledger
+  payload note marks the rows "TEST send — sample redirected to owner";
+  header usage docs updated with the flag and the check-then-live flow.
+- Gates: --test-to=notanemail → rejected before anything runs;
+  --test-to=<valid> and plain live both compile and abort cleanly at the
+  SMTP pre-check in the sandbox (no SMTP creds here); plain behavior of
+  every other flag unchanged.
+
+Stage Summary:
+- New command (run from backend/ on the server):
+    npm run email:campaign -- --test-to=you@yourdomain.com
+  → 2 messages land in that inbox: the invited-driver email (with a
+  working 101drivers.com onboarding link) and the approved-driver email.
+  Dry-run, resume and rate-limit machinery untouched; once the inbox
+  check passes, the live command stays
+    npm run email:campaign -- --yes
