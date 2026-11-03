@@ -2227,3 +2227,54 @@ Stage Summary:
   start the backend node process (techbee's 502 says it is down). Then
   re-run --test-to and click BOTH links; only after they open the real
   app, run npm run email:campaign -- --yes.
+
+---
+
+Task ID: 40
+Agent: main agent (Super Z)
+Task: revert invite-copy change to as-it-was + full every-email audit (code only)
+
+Work Log:
+- Owner instruction: everything stays exactly as it was except the admin
+  approval email carrying its link (already in the baseline via owner's
+  commit 275ad936); audit every email message for validity; no
+  infrastructure topics.
+- Reverted Task 39's rewording: engine invite body and campaign copy are
+  byte-identical to the pre-change baseline again (git checkout
+  5f078136 -- driverApproval.engine.ts send-invite-approval-emails.ts).
+  tsc clean (pre-existing spec-file errors aside, untouched).
+- Full audit — every send path enumerated (queueAndSend: ~60 templates
+  across delivery lifecycle, payments, disputes, admin alerts, support;
+  direct MailService: signup confirmation, email verification/password
+  reset, admin invite, meeting-request, rating reminder, SMTP fallback).
+  Link-bearing emails and their construction:
+  1. driver-invited (invite + reminder): https://$APP_DOMAIN
+     /driver-onboarding-complete?token=<onboardingToken> — token is the
+     driver row's own value, String?, NO expiry; endpoint requires token
+     match + status INVITED + not completed. Token dies only via
+     re-invite (regenerates by design) or completed onboarding. Campaign
+     preserves existing tokens. NOTE (left as-is per owner): the main
+     invite body puts the URL mid-sentence with a trailing period.
+  2. driver-approved: https://$APP_DOMAIN/driver-signin — own line, no
+     token. Valid by construction.
+  3. email verification / password reset: Continue here: <url> on its
+     own line; encodeURIComponent; appDomain = 101_DOMAIN env ??
+     https://101drivers.com; OTP hashed (tokenHash) with expiresAt
+     (intentional security expiry).
+  4. admin invite: $appDomain/auth/accept-invite?token=…&key=… — encoded.
+  5. tracking emails: $appDomain/track/<shareToken> (101_DOMAIN env);
+     share token has its own expiry by design.
+  6. rating reminder: static https://101drivers.com link; Stripe admin
+     alerts: dashboard.stripe.com/payments/<intentId>. No other template
+     embeds any URL (delivery/support templates verified text-only).
+- "Invalid or expired" strings exist ONLY in API error responses
+  (onboarding 404, auth refresh 401, ws guard, referral codes) and the
+  frontend onboarding page's error card. NO email contains or sends
+  that text.
+
+Stage Summary:
+- Code can never email an invalid token: every token-bearing link reads
+  the recipient's own DB value at send time; onboarding tokens have no
+  expiry; the only invalidation paths are by-design (re-invite,
+  completion). Invite copy restored to as-it-was; approval email keeps
+  its link. No other changes.
