@@ -136,9 +136,13 @@ export class DriverApprovalEngine {
         body: [
           `Hi ${displayName},`,
           "",
-          "good news \u2014 you\u2019ve been selected to move forward with your 101 Drivers application.",
+          "Good news \u2014 you\u2019ve been selected to move forward with your 101 Drivers application.",
           "",
-          `Complete it here: https://${(process.env.APP_DOMAIN || "101drivers.com").replace(/^https?:\/\//, "")}/driver-onboarding-complete?token=${onboardingToken}. You\u2019ll need your driver\u2019s license front and back, photos, Social Security number, current address, and a selfie for ID verification.`,
+          "Click the button below, or copy this link, to complete your application:",
+          "",
+          `https://${(process.env.APP_DOMAIN || "101drivers.com").replace(/^https?:\/\//, "")}/driver-onboarding-complete?token=${onboardingToken}`,
+          "",
+          "You\u2019ll need your driver\u2019s license (front and back photos), Social Security number, current residential address, and a selfie for ID verification.",
           "",
           "Once we receive everything, your application goes into review. A team member may follow up by email or phone with a quick two-to-three-minute call before we run the final background check. It only takes a few minutes and helps us get you approved faster.",
           "",
@@ -152,6 +156,8 @@ export class DriverApprovalEngine {
           driverId: input.driverId,
           invitedAt: afterDriver ? new Date().toISOString() : null,
           note: input.note ?? null,
+          actionUrl: `https://${(process.env.APP_DOMAIN || "101drivers.com").replace(/^https?:\/\//, "")}/driver-onboarding-complete?token=${onboardingToken}`,
+          actionLabel: "Complete Your Application",
         },
       });
     }
@@ -263,6 +269,8 @@ export class DriverApprovalEngine {
           driverId: input.driverId,
           approvedAt: afterDriver?.approvedAt ?? null,
           note: input.note ?? null,
+          actionUrl: `https://${(process.env.APP_DOMAIN || "101drivers.com").replace(/^https?:\/\//, "")}/driver-signin`,
+          actionLabel: "Log In to Your Account",
         },
       });
     }
@@ -917,7 +925,7 @@ export class DriverApprovalEngine {
           `Hi ${displayName},`,
           "",
           "This is a reminder to complete your driver application with 101 Drivers.",
-          "Please visit the link below to finish your onboarding:",
+          "Click the button below, or copy this link, to finish your onboarding:",
           "",
           `https://${(process.env.APP_DOMAIN || "101drivers.com").replace(/^https?:\/\//, "")}/driver-onboarding-complete?token=${onboardingToken}`,
           "",
@@ -938,6 +946,8 @@ export class DriverApprovalEngine {
           driverId: input.driverId,
           invitedAt: afterDriver ? new Date().toISOString() : null,
           note: input.note ?? null,
+          actionUrl: `https://${(process.env.APP_DOMAIN || "101drivers.com").replace(/^https?:\/\//, "")}/driver-onboarding-complete?token=${onboardingToken}`,
+          actionLabel: "Complete Your Application",
         },
       });
     }

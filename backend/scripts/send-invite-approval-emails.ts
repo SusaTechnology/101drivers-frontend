@@ -267,9 +267,13 @@ function buildInvitedDriverEmail(fullName: string, onboardingToken: string) {
     body: [
       `Hi ${fullName},`,
       "",
-      "good news \u2014 you\u2019ve been selected to move forward with your 101 Drivers application.",
+      "Good news \u2014 you\u2019ve been selected to move forward with your 101 Drivers application.",
       "",
-      `Complete it here: https://${appDomain}/driver-onboarding-complete?token=${onboardingToken}. You\u2019ll need your driver\u2019s license front and back, photos, Social Security number, current address, and a selfie for ID verification.`,
+      "Click the button below, or copy this link, to complete your application:",
+      "",
+      `https://${appDomain}/driver-onboarding-complete?token=${onboardingToken}`,
+      "",
+      "You\u2019ll need your driver\u2019s license (front and back photos), Social Security number, current residential address, and a selfie for ID verification.",
       "",
       "Once we receive everything, your application goes into review. A team member may follow up by email or phone with a quick two-to-three-minute call before we run the final background check. It only takes a few minutes and helps us get you approved faster.",
       "",
@@ -705,6 +709,8 @@ async function queueOne(
           note: (r as any).testRun
             ? "TEST send — sample redirected to owner (campaign script)"
             : "Bulk invite re-send (campaign script)",
+          actionUrl: `https://${appDomain}/driver-onboarding-complete?token=${(r as any).onboardingToken ?? ""}`,
+          actionLabel: "Complete Your Application",
         } as Prisma.InputJsonValue,
       });
     } else if (r.category === "APPROVED_DRIVER") {
@@ -720,6 +726,8 @@ async function queueOne(
           note: (r as any).testRun
             ? "TEST send — sample redirected to owner (campaign script)"
             : "Bulk approval re-send (campaign script)",
+          actionUrl: `https://${appDomain}/driver-signin`,
+          actionLabel: "Log In to Your Account",
         } as Prisma.InputJsonValue,
       });
     }

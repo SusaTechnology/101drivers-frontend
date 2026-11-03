@@ -2331,3 +2331,52 @@ Stage Summary:
   before. Fix ships to users with the next frontend build. Owner can
   confirm the historical rejections on the admin metrics page
   (BlockedSignup reasons, DESKTOP_UA, with this UA and attempted email).
+
+---
+
+Task ID: 42
+Agent: main agent (Super Z)
+Task: link emails as a button + clickable copy-fallback; root cause of the glued-URL token corruption
+
+Work Log:
+- Owner ask: stop telling drivers to "copy this link" — send a real
+  BUTTON (click → navigates) with a clickable copy fallback, and make
+  the links clickable.
+- Renderer (notificationEvent.engine.ts):
+  * wrapSimpleHtml(subject, body, action?) now renders, when the sender
+    supplies an action: a blue button (same style as the tracking
+    "Track Delivery" button) + "Or copy this link: <a>url</a>" under the
+    body. Plain-text part keeps the URL on its own line (unchanged
+    contract).
+  * The action rides in the event payload (actionUrl/actionLabel) —
+    persisted, so deferred delivery is safe; deliver() selects payload
+    and forwards it. Every queueAndSend sender (engine templates AND
+    the campaign script) gets the button with zero extra plumbing.
+  * Linkify hardening (the big one): the old regex baked TRAILING
+    PUNCTUATION into the clickable href — the old invite sentence
+    "…token=<token>. You'll need…" produced href "…token=<token>." →
+    token "abc." ≠ "abc" → "Invalid or expired token" page. This was
+    almost certainly the ORIGINAL token complaint. The new linkifier
+    strips trailing .,!??:;')" from every URL in every email; render
+    test proves the old glued sentence now yields the clean token href.
+- Templates (driverApproval.engine.ts):
+  * driver-invited: no more mid-sentence URL — "Click the button below,
+    or copy this link, to complete your application:" + URL on its own
+    line (no trailing period); payload gains actionUrl +
+    actionLabel "Complete Your Application".
+  * re-invite: same treatment ("…to finish your onboarding:").
+  * driver-approved: body unchanged (URL already own-line); payload
+    gains actionUrl + actionLabel "Log In to Your Account".
+- Campaign script: invite text mirrored to the engine's new copy; both
+  campaign payloads carry the same actionUrl/actionLabel, so campaign
+  samples render exactly like production emails.
+- Verification: backend tsc clean (node_modules restored via
+  `npm ci --legacy-peer-deps` after the recycle wiped it — 1022 pkgs);
+  render test on the REAL wrapSimpleHtml: button + fallback rendered,
+  3/3 hrefs byte-equal the clean onboarding URL.
+
+Stage Summary:
+- Driver link emails now read "Click the button below, or copy this
+  link" and both the button and the link are clickable and clean; the
+  trailing-period href corruption (invalid-token class) is fixed for
+  every template. Ships with the next backend deploy.
