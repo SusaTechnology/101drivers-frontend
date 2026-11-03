@@ -2037,3 +2037,40 @@ Stage Summary:
   APPROVED customer with the corrected 101drivers.com links, skips
   meeting-requested by design, is dry-runnable, resumable, and cannot
   double-send within a run. No product code changed this task.
+
+---
+
+Task ID: 35
+Agent: main agent (Super Z)
+Task: independent verification of Tasks 31-34 (DI fix, domain sweep, campaign script)
+
+Work Log:
+- Fresh sandbox (node_modules reinstalled from lockfile). A parallel
+  session had already pushed Tasks 31-34 (98646a64, 1c2b2127, feb3010f,
+  be9572a9, 9cee2fab); this session's overlapping re-implementation was
+  discarded in favor of the pushed architecture, then everything was
+  re-verified from scratch on origin/master@9cee2fab.
+- npm run build green (nest build = full src typecheck).
+- Campaign script: npx ts-node scripts/send-invite-approval-emails.ts
+  compiles clean and reaches the SMTP pre-check (aborts correctly in
+  the sandbox where SMTP is unset) — TS2554 confirmed gone.
+- Boot: resolved the ENTIRE Nest DI graph with zero "can't resolve"
+  errors (MailService instantiated in every consuming module), passed
+  config validation, and stopped ONLY at PrismaClientInitializationError
+  (sandbox has no Postgres and no root to install one). On the server
+  the DB exists, so the app comes up.
+- Repo-wide grep: 101drivers.techbee.et = zero occurrences in src +
+  scripts (cdn.techbee.et remains by design — real file-storage host).
+- Operational caveat for the re-send: code defaults are 101drivers.com,
+  but server .env values OVERRIDE them — APP_DOMAIN / 101_DOMAIN /
+  FRONTEND_URL must be https://101drivers.com (or those lines removed);
+  ROOT_DOMAIN=101drivers.com (or unset) so auth cookies derive the .com
+  domain.
+- Worklog committed together with this entry (matches the Tasks 31-34
+  convention).
+
+Stage Summary:
+- Tasks 31-34 verified independently: build green, campaign script runs
+  (TS2554 gone), Nest DI resolves in all modules (the DisputeCaseModule
+  boot error is dead), no techbee.et left in any user-facing URL. The
+  campaign is ready to run on the server after the .env domain check.
