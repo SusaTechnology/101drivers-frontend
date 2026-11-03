@@ -19,6 +19,19 @@
  *          referral-code line + COO signature; PRIVATE copy is the generic
  *          one. Subject differs by customerType, exactly like the engine.
  *
+ *   Deliberately NOT in scope:
+ *     - MEETING_REQUESTED drivers — their scheduling email is admin-composed
+ *       and personal; there is no template to re-send (per ops: skip them).
+ *     - WAITLISTED / PENDING_APPROVAL / REJECTED drivers and PENDING /
+ *       REJECTED customers — the system never sent them a link-bearing
+ *       email, so they hold no stale techbee.et URL to fix.
+ *     - SUSPENDED drivers — no suspension email exists; re-sending the
+ *       approval copy would contradict their status.
+ *
+ *   2026-11 domain-fix resend: every link these templates build now points
+ *   at 101drivers.com; re-running the campaign re-emails everyone still in
+ *   the in-scope statuses with the corrected URLs.
+ *
  * ── Delivery pipeline ─────────────────────────────────────────────────────
  *   Emails go through the REAL NotificationEventEngine.queueAndSend → the
  *   same NotificationEvent ledger, the same MailService SMTP transport,
@@ -82,6 +95,7 @@ import {
 import { ConfigService } from "@nestjs/config";
 import { PrismaService } from "../src/prisma/prisma.service";
 import { MailService } from "../src/common/mail/mail.service";
+import { AdminGateService } from "../src/admin-gate/admin-gate.service";
 import { NotificationEventEngine } from "../src/domain/notificationEvent/notificationEvent.engine";
 
 // ── env: shell first, then backend/.env, then repo root .env ──────────────
@@ -333,7 +347,10 @@ async function main() {
   console.log(`mode: ${DRY_RUN ? "DRY-RUN (no emails sent)" : "LIVE"}`);
 
   // ── SMTP pre-check: abort before touching the ledger if mail can't go ──
-  const mail = new MailService(new ConfigService());
+  // MailService now also injects AdminGateService (invite emails carry the
+  // gate key); the gate is only consulted on the admin-invite path, never
+  // for these campaign emails — but the constructor requires the instance.
+  const mail = new MailService(new ConfigService(), new AdminGateService());
   if (!mail.isConfigured && !DRY_RUN) {
     console.error(
       "\nABORT: SMTP is not configured in this environment " +

@@ -1985,3 +1985,55 @@ Stage Summary:
   Stripe, onboarding links, CDN, CORS, auth-cookie domains and the
   SPA's refresh endpoint. Old worklog history deliberately keeps its
   original text.
+
+---
+
+Task ID: 34
+Agent: main agent (Super Z)
+Task: Re-send lifecycle emails with the corrected 101drivers.com URLs —
+campaign script fixed and ready (ops runs it on the server)
+
+Work Log:
+- Ops request: after the domain migration everyone holding a lifecycle
+  email still holds a techbee.et link; re-send per current status,
+  EXCEPT meeting-requested drivers.
+- Audit of what the system emails with a link inside:
+  * driver-invited (onboarding token link) — INVITED drivers
+  * driver-approved (driver-signin link) — APPROVED drivers
+  * dealer-approved — APPROVED customers (BUSINESS/PRIVATE copy)
+  Everything else (WAITLISTED, PENDING_APPROVAL, REJECTED drivers;
+  PENDING/REJECTED customers) has no link-bearing template — nothing
+  to re-send. MEETING_REQUESTED drivers deliberately excluded (their
+  scheduling email is admin-composed and personal; ops decision).
+  SUSPENDED drivers excluded by default (no suspension template; the
+  approval copy would contradict their status) — can be added on ask.
+- The existing campaign script scripts/send-invite-approval-emails.ts
+  already implements the whole pipeline (per-status templates verbatim,
+  NotificationEventEngine.queueAndSend ledger, dry-run/--yes/--limit,
+  stagger, 421 rate-limit pauses, JSON+MD reports, --retry-failed-from
+  resume). It needed ONE fix: MailService gained AdminGateService in
+  its constructor for the invite-key feature, so the script's
+  `new MailService(new ConfigService())` would crash before queueing
+  anything. Now `new MailService(new ConfigService(), new
+  AdminGateService())` — the gate service needs no constructor args
+  and the campaign path never consults it (only the admin-invite
+  email does). Header documents the scope matrix + this resend.
+- Template links are APP_DOMAIN-driven and default to 101drivers.com
+  since Task 33, so every re-sent email carries the right URL.
+  INVITED drivers keep their EXISTING onboarding token (links they
+  already have keep working; only the host changes).
+- Gates: campaign script typechecks clean (tsc --strict, ES2021;
+  project target is es2022); backend tsc = 2 baseline spec errors; no
+  src changes in this task.
+- Runbook (on the server, where SMTP + DB env live):
+    npm run email:campaign -- --dry-run        # review recipients
+    npm run email:campaign -- --yes --limit=5  # smoke test
+    npm run email:campaign -- --yes            # full run (nohup/pm2)
+  SMTP hourly caps (~20/h on the shared host) make the full run take
+  hours BY DESIGN; Ctrl+C is safe; resume with --retry-failed-from.
+
+Stage Summary:
+- One command now re-emails every INVITED driver, APPROVED driver and
+  APPROVED customer with the corrected 101drivers.com links, skips
+  meeting-requested by design, is dry-runnable, resumable, and cannot
+  double-send within a run. No product code changed this task.
