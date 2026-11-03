@@ -2380,3 +2380,36 @@ Stage Summary:
   link" and both the button and the link are clickable and clean; the
   trailing-period href corruption (invalid-token class) is fixed for
   every template. Ships with the next backend deploy.
+
+---
+
+Task ID: 43
+Agent: main agent (Super Z)
+Task: landing page — #dealers cards and hero chooser share one selection state
+
+Work Log:
+- Owner report: the landing page shows the Business/Personal cards in
+  TWO places (hero quote-form chooser ~line 1025, #dealers signup cards
+  ~line 1645); clicking one did not select the matching card in the
+  other. Root cause: same component, TWO states — the hero chooser used
+  `deliveryType` (useState, line 187) while the #dealers cards had their
+  own `signupCard` (useState, line 157).
+- Minimal shared-state change, nothing else:
+  * deleted the separate `signupCard` useState;
+  * `signupCard` is now DERIVED: `deliveryType ?? "BUSINESS"` (null →
+    BUSINESS preserves the pre-existing default look for fresh guests);
+  * `setSignupCard` is now an alias of `handleDeliveryTypeChange`, so
+    the #dealers cards, the navbar tabs (SELECT_SIGNUP_CARD_EVENT) and
+    the #dealers-business/#dealers-personal hash all write the ONE
+    state. Selecting Business/Personal anywhere selects it everywhere.
+  * The type-changing side effects (drop stale quote, persist prefill)
+    come with the shared state — identical to what hero-card clicks
+    always did; no new behavior invented.
+- Frontend typecheck: 137 pre-existing errors, unchanged, none in
+  homePage.tsx; no separate signupCard state remains.
+
+Stage Summary:
+- Both card sections (and the navbar tabs + hash links) now express one
+  selection: pick Personal in the #dealers section and the hero chooser
+  shows Personal selected too, and vice versa. Ships with the next
+  frontend build.
