@@ -2457,3 +2457,56 @@ Stage Summary:
 - No code change needed or made; current master is runtime-verified.
   Task 43's shared selection confirmed working end-to-end in a real
   browser environment.
+
+---
+
+Task ID: 45
+Agent: main agent (Super Z)
+Task: invite-link "expiry" question answered; status board becomes the post-login home for every driver status
+
+Work Log:
+- Owner asked how many days after invite links expire (they tested and
+  saw the "Invalid or Expired Link" screen) and said: if the link never
+  expires by time, keep the behavior as is.
+- ANSWER (verified in code, backend + frontend): there is NO day count —
+  the link never expires by time. The onboarding-complete page shows
+  "Invalid or Expired Link" for ANY failed token lookup; the token stops
+  matching an INVITED driver in exactly these cases: (1) the admin used
+  Resend invite — the token is ROTATED, the previous email's link dies
+  instantly and only the newest email works; (2) the driver already
+  completed onboarding — the link is one-time use; (3) the driver's
+  status left INVITED (approved/rejected/on hold); (4) unknown/typo'd
+  token. An expiry system briefly started this turn was FULLY REVERTED
+  per the owner's keep-as-is instruction (schema field, migration and
+  redemption checks all removed; master carries zero expiry code).
+- FE change (the live ask): after sign-in EVERY driver status now lands
+  on the status board (/driver-application-submitted) instead of
+  /driver/dashboard — the old onboardingCompleted → dashboard branch is
+  gone from DealerSignIn. The board is status-aware, reading the login
+  payload from localStorage: WAITLISTED (waitlist copy), INVITED (+
+  "Complete Your Application" carrying the onboarding token), PENDING /
+  PENDING_APPROVAL / MEETING_REQUESTED ("Under Review"), APPROVED (+
+  "Open Driver Dashboard"), ON_HOLD, SUSPENDED, REJECTED — same card
+  design throughout. Anonymous visitors (the signup flow's
+  application-submitted step) still get the original static
+  "Thank You — Waitlisted" screen, byte-for-byte.
+- Environment note: the sandbox recycled again mid-turn and rolled the
+  local repo back to 09828203, deleting committed work from the working
+  tree (including backend/src/upload/*). Recovered with reset --hard
+  origin/master (1ddffd55) — nothing committed was lost.
+- Verification (all four gates, before the push): tsc error-set diff vs
+  HEAD — zero new errors, four pre-existing ones removed by the deleted
+  branch (137 → 133); vite production build passes; headless browser
+  (built site via vite preview): anonymous screen identical, all six
+  seeded statuses render their correct board, "Complete Your
+  Application" navigates to /driver/onboarding-complete?token=… and
+  "Open Driver Dashboard" enters the driver area; zero page errors and
+  zero "not defined" console messages. Click-blocking during testing was
+  the app's own full-screen "Install the App" PWA prompt, not a defect.
+
+Stage Summary:
+- Invite links: unchanged (no TTL) — "expired" in that screen means the
+  token was rotated by a re-invite or already used, not that days passed.
+- All drivers now see a status board that tells the truth about their
+  application after sign-in; the dashboard is one tap away for approved
+  drivers. Ships with the next frontend build.

@@ -235,21 +235,14 @@ export function DealerSignIn({
           // customerType from the API.
           navigate({ to: "/dealer-dashboard" });
         } else if (userType === "driver") {
-          // Use login data to decide where to redirect — no extra API call needed
-          if (data.onboardingCompleted) {
-            navigate({ to: "/driver/dashboard" });
-          } else if (data.onboardingToken) {
-            navigate({
-              to: "/driver/onboarding-complete",
-              search: { token: data.onboardingToken },
-            });
-          } else if (data.driverStatus === 'WAITLISTED' || data.driverStatus === 'INVITED') {
-            navigate({ to: "/driver-application-submitted" });
-          } else if (data.driverStatus === 'PENDING_APPROVAL') {
-            navigate({ to: "/driver-application-submitted" });
-          } else {
-            navigate({ to: "/driver-application-submitted" });
-          }
+          // Owner decision: EVERY driver status lands on the status board
+          // (/driver-application-submitted) after sign-in — the dashboard is
+          // no longer the post-login home. The board is status-aware: it
+          // reads driverStatus from the login payload stored above; INVITED
+          // drivers get a "Complete Your Application" action there (the
+          // onboarding token rides along in localStorage), APPROVED drivers
+          // a dashboard shortcut.
+          navigate({ to: "/driver-application-submitted" });
         } else {
           navigate({ to: "/admin-dashboard" });
         }
