@@ -18,6 +18,7 @@
  */
 import {
   classifySignupUserAgent,
+  classifyDriverDeviceRequest,
   touchHintFromHeader,
 } from "./user-agent.util";
 
@@ -146,5 +147,115 @@ describe("touchHintFromHeader", () => {
     expect(touchHintFromHeader("yes")).toBe(false);
     expect(touchHintFromHeader(undefined)).toBe(false);
     expect(touchHintFromHeader(null)).toBe(false);
+  });
+});
+
+// ── classifyDriverDeviceRequest — the DRIVER-PORTAL gate ─────────────
+// Stricter than signup: the touch hint is REQUIRED (device.ts attaches it
+// to every driver-onboarding call, so a scripted replay with a borrowed
+// UA never has it), and Chrome's own sec-ch-ua client hints must agree
+// with the claimed device — a UA-switcher extension rewrites the UA but
+// not the hints.
+describe("classifyDriverDeviceRequest — real phones and tablets pass", () => {
+  const passing: Array<[string, string, string, string?, string?]> = [
+    // [name, UA, x-device-touch, sec-ch-ua-mobile, sec-ch-ua-platform]
+    ["iPhone Safari", UAS.iphoneSafari, "1", undefined, undefined],
+    [
+      "Android phone Chrome (hints agree)",
+      UAS.androidPhoneChrome,
+      "1",
+      "?1",
+      '"Android"',
+    ],
+    [
+      "Android tablet Chrome (hints agree)",
+      UAS.androidTabletChrome,
+      "1",
+      "?1",
+      '"Android"',
+    ],
+    ["iPad classic UA (WebKit, no hints)", UAS.ipadSafari, "1", undefined, undefined],
+    // iPadOS desktop-mode Safari/Chrome-on-iOS are WebKit and send NO
+    // client hints — the touch hint alone must keep admitting them.
+    [
+      "iPadOS desktop-mode iPad (WebKit, no hints)",
+      UAS.ipadosDesktopMode,
+      "1",
+      undefined,
+      undefined,
+    ],
+  ];
+
+  it.each(passing)("allows %s", (_name, ua, hint, mobile, platform) => {
+    const verdict = classifyDriverDeviceRequest(ua, hint, mobile, platform);
+    expect(verdict.blocked).toBe(false);
+    expect(verdict.reason).toBe("MOBILE_UA");
+  });
+});
+
+describe("classifyDriverDeviceRequest — the stricter driver rules", () => {
+  it("blocks a borrowed iPhone UA with NO touch hint (scripted replay)", () => {
+    // curl/Postman replaying a captured request: perfect phone UA, but
+    // the FE always sends the hint, so its absence is the tell.
+    expect(classifyDriverDeviceRequest(UAS.iphoneSafari)).toEqual({
+      blocked: true,
+      reason: "NO_TOUCH_HINT",
+    });
+    expect(classifyDriverDeviceRequest(UAS.iphoneSafari, "0")).toEqual({
+      blocked: true,
+      reason: "NO_TOUCH_HINT",
+    });
+  });
+
+  it("blocks a UA-switcher extension: iPhone UA, desktop Chrome's own hints", () => {
+    // The extension rewrites navigator.userAgent + the UA header but NOT
+    // the sec-ch-ua headers Chrome derives from the REAL browser.
+    expect(
+      classifyDriverDeviceRequest(UAS.iphoneSafari, "1", "?0", '"Windows"')
+    ).toEqual({ blocked: true, reason: "CLIENT_HINT_MISMATCH" });
+    // Mobile hint says ?0 even with a coherent platform — still a lie.
+    expect(
+      classifyDriverDeviceRequest(UAS.iphoneSafari, "1", "?0")
+    ).toEqual({ blocked: true, reason: "CLIENT_HINT_MISMATCH" });
+  });
+
+  it("blocks desktop Chrome claiming the iPad touch hint (macOS platform report)", () => {
+    // Old shortcut: Mac UA + x-device-touch: 1 passed as a desktop-mode
+    // iPad. A REAL desktop Chromium's own platform hint says "macOS" —
+    // that positive evidence now blocks it.
+    expect(
+      classifyDriverDeviceRequest(MAC_SAFARI, "1", "?0", '"macOS"')
+    ).toEqual({ blocked: true, reason: "CLIENT_HINT_MISMATCH" });
+    // Platform hint alone (even without the mobile hint) also blocks.
+    expect(
+      classifyDriverDeviceRequest(UAS.ipadosDesktopMode, "1", undefined, '"macOS"')
+    ).toEqual({ blocked: true, reason: "CLIENT_HINT_MISMATCH" });
+  });
+
+  it("blocks an Android platform report next to an iPhone UA", () => {
+    expect(
+      classifyDriverDeviceRequest(UAS.iphoneSafari, "1", "?1", '"Android"')
+    ).toEqual({ blocked: true, reason: "CLIENT_HINT_MISMATCH" });
+  });
+
+  it("still blocks desktops and empty UAs before the hint check", () => {
+    expect(classifyDriverDeviceRequest(UAS.windowsChrome, "1")).toEqual({
+      blocked: true,
+      reason: "DESKTOP_TOUCH_UA",
+    });
+    expect(classifyDriverDeviceRequest("")).toEqual({
+      blocked: true,
+      reason: "NO_TOUCH_HINT",
+    });
+  });
+
+  it("keeps DevTools device-toolbar emulation passable (honest limitation)", () => {
+    // DevTools rewrites UA AND client hints coherently — from HTTP
+    // headers alone it IS the emulated device. The audit trail is the
+    // deterrent; this test pins that we do not block real phones whose
+    // hints happen to be coherent.
+    expect(
+      classifyDriverDeviceRequest(UAS.iphoneSafari, "1", "?1", '"iOS"')
+    ).toEqual({ blocked: false, reason: "MOBILE_UA" });
   });
 });

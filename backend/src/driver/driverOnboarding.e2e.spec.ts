@@ -25,7 +25,7 @@ import { DriverDomain } from "../domain/driver/driver.domain";
 import { DefaultAuthGuard } from "../auth/defaultAuth.guard";
 import { JwtStrategy } from "../auth/jwt/jwt.strategy";
 import { ACLModule } from "../auth/acl.module";
-import { MobileOnlySignupGuard } from "../auth/guards/mobile-only-signup.guard";
+import { MobileOnlyDriverGuard } from "../auth/guards/mobile-only-driver.guard";
 import { AppEventsService } from "../common/appEvents/appEvents.service";
 import { PrismaService } from "../prisma/prisma.service";
 
@@ -158,7 +158,7 @@ describe("Driver self-service onboarding — real pipeline", () => {
         },
         DefaultAuthGuard,
         ACGuard,
-        MobileOnlySignupGuard,
+        MobileOnlyDriverGuard,
         { provide: AppEventsService, useValue: { emit: () => undefined } },
         {
           provide: DriverService,
@@ -197,6 +197,20 @@ describe("Driver self-service onboarding — real pipeline", () => {
 
   const bearer = (token: string) => ({ Authorization: `Bearer ${token}` });
 
+  // What the FE's device.ts attaches to every driver-onboarding call: a
+  // touch-capable client reports x-device-touch: 1. All four self-service
+  // routes REQUIRE it (MobileOnlyDriverGuard) — a request without it is a
+  // scripted replay, not this app's own client.
+  const PHONE = { "user-agent": MOBILE_UA, "x-device-touch": "1" };
+
+  const BLOCKED_BODY = {
+    statusCode: HttpStatus.FORBIDDEN,
+    error: "Forbidden",
+    message:
+      "The driver portal is available on phones and tablets only. Please open 101drivers.com/download on your phone or tablet to continue.",
+    storeUrl: "https://101drivers.com/download",
+  };
+
   test("401 without any token", async () => {
     await request(app.getHttpServer())
       .get("/api/drivers/onboarding-data")
@@ -207,6 +221,7 @@ describe("Driver self-service onboarding — real pipeline", () => {
     const res = await request(app.getHttpServer())
       .get("/api/drivers/onboarding-data")
       .set(bearer(driverToken))
+      .set(PHONE)
       .expect(HttpStatus.OK);
 
     expect(res.body).toEqual({
@@ -227,6 +242,7 @@ describe("Driver self-service onboarding — real pipeline", () => {
     const res = await request(app.getHttpServer())
       .get("/api/drivers/onboarding-data")
       .set(bearer(noProfileToken))
+      .set(PHONE)
       .expect(HttpStatus.FORBIDDEN);
 
     expect(res.body).toMatchObject({
@@ -236,11 +252,52 @@ describe("Driver self-service onboarding — real pipeline", () => {
     });
   });
 
+  test("GET /api/drivers/onboarding-data — 403 without the touch hint (scripted replay with a borrowed UA)", async () => {
+    // Perfect iPhone UA, but the FE always attaches x-device-touch — its
+    // absence marks a non-FE client. Guard runs BEFORE the handler, so
+    // this 403 is the device gate's, not the profile resolver's.
+    const res = await request(app.getHttpServer())
+      .get("/api/drivers/onboarding-data")
+      .set(bearer(driverToken))
+      .set("user-agent", MOBILE_UA)
+      .expect(HttpStatus.FORBIDDEN);
+
+    expect(res.body).toEqual(BLOCKED_BODY);
+  });
+
+  test("GET /api/drivers/onboarding-data — 403 when Chrome's client hints contradict the claimed UA", async () => {
+    // A UA-switcher extension rewrites the UA header but not the
+    // sec-ch-ua-* headers Chrome derives from the REAL browser: a
+    // desktop Chrome presenting an iPhone UA answers ?0 / "Windows".
+    const res = await request(app.getHttpServer())
+      .get("/api/drivers/onboarding-data")
+      .set(bearer(driverToken))
+      .set(PHONE)
+      .set("sec-ch-ua-mobile", "?0")
+      .set('sec-ch-ua-platform', '"Windows"')
+      .expect(HttpStatus.FORBIDDEN);
+
+    expect(res.body).toEqual(BLOCKED_BODY);
+  });
+
+  test("GET /api/drivers/onboarding-data — 403 for a desktop browser even with a touch hint", async () => {
+    // Touchscreen-laptop / desktop class: Windows UA + touch hint.
+    const res = await request(app.getHttpServer())
+      .get("/api/drivers/onboarding-data")
+      .set(bearer(driverToken))
+      .set("user-agent", DESKTOP_UA)
+      .set("x-device-touch", "1")
+      .expect(HttpStatus.FORBIDDEN);
+
+    expect(res.body).toEqual(BLOCKED_BODY);
+  });
+
   test("PATCH /api/drivers/onboarding-data — real service update + audit trail (mobile device)", async () => {
     const res = await request(app.getHttpServer())
       .patch("/api/drivers/onboarding-data")
       .set(bearer(driverToken))
       .set("user-agent", MOBILE_UA)
+      .set("x-device-touch", "1")
       .send({
         licenseNumber: "D7654321",
         licenseState: "CA",
@@ -283,6 +340,7 @@ describe("Driver self-service onboarding — real pipeline", () => {
     const res = await request(app.getHttpServer())
       .get("/api/drivers/onboarding-status")
       .set(bearer(driverToken))
+      .set(PHONE)
       .expect(HttpStatus.OK);
 
     expect(res.body).toMatchObject({

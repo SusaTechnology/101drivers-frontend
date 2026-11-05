@@ -26,7 +26,7 @@ import { map } from "rxjs";
 import { ACGuard } from "nest-access-control";
 import { DefaultAuthGuard } from "../auth/defaultAuth.guard";
 import { ACLModule } from "../auth/acl.module";
-import { MobileOnlySignupGuard } from "../auth/guards/mobile-only-signup.guard";
+import { MobileOnlyDriverGuard } from "../auth/guards/mobile-only-driver.guard";
 import { AclFilterResponseInterceptor } from "../interceptors/aclFilterResponse.interceptor";
 import { AclValidateRequestInterceptor } from "../interceptors/aclValidateRequest.interceptor";
 import { DriverController } from "./driver.controller";
@@ -182,7 +182,7 @@ describe("Driver self-service routing", () => {
       .useValue(basicAuthGuard)
       .overrideGuard(ACGuard)
       .useValue(acGuard)
-      .overrideGuard(MobileOnlySignupGuard)
+      .overrideGuard(MobileOnlyDriverGuard)
       .useValue(mobileOnlyGuard)
       .overrideInterceptor(AclFilterResponseInterceptor)
       .useValue(aclFilterResponseInterceptor)

@@ -13,7 +13,7 @@ import { AclValidateRequestInterceptor } from "../interceptors/aclValidateReques
 import { AclFilterResponseInterceptor } from "../interceptors/aclFilterResponse.interceptor";
 import { CompleteDriverOnboardingDto } from "./dto/driverOnboardingComplete.dto";
 import { UpdateDriverOnboardingDto } from "./dto/driverOnboardingUpdate.dto";
-import { MobileOnlySignupGuard } from "../auth/guards/mobile-only-signup.guard";
+import { MobileOnlyDriverGuard } from "../auth/guards/mobile-only-driver.guard";
 import { PrismaService } from "../prisma/prisma.service";
 import { DriverCreateInput } from "./base/DriverCreateInput";
 import { Driver } from "./base/Driver";
@@ -87,10 +87,12 @@ export class DriverController extends DriverControllerBase {
   // swallowed by them and answers 404
   // `No resource was found for {"id":"onboarding-data"}`.
   @common.Post("/onboarding-complete")
-  // Driver onboarding is PHONE/TABLET ONLY — same desktop gate as driver
-  // signup (runs after DefaultAuthGuard, so the identity is already
-  // resolved; it then classifies the device like the public route).
-  @common.UseGuards(MobileOnlySignupGuard)
+  // Driver onboarding is PHONE/TABLET ONLY — the driver-portal device gate
+  // (stricter than the public signup gate: the touch hint is REQUIRED and
+  // Chrome's own client hints must agree with the UA, so a UA-switcher
+  // extension or a scripted replay is caught; runs after DefaultAuthGuard,
+  // so the identity is already resolved).
+  @common.UseGuards(MobileOnlyDriverGuard)
   @swagger.ApiOkResponse({ description: "Onboarding completed successfully" })
   @swagger.ApiBadRequestResponse({ description: "Invalid input or driver not eligible" })
   @swagger.ApiForbiddenResponse({ description: "Driver profile not found" })
@@ -118,6 +120,9 @@ export class DriverController extends DriverControllerBase {
   }
 
   @common.Get("/onboarding-status")
+  // PHONE/TABLET ONLY — same driver-portal device gate as the rest of the
+  // self-service onboarding surface.
+  @common.UseGuards(MobileOnlyDriverGuard)
   @swagger.ApiOkResponse({
     schema: {
       type: "object",
@@ -188,6 +193,10 @@ export class DriverController extends DriverControllerBase {
   // layers by design.
 
   @common.Get("/onboarding-data")
+  // PHONE/TABLET ONLY — the prefill used to leak on desktops because only
+  // the PATCH side was gated; the device gate now covers both halves of
+  // the flow (the FE device.ts attaches the touch hint to this GET too).
+  @common.UseGuards(MobileOnlyDriverGuard)
   @swagger.ApiOkResponse({
     description: "The driver's stored license data for prefill",
     schema: {
@@ -215,7 +224,7 @@ export class DriverController extends DriverControllerBase {
   }
 
   @common.Patch("/onboarding-data")
-  @common.UseGuards(MobileOnlySignupGuard)
+  @common.UseGuards(MobileOnlyDriverGuard)
   @swagger.ApiOkResponse({ description: "Driver license information updated" })
   @swagger.ApiBadRequestResponse({
     description: "Invalid input or the license is not editable for this status",

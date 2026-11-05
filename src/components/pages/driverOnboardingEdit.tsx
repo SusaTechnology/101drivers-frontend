@@ -110,6 +110,10 @@ export function DriverOnboardingEdit() {
   const [saved, setSaved] = useState(false);
   const [loadingData, setLoadingData] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
+  // The server's device gate rejected the request even though the client
+  // gate passed (DevTools emulation can fool the client checks, never the
+  // server's) — show the same phone/tablet card the gate would.
+  const [serverBlocked, setServerBlocked] = useState(false);
   const [data, setData] = useState<OnboardingDataResponse | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [licenseFrontPreview, setLicenseFrontPreview] = useState<string | null>(null);
@@ -124,13 +128,28 @@ export function DriverOnboardingEdit() {
       window.location.href = "/driver-signin";
       return;
     }
-    authFetchRaw(`${API_URL}/api/drivers/onboarding-data`)
+    // The touch hint lets the server's mobile-only gate classify the
+    // device exactly like the PATCH/save call does — the GET is gated too.
+    authFetchRaw(`${API_URL}/api/drivers/onboarding-data`, {
+      headers: { "x-device-touch": deviceTouchHint() },
+    })
       .then(async (res) => {
-        if (!res.ok) throw new Error("Could not load your license information");
+        if (!res.ok) {
+          const errData: any = await res.json().catch(() => ({}));
+          // Server device gate (403 + storeUrl): the client gate passed but
+          // the server disagrees — render the phone/tablet card.
+          if (res.status === 403 && errData?.storeUrl) {
+            setServerBlocked(true);
+            return null;
+          }
+          throw new Error(
+            errData?.message || "Could not load your license information"
+          );
+        }
         return res.json();
       })
-      .then((payload: OnboardingDataResponse) => {
-        setData(payload);
+      .then((payload: OnboardingDataResponse | null) => {
+        if (payload) setData(payload);
       })
       .catch((err) => {
         setLoadError(err.message || "Could not load your license information");
@@ -270,6 +289,13 @@ export function DriverOnboardingEdit() {
         const message: string =
           errData?.message || `Request failed (${res.status})`;
 
+        // Server device gate (403 + storeUrl): show the phone/tablet card
+        // instead of a toast — same surface as the client gate.
+        if (res.status === 403 && errData?.storeUrl) {
+          setServerBlocked(true);
+          return;
+        }
+
         // License reuse (one driver account per license): the server
         // answers a NEUTRAL 409 — surface it ON the field, scroll the
         // driver there, skip the generic error toast.
@@ -306,6 +332,12 @@ export function DriverOnboardingEdit() {
   // ==================== DEVICE GATE ====================
   // Runs FIRST, before every other branch — same as onboarding-complete.
   if (shouldShowMobileOnlySignup()) {
+    return <MobileOnlySignupCard />;
+  }
+
+  // Server device gate overruled the client checks (spoofed/emulated
+  // device) — same card, no form flash.
+  if (serverBlocked) {
     return <MobileOnlySignupCard />;
   }
 

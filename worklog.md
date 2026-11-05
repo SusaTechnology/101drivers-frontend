@@ -3077,4 +3077,28 @@ Stage Summary:
 - Pull and retest: GET /api/drivers/onboarding-data with a logged-in driver now returns the license payload; PATCH saves from a phone/tablet. The 403 remains only for an authenticated user with genuinely no Driver row — the honest business failure, not a routing/auth artifact.
 - Reminder: PATCH /onboarding-data and POST /onboarding-complete stay PHONE/TABLET-ONLY by design (MobileOnlySignupGuard) — a desktop browser gets the mobile-only 403 card. The GET endpoints work everywhere.
 - The e2e spec now guards the user-shape contract permanently: any handler that starts reading a field JwtStrategyBase.validate() does not set will fail the suite with the production 403 body.
+---
+Task ID: 54
+Agent: Main Agent
+Task: Enforce PHONE/TABLET-ONLY on the whole driver self-service onboarding surface (all four /drivers/onboarding-* routes) — including anti-spoof hardening for DevTools device toolbar / UA switchers
+
+Work Log:
+- Owner rule after the Task-53 fix: the GET endpoints were still reachable from desktops because only POST/PATCH carried a device gate — and the owner explicitly worried about DevTools' device toolbar ("toggle device toolbar as a phone"). The GET prefill was a leak (a desktop saw the license data), so the gate now covers ALL FOUR routes: POST /onboarding-complete, GET/PATCH /onboarding-data, GET /onboarding-status.
+- New stricter classifier classifyDriverDeviceRequest in backend/src/common/user-agent.util.ts, layered on top of the signup rules:
+  1. x-device-touch REQUIRED — device.ts attaches it to every driver-onboarding call, so a real phone/tablet always carries it; a curl/Postman/scripted replay with a borrowed iPhone UA does not know to (NO_TOUCH_HINT). (Signup cannot require it — the header is only sent on FE calls that opt in.)
+  2. Client-hint coherence: Chrome derives sec-ch-ua-mobile / sec-ch-ua-platform from the REAL browser on every request, and UA-switcher extensions rewrite the UA but NOT these. "?0" while the UA claims a phone, a platform hint claiming Windows/macOS/Linux/Chrome OS, or an Android platform report next to an iPhone UA → CLIENT_HINT_MISMATCH. This also closes the old "Mac UA + touch hint = iPad" shortcut for desktop Chromium — its platform hint says "macOS".
+  3. iPadOS desktop-mode iPad unchanged: Safari and Chrome-on-iOS are WebKit and send NO client hints, so the touch hint alone keeps admitting them.
+  4. Honest limitation, documented in code and tests: DevTools' device toolbar rewrites UA AND client hints coherently, so it still passes at the HTTP layer — the request line is the only evidence the server ever gets. The deterrent is the audit: every block writes a BlockedSignup row (reason + " (driver portal)" suffix) feeding the admin spam radar.
+- New MobileOnlyDriverGuard (backend/src/auth/guards/mobile-only-driver.guard.ts) mirrors the signup guard (fire-and-forget BlockedSignup write + APP_EVENT ping + 403 mobileOnlyDriverPayload with message/storeUrl — same body shape the FE cards already handle) and replaces MobileOnlySignupGuard on POST/PATCH and is ADDED to both GETs.
+- FE: driverOnboardingEdit.tsx GET prefill now attaches x-device-touch (PATCH and the auth-based POST already did); any server block (403 + storeUrl) renders the MobileOnlySignupCard instead of a form flash or toast — covers the spoof case where the client gate passes but the server disagrees. device.ts doc comment synced (hint now goes on signup + driver-onboarding calls; still never global — CORS preflight).
+- Verification:
+  1. user-agent.util.spec.ts: +14 tests — real-device matrix (iPhone / Android phone+tablet with coherent hints / iPad classic / desktop-mode iPad with NO hints) and the strict rules (no hint, ?0, desktop platform report, Android-platform+iPhone-UA, empty UA, and the pinned DevTools coherent-pass case). jest-each gotcha: rows with fewer entries than the callback arity made jest wait for a done() — every row now carries all five columns.
+  2. driverRouting.spec.ts (7/7) + driver.controller.base.spec.ts (5/5): guard override swapped to MobileOnlyDriverGuard.
+  3. driverOnboarding.e2e.spec.ts over the real pipeline (real DefaultAuthGuard/JwtStrategy/ACGuard/MobileOnlyDriverGuard/ACL/ValidationPipe/DriverService, real signed tokens): 10 tests — happy paths carry iPhone UA + hint (GET data, PATCH save + audit row, GET status); new negatives: GET without the hint → exact blocked body; GET with iPhone UA + ?0/"Windows" hints (extension spoof) → blocked; GET with Windows UA + touch hint → blocked; 401 without token unchanged; GET /:id catch-all (ungated admin surface) still serves real ids.
+  4. Full backend suite serially: failure set IDENTICAL to the Task-52/53 baseline — 8 suites / 29 tests, all pre-existing in unrelated modules; passed 459 -> 473 (+14 = this task's new green tests). vite build clean.
+
+Stage Summary:
+- Pull and retest: phone/tablet (any iPad mode) → the whole flow works as before; desktop → the client gate shows the phone/tablet card immediately and the server refuses every onboarding route; UA-switcher extension or scripted replay → server 403 + BlockedSignup audit row. DevTools device-toolbar emulation still passes at the HTTP layer (physically undetectable from headers alone) but is now documented, pinned in tests, and every other spoof class lands in the audit trail.
+- The touch hint is now a load-bearing signal: any new driver-onboarding FE call MUST attach x-device-touch (deviceTouchHint()) or the server will read it as a scripted replay — device.ts and the e2e specs document this.
+
 
