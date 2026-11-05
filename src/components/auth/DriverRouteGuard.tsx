@@ -115,10 +115,27 @@ export function DriverRouteGuard({ children }: { children: React.ReactNode }) {
       if (user?.onboardingToken) {
         navigate({
           to: "/driver-onboarding-complete",
-          search: { token: user.onboardingToken },
+          // routeTree typing doesn't surface the route's validateSearch
+          // shape; the runtime route accepts { token } (same cast the
+          // status board's Link uses).
+          search: { token: user.onboardingToken } as never,
         });
       } else {
         navigate({ to: "/driver-signin" });
+      }
+    } else if (guardState === "invited") {
+      // INVITED drivers are here to complete their application — the
+      // card below even says "You will be redirected to continue the
+      // process". Follow through: send them to the UNGUARDED top-level
+      // onboarding route with their token (the card only stays up for
+      // the rare no-token case). Redirecting to the top-level route
+      // also avoids a loop: this guard does not wrap it.
+      const user = getUser();
+      if (user?.onboardingToken) {
+        navigate({
+          to: "/driver-onboarding-complete",
+          search: { token: user.onboardingToken } as never,
+        });
       }
     }
   }, [guardState, navigate]);
@@ -218,7 +235,8 @@ export function DriverRouteGuard({ children }: { children: React.ReactNode }) {
           </h2>
           <p className="text-slate-600 dark:text-slate-400 leading-relaxed">
             Congratulations! An administrator has invited you to complete your
-            driver application. You will be redirected to continue the process.
+            driver application. We're opening your application form now — if
+            nothing happens, please sign in again to refresh your session.
           </p>
           <button
             onClick={() => window.history.back()}

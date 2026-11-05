@@ -48,6 +48,7 @@ import {
   EyeOff,
   Lock,
   AlertCircle,
+  Camera,
   FileCheck,
   Clock,
 } from "lucide-react";

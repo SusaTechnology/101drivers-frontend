@@ -117,7 +117,12 @@ export function DriverApplicationSubmitted() {
       action: user?.onboardingToken
         ? {
             label: "Complete Your Application",
-            to: "/driver/onboarding-complete",
+            // The TOP-LEVEL onboarding route: /driver/onboarding-complete
+            // sits under the /driver layout whose DriverRouteGuard blocks
+            // INVITED drivers with a dead-end "invited" card before the
+            // page ever renders. This route is unguarded and renders the
+            // form for the token directly.
+            to: "/driver-onboarding-complete",
             search: { token: user.onboardingToken },
           }
         : undefined,

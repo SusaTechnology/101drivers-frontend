@@ -2627,3 +2627,62 @@ Stage Summary:
   Every other request goes out preflight-light (Content-Type only) and
   works from any browser on any deploy combination. Backend untouched —
   the guard was already scoped correctly.
+
+---
+
+Task ID: 48
+Agent: main agent (Super Z)
+Task: INVITED driver clicked "Complete Your Application" and got the invited card again instead of the form — two route paths, a layout guard dead-end, and a missing icon import
+
+Work Log:
+- Reproduced in the headless browser: clicking the board's "Complete
+  Your Application" (INVITED driver, token present) navigated to
+  /driver/onboarding-complete and NEVER reached the form. Two causes,
+  plus one latent crash behind them:
+  1. THE GUARD DEAD-END: the nested /driver/onboarding-complete route
+     sits under the /driver LAYOUT route, whose DriverLayout wraps
+     every child in DriverRouteGuard. For driverStatus INVITED the
+     guard renders its own "You've Been Invited!" card with copy
+     promising "You will be redirected to continue the process" — and
+     never redirects. That card at the onboarding URL is exactly what
+     the owner saw. (A no-token/unauthenticated visitor instead hits
+     the guard's needs_signin → /driver-signin, which is what the
+     first reproduction saw.)
+  2. TWO ROUTES, ONE BROKEN: a TOP-LEVEL /driver-onboarding-complete
+     route also exists (unguarded, correct validateSearch, renders the
+     form) and is ALREADY the guard's own needs_onboarding redirect
+     target — but the status board's button linked to the nested,
+     guarded one.
+  3. LATENT CRASH: the onboarding form referenced a lucide <Camera>
+     icon that was never imported (TS2304, pre-existing) — Section 4
+     "Verification Photo" threw ReferenceError the moment the form
+     rendered. The owner would have hit this right after any fix that
+     got them onto the page.
+- Fixes: board INVITED action now links to the top-level
+  /driver-onboarding-complete (unguarded); DriverRouteGuard's invited
+  state now actually redirects to that route with the token — same
+  target and mechanism as its needs_onboarding branch, no loop (the
+  guard does not wrap the top-level route) — and the card copy now
+  says the form is opening, with the card remaining only as the
+  no-token fallback; Camera added to the lucide imports; both guard
+  navigate() search payloads use the same `as never` cast the board
+  Link already used (routeTree typing doesn't surface validateSearch).
+- Verified end-to-end in the headless browser (INVITED user + token in
+  localStorage, status endpoint mocked 200): board click → URL
+  /driver-onboarding-complete?token=… → FORM RENDERS ("License",
+  "Verification Photo", "Take a clear selfie" all present, no crash,
+  no invalid-token card). Guard path: opening /driver/dashboard
+  directly as INVITED auto-redirects to
+  /driver-onboarding-complete?token=… . tsc 131 errors — two BELOW the
+  133 baseline (the casts cleared the guard's own typing errors); vite
+  build passes. Live API already serves
+  /api/public/drivers/onboarding-status (custom "Invalid or expired
+  token" 404 body proves the route is deployed).
+- Housekeeping: removed all three .docx files from download/ at the
+  owner's request (the right-drawer documents).
+
+Stage Summary:
+- INVITED drivers now have ONE working path into onboarding from
+  everywhere: board button, guard auto-redirect on any /driver page,
+  and the guard's own needs_onboarding flow all land on the unguarded
+  /driver-onboarding-complete?token=… form, which now renders fully.
