@@ -2932,3 +2932,68 @@ Stage Summary:
   authenticated driver. The admin deliveries endpoint can no longer 500
   on legacy or malformed status filters: unknown statuses yield zero
   rows, comma lists are validated, and valid multi-status filters work.
+
+---
+
+Task ID: 53
+Agent: main agent (Super Z)
+Task: E2E test the driver sign-in / onboarding / onboarding-complete flows; verify the device gate (x-device-touch / MobileOnlySignupGuard) on driver onboarding never touches other roles
+
+Work Log:
+- Environment: the real Nest backend needs PostgreSQL which the sandbox
+  cannot run (no sudo), so the E2E ran against a mock API server
+  (scripts/mock-api-53.mjs) implementing the exact contracts these flows
+  touch (login payload incl. driverStatus/onboardingCompleted/
+  onboardingToken, /auth/me, refresh-token, public onboarding-status +
+  onboarding-complete, driver-selfie uploads) with the backend's CORS
+  allow-list mirrored. Real FE driven via vite dev with
+  VITE_API_URL=http://localhost:4550. One mock bug found and fixed
+  during the run: JSON.parse on a FormData body crashed the server —
+  now only application/json bodies are parsed.
+- Device-gate scoping audit (static):
+  - MobileOnlySignupGuard is attached to exactly THREE routes, all
+    driver-only: POST /auth/signup/driver, POST /drivers/onboarding-
+    complete (auth), POST /public/drivers/onboarding-complete (token).
+    No customer/admin/dealer route carries it.
+  - Client gate shouldShowMobileOnlySignup() renders a mobile-only card
+    on exactly three driver pages (signup, verify-email,
+    onboarding-complete).
+  - dataQuery.ts baseFetch does NOT attach x-device-touch globally (the
+    Task 46 CORS break cannot recur from master); only the driver
+    signup/verify/onboarding call sites send it explicitly.
+  - Server classification verified against the REAL backend code
+    (esbuild-bundled user-agent.util): iPhone/iPad/desktop-mode iPad
+    (Macintosh + touch=1) PASS; real Mac DESKTOP_UA, Windows laptop
+    DESKTOP_UA, touchscreen Windows DESKTOP_TOUCH_UA all BLOCKED.
+- E2E results (headless browser against the mock):
+  - Sign-in matrix: APPROVED+onboarded driver -> /driver/dashboard
+    (first run via the proof-cam explainer), INVITED driver ->
+    /driver-application-submitted board ("You've Been Invited!"),
+    APPROVED+onboardingToken driver -> /driver-onboarding-
+    complete?token=… . Dealer -> /dealer-dashboard; admin ->
+    /admin-dashboard. All login requests carried NO x-device-touch
+    header (mock log audit) — the device signal is nowhere near other
+    roles' flows.
+  - Desktop onboarding-complete shows the "Signup is mobile only" card
+    (client gate) while the server gate would 403 the same client —
+    consistent by design on both layers.
+  - Full tablet flow (navigator.maxTouchPoints/UA spoofed + canvas-backed
+    fake getUserMedia injected in-page before SPA navigation; the real
+    LivePhotoCapture camera chain runs): form renders with the token ->
+    all six text fields fill -> three captures fire the REAL upload
+    path (3 POSTs to /api/public/uploads/driver-selfie) -> Submit ->
+    POST /api/public/drivers/onboarding-complete with x-device-touch: 1
+    on the public token path -> "Onboarding Complete!" screen
+    ("We'll run your background check…").
+- Noted, not fixed (separate issue): /signin renders the app's 404 — its
+  only page file is routes/signin/-index.tsx whose dash prefix EXCLUDES
+  it from the URL tree. If customer sign-in is expected at /signin it is
+  currently unreachable; customer/dealer/admin access otherwise works.
+
+Stage Summary:
+- All three driver sign-in destinations verified against the login
+  contract, the onboarding-complete flow works end-to-end for a
+  touch client and is correctly refused for desktops on BOTH layers,
+  and the device gate is provably driver-only (3 routes, 3 pages, no
+  global header). The pasted board button (Contact Support) is the
+  unchanged primary action and still works.
