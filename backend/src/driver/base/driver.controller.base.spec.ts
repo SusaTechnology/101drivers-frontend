@@ -9,6 +9,7 @@ import request from "supertest";
 import { ACGuard } from "nest-access-control";
 import { DefaultAuthGuard } from "../../auth/defaultAuth.guard";
 import { ACLModule } from "../../auth/acl.module";
+import { MobileOnlySignupGuard } from "../../auth/guards/mobile-only-signup.guard";
 import { AclFilterResponseInterceptor } from "../../interceptors/aclFilterResponse.interceptor";
 import { AclValidateRequestInterceptor } from "../../interceptors/aclValidateRequest.interceptor";
 import { map } from "rxjs";
@@ -117,6 +118,11 @@ describe("Driver", () => {
       .useValue(basicAuthGuard)
       .overrideGuard(ACGuard)
       .useValue(acGuard)
+      // DriverController also mounts the self-service onboarding routes,
+      // whose MobileOnlySignupGuard needs PrismaService/AppEventsService —
+      // not provided in this bare module, so stub it like the other guards.
+      .overrideGuard(MobileOnlySignupGuard)
+      .useValue({ canActivate: () => true })
       .overrideInterceptor(AclFilterResponseInterceptor)
       .useValue(aclFilterResponseInterceptor)
       .overrideInterceptor(AclValidateRequestInterceptor)

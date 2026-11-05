@@ -3042,3 +3042,20 @@ Stage Summary:
 - Flow now exactly as the owner described: non-approved driver logs in → Application Status board (status, checklist, Contact Support, Back to Home) → ONLY a PENDING_APPROVAL driver sees one extra button ("Update Driver's License") → license-only edit page (number, issuing state, front/back photos, prefilled) → save never changes status.
 - Admins see every edit on the existing Audit Logs page (filter by driver / action OTHER / reason "license"), with before/after values and no identity material.
 - Everything else (SSN, DOB, address, selfie) is locked for self-service — support or admin paths only.
+---
+Task ID: 52
+Agent: Main Agent
+Task: Fix live 404 on /api/drivers/onboarding-data — route-order shadowing by the :id catch-alls
+
+Work Log:
+- Owner hit the bug on a real device: GET /api/drivers/onboarding-data answered the driver module's base 404 `No resource was found for {"id":"onboarding-data"}`. Diagnosis: the self-service routes lived in a second @Controller("drivers") class (DriverOnboardingController) registered AFTER DriverController, which redeclares the Amplication base catch-alls as its own methods (driver -> GET /:id, updateDriver -> PATCH /:id). NestJS scans controller methods in DECLARATION order and Express matches in registration order, so the catch-alls won every single-segment subpath: GET /onboarding-data and GET /onboarding-status -> base 404; PATCH /onboarding-data -> fell into PATCH /:id and failed (500 in the reproduction). Only POST /onboarding-complete survived (no POST /:id catch-all exists) — which is why onboarding completion kept working while the edit page was dead.
+- Fix: the four route methods (onboarding-complete, onboarding-status, GET/PATCH onboarding-data) moved VERBATIM into DriverController and declared BEFORE the catch-alls (right after the constructor); DriverOnboardingController deleted; driver.module.ts controllers array updated with a comment warning that a second @Controller("drivers") class gets its GET/PATCH routes swallowed. No path, payload, guard or status-gate change — the frontend and the Task-51 PDF contract are untouched.
+- Verification (this time against the REAL router, not a mock — the Task 50/51 mock-based e2e could never see this class of bug):
+  1. New backend/src/driver/driverRouting.spec.ts boots the real DriverController behind the "api" global prefix (matching main.ts) and asserts each self-service route reaches ITS handler (stub service returns marker payloads) while GET/PATCH /:id still serve real drivers and still 404 unknown ids. Run against the pre-fix arrangement it failed exactly like production (3 failed: GET data 404, PATCH data, GET status); after the fix it passes 6/6.
+  2. First placement attempt appended the routes at the BOTTOM of DriverController — still shadowed (declaration order); a route-stack dump (express layer order) proved the mechanism and the reposition. The spec now locks this in permanently.
+  3. driver.controller.base.spec.ts updated to override MobileOnlySignupGuard (the onboarding routes make it a guard of this controller; its PrismaService/AppEventsService deps don't exist in that bare module) — mirrors the existing guard-override pattern.
+  4. nest build clean. Full backend jest run serially, A/B against pristine 492fe07d: identical failure set (8 suites / 29 tests — auth spec compile errors, other modules' base specs, pricing engine, user service; all pre-date this work), plus 6 new passing tests from the routing spec.
+
+Stage Summary:
+- The Update Driver's License flow now actually works end to end: prefill GET returns the license payload, PATCH reaches the license-only validator, and onboarding-status serves the board — every self-service route reaches its own handler instead of the ":id" catch-all.
+- A route-ordering regression spec guards the ordering constraint permanently; anyone who redeclares the routes elsewhere or re-appends them below the catch-alls will see the suite fail with the production 404 message.

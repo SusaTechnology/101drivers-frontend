@@ -3,7 +3,6 @@ import { AuthModule } from "../auth/auth.module";
 import { DriverModuleBase } from "./base/driver.module.base";
 import { DriverService } from "./driver.service";
 import { DriverController } from "./driver.controller";
-import { DriverOnboardingController } from "./driverOnboarding.controller";
 import { DriverOnboardingPublicController } from "./driverOnboardingPublic.controller";
 import { DriverResolver } from "./driver.resolver";
 import { DriverPolicyService } from "src/domain/driver/driverPolicy.service";
@@ -29,7 +28,12 @@ import { GeoModule } from "../geo/geo.module";
     // crash DI (MailService requires AdminGateService, invisible here).
     MailModule,
   ],
-  controllers: [DriverController, DriverOnboardingController, DriverOnboardingPublicController],
+  // DriverOnboardingPublicController serves /public/drivers/* — a different
+  // base path, so it cannot collide with DriverControllerBase's ":id" routes.
+  // All /drivers/* self-service routes live on DriverController itself (see
+  // the route-order note there); adding another @Controller("drivers") class
+  // AFTER it would get its GET/PATCH routes swallowed by the base ":id".
+  controllers: [DriverController, DriverOnboardingPublicController],
   providers: [DriverService, DriverResolver, DriverDomain, DriverPolicyService, DriverApprovalEngine, NotificationEventEngine],
   exports: [DriverService],
 })

@@ -11,6 +11,9 @@ import { ApiNestedQuery } from "../decorators/api-nested-query.decorator";
 import * as defaultAuthGuard from "../auth/defaultAuth.guard";
 import { AclValidateRequestInterceptor } from "../interceptors/aclValidateRequest.interceptor";
 import { AclFilterResponseInterceptor } from "../interceptors/aclFilterResponse.interceptor";
+import { CompleteDriverOnboardingDto } from "./dto/driverOnboardingComplete.dto";
+import { UpdateDriverOnboardingDto } from "./dto/driverOnboardingUpdate.dto";
+import { MobileOnlySignupGuard } from "../auth/guards/mobile-only-signup.guard";
 import { DriverCreateInput } from "./base/DriverCreateInput";
 import { Driver } from "./base/Driver";
 import { DriverFindManyArgs } from "./base/DriverFindManyArgs";
@@ -54,6 +57,182 @@ export class DriverController extends DriverControllerBase {
   ) {
     super(service, rolesBuilder);
   }
+  // ── Driver self-service onboarding routes ──────────────────────────────
+  // These routes MUST be declared BEFORE the base-style catch-alls below
+  // (driver -> GET /:id, updateDriver -> PATCH /:id). NestJS scans controller
+  // methods in DECLARATION order and Express matches in registration order,
+  // so a GET/PATCH /onboarding-data declared after those catch-alls is
+  // swallowed by them and answers 404
+  // `No resource was found for {"id":"onboarding-data"}`.
+  @common.Post("/onboarding-complete")
+  // Driver onboarding is PHONE/TABLET ONLY — same desktop gate as driver
+  // signup (runs after DefaultAuthGuard, so the identity is already
+  // resolved; it then classifies the device like the public route).
+  @common.UseGuards(MobileOnlySignupGuard)
+  @swagger.ApiOkResponse({ description: "Onboarding completed successfully" })
+  @swagger.ApiBadRequestResponse({ description: "Invalid input or driver not eligible" })
+  @swagger.ApiForbiddenResponse({ description: "Driver profile not found" })
+  @nestAccessControl.UseRoles({
+    resource: "Driver",
+    action: "update",
+    possession: "own",
+  })
+  async completeOnboarding(
+    @common.Req() request: Request,
+    @common.Body() body: CompleteDriverOnboardingDto
+  ) {
+    const profileId = (request as any).user?.profileId;
+    if (!profileId) {
+      throw new common.ForbiddenException("Driver profile not found");
+    }
+
+    try {
+      return await this.service.completeOnboarding(profileId, body);
+    } catch (error) {
+      if (error instanceof common.BadRequestException) {
+        throw error;
+      }
+      throw new common.NotFoundException(
+        `Failed to complete onboarding: ${error instanceof Error ? error.message : "Unknown error"}`
+      );
+    }
+  }
+
+  @common.Get("/onboarding-status")
+  @swagger.ApiOkResponse({
+    schema: {
+      type: "object",
+      properties: {
+        onboardingCompleted: { type: "boolean" },
+        onboardingCompletedAt: { type: "string", nullable: true },
+        driverStatus: { type: "string" },
+        residentialZip: { type: "string", nullable: true },
+      },
+    },
+  })
+  @nestAccessControl.UseRoles({
+    resource: "Driver",
+    action: "read",
+    possession: "own",
+  })
+  async getOnboardingStatus(
+    @common.Req() request: Request
+  ): Promise<{
+    onboardingCompleted: boolean;
+    onboardingCompletedAt: string | null;
+    driverStatus: string;
+    dateOfBirth: string | null;
+    residentialZip: string | null;
+  }> {
+    const profileId = (request as any).user?.profileId;
+    if (!profileId) {
+      return { onboardingCompleted: false, onboardingCompletedAt: null, driverStatus: "UNKNOWN", dateOfBirth: null, residentialZip: null };
+    }
+
+    const driver = await this.service.driver({
+      where: { id: profileId },
+      select: {
+        status: true,
+        onboardingCompletedAt: true,
+        dateOfBirth: true,
+        // Signup already collects (and stores) a 5-digit home ZIP; exposing
+        // it here lets the onboarding form reuse it instead of asking again.
+        residentialZip: true,
+      },
+    });
+
+    return {
+      onboardingCompleted: !!driver?.onboardingCompletedAt,
+      onboardingCompletedAt: driver?.onboardingCompletedAt?.toISOString() ?? null,
+      driverStatus: driver?.status ?? "UNKNOWN",
+      dateOfBirth: driver?.dateOfBirth?.toISOString() ?? null,
+      residentialZip: driver?.residentialZip ?? null,
+    };
+  }
+
+  // ── Driver license update (self-service) ───────────────────────────────
+  // Prefill + update for the Application Status board "Update Driver's
+  // License" page, reachable ONLY while the driver is PENDING_APPROVAL
+  // (owner decision: the background check starts after approval, so license
+  // documents can never change underneath a running check — every other
+  // status goes through support). GET returns the stored license number,
+  // issuing state and photo URLs plus an `editable` flag so the page can
+  // render an honest not-available card. PATCH re-validates identity
+  // uniqueness (excluding the driver's own row) and never touches the
+  // driver's status or onboardingCompletedAt. The PATCH keeps the same
+  // PHONE/TABLET-ONLY gate as onboarding-complete — re-capturing license
+  // photos requires the live camera, and desktops are refused on both
+  // layers by design.
+
+  @common.Get("/onboarding-data")
+  @swagger.ApiOkResponse({
+    description: "The driver's stored license data for prefill",
+    schema: {
+      type: "object",
+      properties: {
+        driverStatus: { type: "string" },
+        onboardingCompleted: { type: "boolean" },
+        editable: { type: "boolean" },
+        licenseNumber: { type: "string", nullable: true },
+        licenseState: { type: "string", nullable: true },
+        licenseFrontUrl: { type: "string", nullable: true },
+        licenseBackUrl: { type: "string", nullable: true },
+      },
+    },
+  })
+  @swagger.ApiForbiddenResponse({ description: "Driver profile not found" })
+  @nestAccessControl.UseRoles({
+    resource: "Driver",
+    action: "read",
+    possession: "own",
+  })
+  async getOnboardingData(@common.Req() request: Request) {
+    const profileId = (request as any).user?.profileId;
+    if (!profileId) {
+      throw new common.ForbiddenException("Driver profile not found");
+    }
+    return this.service.getOnboardingData(profileId);
+  }
+
+  @common.Patch("/onboarding-data")
+  @common.UseGuards(MobileOnlySignupGuard)
+  @swagger.ApiOkResponse({ description: "Driver license information updated" })
+  @swagger.ApiBadRequestResponse({
+    description: "Invalid input or the license is not editable for this status",
+  })
+  @swagger.ApiConflictResponse({
+    description: "License already registered on another account",
+  })
+  @swagger.ApiForbiddenResponse({ description: "Driver profile not found" })
+  @nestAccessControl.UseRoles({
+    resource: "Driver",
+    action: "update",
+    possession: "own",
+  })
+  async updateOnboardingData(
+    @common.Req() request: Request,
+    @common.Body() body: UpdateDriverOnboardingDto
+  ) {
+    const profileId = (request as any).user?.profileId;
+    if (!profileId) {
+      throw new common.ForbiddenException("Driver profile not found");
+    }
+
+    try {
+      return await this.service.updateOnboardingData(profileId, body);
+    } catch (error) {
+      if (
+        error instanceof common.BadRequestException ||
+        error instanceof common.ConflictException
+      ) {
+        throw error;
+      }
+      throw new common.NotFoundException(
+        `Failed to update onboarding data: ${error instanceof Error ? error.message : "Unknown error"}`
+      );
+    }
+  }
+
 @common.Get("/lookup/minimal")
 @swagger.ApiOkResponse({
   schema: {
