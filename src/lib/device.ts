@@ -66,12 +66,15 @@ export function hasTouchCapability(): boolean {
 }
 
 /**
- * Value for the x-device-touch header the FE sends with every API call:
- * "1" when the browser is touch-capable, "0" otherwise. The server's
- * signup gate uses it to tell the iPadOS desktop-mode iPad (touch —
- * allowed) apart from a real Mac (no touch — blocked), something a
- * user-agent string alone can never do. Self-reported, but so is the
- * UA string itself; the server audits every block either way.
+ * Value for the x-device-touch header the FE sends ONLY on the driver
+ * signup requests (POST /auth/signup/driver, via the mutations' `headers`
+ * option): "1" when the browser is touch-capable, "0" otherwise. The
+ * server's signup gate uses it to tell the iPadOS desktop-mode iPad
+ * (touch — allowed) apart from a real Mac (no touch — blocked), something
+ * a user-agent string alone can never do. Self-reported, but so is the
+ * UA string itself; the server audits every block either way. Never
+ * attach it globally — a custom header forces a CORS preflight on every
+ * request that carries it.
  */
 export function deviceTouchHint(): "1" | "0" {
   return hasTouchCapability() ? "1" : "0";

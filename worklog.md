@@ -2575,3 +2575,55 @@ Stage Summary:
   never send it. Backend now allows the header — deploy the API and
   admin login works from every bundle variant; the signup device gate
   regains its touch signal as a side effect.
+
+---
+
+Task ID: 47
+Agent: main agent (Super Z)
+Task: laptop could do NOTHING while phone drivers could log in — x-device-touch was attached to EVERY API call; rescoped to driver signup only, exactly as the owner directed
+
+Work Log:
+- Owner correction: drivers also could not log in from the laptop — no
+  request worked at all — while phone drivers could. Root cause is the
+  same header from Task 46's report: the committed master tree attached
+  x-device-touch inside dataQuery.ts baseFetch, i.e. on EVERY query and
+  mutation. Any custom header forces a CORS preflight, and the live API
+  (without the b3f18ae1 allowlist deploy) rejects them all — so a laptop
+  browser running the current bundle loses every call, while phones run
+  older service-worker-cached bundles without the header and keep
+  working. (Task 46's "the header is dead code" conclusion was based on
+  a rolled-back working tree during another sandbox recycle — wrong at
+  HEAD; corrected here.)
+- The mobile-only guard needed NO change: it is and was applied to
+  exactly one route, POST /auth/signup/driver (auth.controller.ts:77) —
+  never to login or anything else. The owner's rule ("mobile-only is
+  only for driver onboarding") already holds on the backend.
+- FE fix (this commit): baseFetch no longer attaches x-device-touch;
+  useDataMutation gained an optional `headers` passthrough (documented:
+  use sparingly, custom headers force preflights); the header is now
+  attached ONLY to the three mutations that call
+  POST /auth/signup/driver (driver onboarding send-OTP, verify-email
+  resend + verify). The dead attach in the never-imported
+  query-wrapper.tsx removed; device.ts doc corrected. The client-side
+  mobile-only gate on the onboarding page is untouched — onboarding
+  stays phone/tablet-only by design.
+- Verification: FE tsc — 133 errors, identical count to the pre-change
+  baseline, none in the touched logic (the driver-verify-email
+  error.message ones pre-exist at HEAD lines 124/154; query-wrapper's
+  3-arg baseFetch calls pre-exist; driverOnboarding is @ts-nocheck);
+  vite build passes; built-bundle grep — x-device-touch appears only in
+  the driverOnboarding + index (verify-email) chunks, zero occurrences
+  in the shared fetch; headless-browser runtime capture with fetch
+  patched — the login POST carries keys [Content-Type] with
+  x-device-touch ABSENT, and the page's other calls likewise.
+- Deploys: the FRONTEND deploy removes the header from every non-signup
+  request — the laptop recovers even before the API deploy. The API
+  deploy (b3f18ae1) is still wanted so the signup request itself can
+  carry the header cross-origin and the device gate gets its touch
+  signal. Both are code fixes; nothing lives on techbee.
+
+Stage Summary:
+- One header, one purpose, three requests: driver signup OTP flow only.
+  Every other request goes out preflight-light (Content-Type only) and
+  works from any browser on any deploy combination. Backend untouched —
+  the guard was already scoped correctly.

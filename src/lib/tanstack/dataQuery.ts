@@ -11,7 +11,6 @@ import { socketConnect, socketDisconnect } from "@/lib/socket";
 import { fetchWithTimeout } from "@/lib/fetchWithTimeout";
 import { safeLocalStorage } from "@/lib/safeStorage";
 import { uploadTracker } from "@/lib/uploadFeedback";
-import { deviceTouchHint } from "@/lib/device";
 
 // ==================== TOKEN & USER MANAGEMENT ====================
 const ACCESS_TOKEN_KEY = "accessToken";
@@ -219,6 +218,13 @@ export interface MutationParams<TData = any, TVariables = any> {
   fetchWithoutRefresh?: boolean;
   /** If true, skip all auth logic including token refresh on 401. Use for public endpoints like login. */
   publicEndpoint?: boolean;
+  /**
+   * Per-request headers, merged over the defaults. Use sparingly: any
+   * custom header forces a CORS preflight, and the API must allow it.
+   * The only current consumer is the driver signup device-gate signal
+   * (x-device-touch) on POST /auth/signup/driver.
+   */
+  headers?: HeadersInit;
   successMessage?: string;
   errorMessage?: string;
 }
@@ -278,14 +284,13 @@ async function baseFetch<T>(
   const isFormData = typeof FormData !== "undefined" && options.body instanceof FormData;
   const headers: HeadersInit = {
     ...(isFormData ? {} : { "Content-Type": "application/json" }),
-    // Touch-capability hint for the signup device gate — the server uses it
-    // to tell an iPadOS desktop-mode iPad (touch-capable, UA says
-    // "Macintosh", allowed) apart from a real Mac (no touch, blocked).
-    // WITHOUT it every desktop-mode iPad was 403'd as DESKTOP_UA at
-    // POST /auth/signup/driver even though the client gate showed the
-    // form. See src/lib/device.ts; mirrors the query-wrapper fetcher.
-    // Per-request headers can still override.
-    "x-device-touch": deviceTouchHint(),
+    // NO global x-device-touch here. The header is a signup device-gate
+    // signal, and the backend gate reads it ONLY on POST /auth/signup/
+    // driver — attaching it to every request made desktop browsers fail
+    // CORS preflight on every API call until the API allowlisted it.
+    // Call sites that need it pass `headers` explicitly (the driver
+    // signup mutations do); per-request headers land here via
+    // ...options.headers.
     ...options.headers,
   };
 
@@ -650,6 +655,7 @@ export function useDataMutation<TData = any, TVariables = any>({
   invalidateQueryKey,
   fetchWithoutRefresh = false,
   publicEndpoint = false,
+  headers,
   successMessage,
   errorMessage,
 }: MutationParams<TData, TVariables>) {
@@ -686,6 +692,7 @@ export function useDataMutation<TData = any, TVariables = any>({
         {
           method,
           body,
+          headers,
         },
         requiresAuth,
         skipTokenRefresh,
