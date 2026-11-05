@@ -14,6 +14,7 @@ import { AclFilterResponseInterceptor } from "../interceptors/aclFilterResponse.
 import { CompleteDriverOnboardingDto } from "./dto/driverOnboardingComplete.dto";
 import { UpdateDriverOnboardingDto } from "./dto/driverOnboardingUpdate.dto";
 import { MobileOnlySignupGuard } from "../auth/guards/mobile-only-signup.guard";
+import { PrismaService } from "../prisma/prisma.service";
 import { DriverCreateInput } from "./base/DriverCreateInput";
 import { Driver } from "./base/Driver";
 import { DriverFindManyArgs } from "./base/DriverFindManyArgs";
@@ -53,9 +54,30 @@ export class DriverController extends DriverControllerBase {
   constructor(
     protected readonly service: DriverService,
     @nestAccessControl.InjectRolesBuilder()
-    protected readonly rolesBuilder: nestAccessControl.RolesBuilder
+    protected readonly rolesBuilder: nestAccessControl.RolesBuilder,
+    private readonly prisma: PrismaService
   ) {
     super(service, rolesBuilder);
+  }
+
+  // request.user carries ONLY { id, username, roles, isSuperAdmin } —
+  // JwtStrategyBase.validate() rebuilds the user from the DB on every
+  // request and never includes profileId, so reading request.user.profileId
+  // here 403'd every driver. Resolve the driver row from the authenticated
+  // userId instead (same contract as DriverPayoutController.resolveDriverId).
+  private async resolveDriverProfileId(request: Request): Promise<string> {
+    const userId = (request as any).user?.id;
+    if (!userId) {
+      throw new common.UnauthorizedException("Not authenticated");
+    }
+    const driver = await this.prisma.driver.findUnique({
+      where: { userId },
+      select: { id: true },
+    });
+    if (!driver) {
+      throw new common.ForbiddenException("Driver profile not found");
+    }
+    return driver.id;
   }
   // ── Driver self-service onboarding routes ──────────────────────────────
   // These routes MUST be declared BEFORE the base-style catch-alls below
@@ -81,10 +103,7 @@ export class DriverController extends DriverControllerBase {
     @common.Req() request: Request,
     @common.Body() body: CompleteDriverOnboardingDto
   ) {
-    const profileId = (request as any).user?.profileId;
-    if (!profileId) {
-      throw new common.ForbiddenException("Driver profile not found");
-    }
+    const profileId = await this.resolveDriverProfileId(request);
 
     try {
       return await this.service.completeOnboarding(profileId, body);
@@ -124,8 +143,12 @@ export class DriverController extends DriverControllerBase {
     dateOfBirth: string | null;
     residentialZip: string | null;
   }> {
-    const profileId = (request as any).user?.profileId;
-    if (!profileId) {
+    let profileId: string;
+    try {
+      profileId = await this.resolveDriverProfileId(request);
+    } catch {
+      // No authenticated user / no driver row — same graceful default the
+      // missing-profileId branch used to return.
       return { onboardingCompleted: false, onboardingCompletedAt: null, driverStatus: "UNKNOWN", dateOfBirth: null, residentialZip: null };
     }
 
@@ -187,10 +210,7 @@ export class DriverController extends DriverControllerBase {
     possession: "own",
   })
   async getOnboardingData(@common.Req() request: Request) {
-    const profileId = (request as any).user?.profileId;
-    if (!profileId) {
-      throw new common.ForbiddenException("Driver profile not found");
-    }
+    const profileId = await this.resolveDriverProfileId(request);
     return this.service.getOnboardingData(profileId);
   }
 
@@ -213,10 +233,7 @@ export class DriverController extends DriverControllerBase {
     @common.Req() request: Request,
     @common.Body() body: UpdateDriverOnboardingDto
   ) {
-    const profileId = (request as any).user?.profileId;
-    if (!profileId) {
-      throw new common.ForbiddenException("Driver profile not found");
-    }
+    const profileId = await this.resolveDriverProfileId(request);
 
     try {
       return await this.service.updateOnboardingData(profileId, body);

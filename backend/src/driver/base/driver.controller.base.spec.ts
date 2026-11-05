@@ -15,6 +15,7 @@ import { AclValidateRequestInterceptor } from "../../interceptors/aclValidateReq
 import { map } from "rxjs";
 import { DriverController } from "../driver.controller";
 import { DriverService } from "../driver.service";
+import { PrismaService } from "../../prisma/prisma.service";
 
 const nonExistingId = "nonExistingId";
 const existingId = "existingId";
@@ -109,6 +110,12 @@ describe("Driver", () => {
         {
           provide: DriverService,
           useValue: service,
+        },
+        {
+          // DriverController injects PrismaService to resolve the driver
+          // row from the authenticated userId (see resolveDriverProfileId).
+          provide: PrismaService,
+          useValue: {},
         },
       ],
       controllers: [DriverController],

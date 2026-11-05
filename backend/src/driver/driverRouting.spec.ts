@@ -31,8 +31,10 @@ import { AclFilterResponseInterceptor } from "../interceptors/aclFilterResponse.
 import { AclValidateRequestInterceptor } from "../interceptors/aclValidateRequest.interceptor";
 import { DriverController } from "./driver.controller";
 import { DriverService } from "./driver.service";
+import { PrismaService } from "../prisma/prisma.service";
 
 const DRIVER_PROFILE_ID = "driver-profile-1";
+const DRIVER_USER_ID = "user-1";
 
 const ONBOARDING_DATA_RESULT = {
   driverStatus: "PENDING_APPROVAL",
@@ -97,19 +99,40 @@ const service = {
   },
 };
 
-// Same guards/interceptors as driver.controller.base.spec.ts, except the
-// auth stub also carries profileId — the onboarding handlers resolve the
-// driver from request.user.profileId, not from a route param.
+// Same guards/interceptors as driver.controller.base.spec.ts. The auth stub
+// mirrors the REAL JwtStrategyBase.validate() output — { id, username,
+// roles, isSuperAdmin }, NO profileId — and takes the user id from an
+// x-test-user-id header so a test can act as a user with no driver row.
+// The onboarding handlers resolve the driver row from user.id via
+// PrismaService (Driver.userId is @unique); a stub that smuggled
+// profileId onto request.user is exactly how the live
+// 403 "Driver profile not found" slipped past the first routing spec.
 const basicAuthGuard = {
   canActivate: (context: ExecutionContext) => {
     const argumentHost = context.switchToHttp();
     const request = argumentHost.getRequest();
     request.user = {
-      roles: ["user"],
-      id: "user-1",
-      profileId: DRIVER_PROFILE_ID,
+      username: "driver@test.example",
+      roles: ["DRIVER"],
+      id: (request.headers["x-test-user-id"] as string) || DRIVER_USER_ID,
+      isSuperAdmin: false,
     };
     return true;
+  },
+};
+
+// In-memory stand-in for the Prisma boundary: the controller looks the
+// driver up by the AUTHENTICATED userId, so only user-1 has a profile.
+const prisma = {
+  driver: {
+    findUnique: ({ where }: { where: { userId?: string; id?: string } }) => {
+      if (where.userId !== undefined) {
+        return where.userId === DRIVER_USER_ID
+          ? { id: DRIVER_PROFILE_ID }
+          : null;
+      }
+      return null;
+    },
   },
 };
 
@@ -146,6 +169,10 @@ describe("Driver self-service routing", () => {
         {
           provide: DriverService,
           useValue: service,
+        },
+        {
+          provide: PrismaService,
+          useValue: prisma,
         },
       ],
       controllers: [DriverController],
@@ -203,6 +230,18 @@ describe("Driver self-service routing", () => {
       .send({ licenseNumber: "D1234567" })
       .expect(HttpStatus.CREATED)
       .expect(COMPLETE_RESULT);
+  });
+
+  test("GET /api/drivers/onboarding-data 403s when the user has no driver profile row", async () => {
+    await request(app.getHttpServer())
+      .get("/api/drivers/onboarding-data")
+      .set("x-test-user-id", "user-without-profile")
+      .expect(HttpStatus.FORBIDDEN)
+      .expect({
+        message: "Driver profile not found",
+        error: "Forbidden",
+        statusCode: HttpStatus.FORBIDDEN,
+      });
   });
 
   test("GET /api/drivers/:id still serves the base route for real ids", async () => {
