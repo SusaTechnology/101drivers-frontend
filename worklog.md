@@ -2510,3 +2510,68 @@ Stage Summary:
 - All drivers now see a status board that tells the truth about their
   application after sign-in; the dashboard is one tap away for approved
   drivers. Ships with the next frontend build.
+
+---
+
+Task ID: 46
+Agent: main agent (Super Z)
+Task: "why cors?" — admin sign-in blocked by CORS preflight while driver sign-in works; CORS report verified against the LIVE API and the header allowlisted on the backend
+
+Work Log:
+- The owner's CORS report claimed admin login dies because the frontend
+  sends x-device-touch and the API's Access-Control-Allow-Headers omits
+  it. Verified against the LIVE API with curl preflights:
+  OPTIONS /api/auth/login from Origin https://101drivers.com returns 204
+  with the fixed allow-list (Content-Type, Authorization, …,
+  X-Admin-Gate-Token) — x-device-touch is NOT in it. The cors middleware
+  echoes its configured array regardless of what was requested, so the
+  BROWSER is what rejects the real request when it carries that header —
+  "Failed to fetch" before anything reaches the server. Origins and
+  credentials on the live API are correct (ACAO echoes the origin,
+  credentials true), so the header allow-list is the one broken piece —
+  the report's mechanism is real and confirmed.
+- The asymmetry (drivers can log in, admins cannot) is a DEPLOYED-BUNDLE
+  artifact, not a master-code one: on current master NO live code path
+  sends x-device-touch at all. The header lives only in
+  src/lib/tanstack/query-wrapper.tsx baseFetch, which nothing imports
+  (checked with grep); the login path used by BOTH /driver/signin and
+  /auth/admin-signin (the same DealerSignIn component → useDataMutation
+  → dataQuery.ts baseFetch) sends only Content-Type (+Authorization) —
+  and the live preflight for exactly that request PASSES. So whichever
+  bundle the admin browser runs was built from a tree where the header
+  sat in the shared fetch path; drivers' installed PWAs (service-worker
+  caches, rarely hard-refreshed) run older bundles without it. Could not
+  download the deployed bundle to prove which build: 101drivers.com
+  geo-gates this sandbox to availability.html and the .techbee.et host
+  is 502 — the reporter's DevTools observation is the ground truth for
+  what the admin browser sent.
+- Bonus finding: the backend's mobile-only-signup.guard READS
+  x-device-touch as the device gate's second signal, so the missing
+  allow-list entry silently disabled that signal for every cross-origin
+  (101drivers.com) signup — the gate has been running UA-only. The fix
+  repairs the gate too, not just login.
+- Fix (backend, 10 lines): x-device-touch / X-Device-Touch added to
+  allowedHeaders in src/common/cors-cookie.util.ts with a comment
+  explaining the preflight failure mode. Nothing else changed; master's
+  frontend needs no change (it doesn't send the header), but deploying
+  the API unblocks every bundle variant regardless.
+- Verification: project tsc — 2 pre-existing spec-file errors only
+  (auth.service.spec, token.service.spec — identical without my change);
+  cors echo test (scripts/cors-echo-test.js, real allowlist semantics
+  via the cors package): preflight now covers every requested header,
+  browser-style check true. Deploy of the backend is what ships this.
+- Environment: the sandbox recycled AGAIN mid-turn (HEAD rolled back to
+  09828203, backend/src/upload/* deleted, backend/node_modules wiped).
+  Recovered via reset --hard origin/master (a8979e82) + npm ci; the CORS
+  edit was re-applied on top of the CURRENT file after the first re-
+  apply accidentally resurrected an older file version from the rolled-
+  back tree (caught in diff review: it would have reintroduced the
+  retired techbee.et origin).
+
+Stage Summary:
+- Root cause of "Login failed / Failed to fetch" on admin sign-in: a
+  CORS allow-list that never included x-device-touch while some deployed
+  bundle sends it; drivers are unaffected because the bundles they run
+  never send it. Backend now allows the header — deploy the API and
+  admin login works from every bundle variant; the signup device gate
+  regains its touch signal as a side effect.

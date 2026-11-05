@@ -68,6 +68,16 @@ export function configureCors(app: INestApplication) {
       // the browser refuses the cross-site gate cookie.
       "x-admin-gate-token",
       "X-Admin-Gate-Token",
+      // Signup device-gate signal (mobile-only-signup.guard reads it): the
+      // FE tells the server whether the browser is touch-capable so the
+      // gate can tell an iPadOS desktop-mode iPad (touch, "Macintosh" UA —
+      // allowed) from a real Mac (no touch — blocked). Without it here the
+      // browser aborts at preflight for ANY cross-origin request that
+      // carries the header — which is exactly what broke admin sign-in
+      // from the .com frontend ("Failed to fetch" before login), and it
+      // also meant the gate could only ever see the UA string.
+      "x-device-touch",
+      "X-Device-Touch",
     ],
   });
 }
