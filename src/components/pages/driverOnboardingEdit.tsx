@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -25,22 +25,12 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { toast } from "sonner";
 import {
   ArrowRight,
-  User,
-  Shield,
-  LogIn,
   Info,
-  Menu,
-  X,
   CheckCircle,
   Check,
   Loader2,
-  MapPin,
-  Calendar as CalendarIcon,
-  Eye,
-  EyeOff,
   Lock,
   AlertCircle,
-  Camera,
   FileCheck,
   Clock,
   Pencil,
@@ -49,7 +39,7 @@ import { cn } from "@/lib/utils";
 import { LivePhotoCapture } from "@/components/shared/LivePhotoCapture";
 import { MobileOnlySignupCard } from "../shared/MobileOnlySignupCard";
 import { deviceTouchHint, shouldShowMobileOnlySignup } from "@/lib/device";
-import { authFetchRaw, isAuthenticated, getUser } from "@/lib/tanstack/dataQuery";
+import { authFetchRaw, isAuthenticated } from "@/lib/tanstack/dataQuery";
 // Reused verbatim from the onboarding-complete page so both forms read as
 // one flow: identical site shell and the same (CA-enabled) state list.
 import { US_STATES, Header, Footer } from "./driverOnboardingComplete";
@@ -60,16 +50,13 @@ const API_URL = import.meta.env.VITE_API_URL;
 
 // ==================== VALIDATION SCHEMA ====================
 
-// Same rules as the onboarding-complete form, with three differences:
-//   • ssn is optional — an empty value keeps the SSN already on file
-//     (shown masked); a non-empty value must be 9 digits.
-//   • residentialZip IS collected here, prefilled from the stored value
-//     (the completion form never asks — at signup it was authoritative).
-//   • dateOfBirth is optional, MM/DD/YYYY, validated as a real date.
-const onboardingEditSchema = z.object({
-  ssn: z
-    .string()
-    .regex(/^(\d{9})?$/, "SSN must be exactly 9 digits"),
+// Deliberately narrow (owner decision): while an application is PENDING
+// APPROVAL the driver may correct ONLY their driver's license — number,
+// issuing state, and the front/back photos. Identity data that must not
+// drift mid-review (SSN, date of birth), the residential address, and the
+// verification selfie are locked; anything else goes through support. The
+// server enforces the exact same field set and the PENDING_APPROVAL gate.
+const licenseUpdateSchema = z.object({
   licenseNumber: z
     .string()
     .min(1, "License number is required")
@@ -81,44 +68,9 @@ const onboardingEditSchema = z.object({
     .regex(/^[A-Z]{2}$/, "State must be a valid 2-letter code"),
   licenseFrontUrl: z.string().min(1, "License front photo is required"),
   licenseBackUrl: z.string().min(1, "License back photo is required"),
-  residentialAddressLine1: z.string().min(1, "Street address is required"),
-  residentialAddressLine2: z.string().optional(),
-  residentialCity: z.string().min(1, "City is required"),
-  residentialState: z
-    .string()
-    .min(1, "State is required")
-    .regex(/^[A-Z]{2}$/, "State must be a valid 2-letter code"),
-  residentialZip: z
-    .string()
-    .regex(/^(\d{5}(-\d{4})?)?$/, "ZIP code must be 5 digits"),
-  selfiePhotoUrl: z.string().min(1, "Selfie photo is required"),
-  dateOfBirth: z
-    .string()
-    .regex(/^(\d{2}\/\d{2}\/\d{4})?$/, "Use MM/DD/YYYY"),
 });
 
-type OnboardingEditFormData = z.infer<typeof onboardingEditSchema>;
-
-// ==================== HELPER FUNCTIONS ====================
-
-/** Format DOB input as user types (auto-add slashes) */
-const formatDOB = (value: string): string => {
-  const digits = value.replace(/\D/g, "");
-  if (digits.length === 0) return "";
-  if (digits.length <= 2) return digits;
-  if (digits.length <= 4) return `${digits.slice(0, 2)}/${digits.slice(2)}`;
-  return `${digits.slice(0, 2)}/${digits.slice(2, 4)}/${digits.slice(4, 8)}`;
-};
-
-/** Reject impossible calendar dates (02/31/1990) before the server does. */
-const isRealDate = (dobStr: string): boolean => {
-  if (!/^\d{2}\/\d{2}\/\d{4}$/.test(dobStr)) return false;
-  const [m, d, y] = dobStr.split("/").map(Number);
-  const date = new Date(y, m - 1, d);
-  return (
-    date.getFullYear() === y && date.getMonth() === m - 1 && date.getDate() === d
-  );
-};
+type LicenseUpdateFormData = z.infer<typeof licenseUpdateSchema>;
 
 // ==================== TYPES ====================
 
@@ -127,58 +79,43 @@ interface OnboardingDataResponse {
   onboardingCompleted: boolean;
   onboardingCompletedAt: string | null;
   editable: boolean;
-  dateOfBirth: string | null;
-  dateOfBirthDisplay: string | null;
   licenseNumber: string | null;
   licenseState: string | null;
   licenseFrontUrl: string | null;
   licenseBackUrl: string | null;
-  selfiePhotoUrl: string | null;
-  residentialAddressLine1: string | null;
-  residentialAddressLine2: string | null;
-  residentialCity: string | null;
-  residentialState: string | null;
-  residentialZip: string | null;
-  ssnLastFour: string | null;
-  agreementAcceptedAt: string | null;
 }
 
 // Friendly one-liners for the not-editable card, keyed by the real status.
+// PENDING_APPROVAL is the ONLY editable status — everything else lands on
+// this card if the page is opened directly.
 const STATUS_LOCKED_COPY: Record<string, string> = {
   WAITLISTED:
-    "You haven't been invited to complete your application yet — there is nothing to edit yet.",
+    "You haven't been invited to complete your application yet — there is nothing on file to update.",
   INVITED:
     "Your application form is still waiting to be completed. Use the onboarding link to submit it first.",
   APPROVED:
-    "You're approved — your application details are locked in. Contact support if something needs to be corrected.",
+    "You're approved — your license details are locked in. Contact support if something needs to be corrected.",
   SUSPENDED:
-    "Your account is suspended, so application details can't be edited right now. Please contact support.",
+    "Your account is suspended, so license details can't be edited right now. Please contact support.",
 };
 
 // ==================== COMPONENT ====================
 
 export function DriverOnboardingEdit() {
   // Same PHONE/TABLET-ONLY rule as onboarding-complete (owner rule): the
-  // edit form re-captures license and selfie photos through the live
-  // camera, so a desktop/laptop never sees the form. The server enforces
-  // the same gate on the PATCH endpoint.
+  // license photos are re-captured through the live camera, so a
+  // desktop/laptop never sees the form. The server enforces the same gate
+  // on the PATCH endpoint.
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [ssnDisplay, setSsnDisplay] = useState("");
-  const [ssnVisible, setSsnVisible] = useState(false);
-  const [ssnEditEnabled, setSsnEditEnabled] = useState(false);
-  const ssnInputRef = useRef<HTMLInputElement>(null);
   const [saved, setSaved] = useState(false);
   const [loadingData, setLoadingData] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [data, setData] = useState<OnboardingDataResponse | null>(null);
-  const [selfiePreview, setSelfiePreview] = useState<string | null>(null);
-  const [selfieUploading, setSelfieUploading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [licenseFrontPreview, setLicenseFrontPreview] = useState<string | null>(null);
   const [licenseBackPreview, setLicenseBackPreview] = useState<string | null>(null);
   const [licenseFrontUploading, setLicenseFrontUploading] = useState(false);
   const [licenseBackUploading, setLicenseBackUploading] = useState(false);
-  const [dobDisplay, setDobDisplay] = useState("");
   const navigate = useNavigate();
 
   // ==================== LOAD PREFILL DATA ====================
@@ -189,17 +126,14 @@ export function DriverOnboardingEdit() {
     }
     authFetchRaw(`${API_URL}/api/drivers/onboarding-data`)
       .then(async (res) => {
-        if (!res.ok) throw new Error("Could not load your application information");
+        if (!res.ok) throw new Error("Could not load your license information");
         return res.json();
       })
       .then((payload: OnboardingDataResponse) => {
         setData(payload);
-        if (payload.dateOfBirthDisplay) {
-          setDobDisplay(payload.dateOfBirthDisplay);
-        }
       })
       .catch((err) => {
-        setLoadError(err.message || "Could not load your application information");
+        setLoadError(err.message || "Could not load your license information");
       })
       .finally(() => setLoadingData(false));
   }, []);
@@ -215,45 +149,28 @@ export function DriverOnboardingEdit() {
     clearErrors,
     reset,
     formState: { errors },
-  } = useForm<OnboardingEditFormData>({
-    resolver: zodResolver(onboardingEditSchema),
+  } = useForm<LicenseUpdateFormData>({
+    resolver: zodResolver(licenseUpdateSchema),
     defaultValues: {
-      ssn: "",
       licenseNumber: "",
       licenseState: "CA",
       licenseFrontUrl: "",
       licenseBackUrl: "",
-      residentialAddressLine1: "",
-      residentialAddressLine2: "",
-      residentialCity: "",
-      residentialState: "CA",
-      residentialZip: "",
-      selfiePhotoUrl: "",
-      dateOfBirth: "",
     },
   });
 
-  // Prefill once the payload arrives: every text field with its stored
-  // value, and the stored photo URLs straight into the previews — the
+  // Prefill once the payload arrives: the license fields with their stored
+  // values, and the stored photo URLs straight into the previews — the
   // driver sees exactly what they submitted, and tapping a photo retakes
   // it through the same live-camera path as the original submission.
   useEffect(() => {
     if (!data) return;
     reset({
-      ssn: "",
       licenseNumber: data.licenseNumber ?? "",
       licenseState: data.licenseState ?? "CA",
       licenseFrontUrl: data.licenseFrontUrl ?? "",
       licenseBackUrl: data.licenseBackUrl ?? "",
-      residentialAddressLine1: data.residentialAddressLine1 ?? "",
-      residentialAddressLine2: data.residentialAddressLine2 ?? "",
-      residentialCity: data.residentialCity ?? "",
-      residentialState: data.residentialState ?? "CA",
-      residentialZip: data.residentialZip ?? "",
-      selfiePhotoUrl: data.selfiePhotoUrl ?? "",
-      dateOfBirth: data.dateOfBirthDisplay ?? "",
     });
-    setSelfiePreview(data.selfiePhotoUrl ?? null);
     setLicenseFrontPreview(data.licenseFrontUrl ?? null);
     setLicenseBackPreview(data.licenseBackUrl ?? null);
   }, [data, reset]);
@@ -275,27 +192,6 @@ export function DriverOnboardingEdit() {
       return dataJson.url as string;
     },
     []
-  );
-
-  const handleSelfieCapture = useCallback(
-    async (file: File, previewDataUrl: string) => {
-      setSelfiePreview(previewDataUrl);
-      setSelfieUploading(true);
-      try {
-        const url = await uploadFile(file);
-        setValue("selfiePhotoUrl", url, { shouldValidate: true });
-        toast.success("Selfie updated!");
-      } catch {
-        toast.error("Upload failed", {
-          description: "Could not upload selfie. Please try again.",
-        });
-        setSelfiePreview(null);
-        setValue("selfiePhotoUrl", "");
-      } finally {
-        setSelfieUploading(false);
-      }
-    },
-    [setValue, uploadFile]
   );
 
   const handleLicenseFrontCapture = useCallback(
@@ -340,46 +236,6 @@ export function DriverOnboardingEdit() {
     [setValue, uploadFile]
   );
 
-  // Bring an errored field into view after the state update renders it.
-  const focusField = (id: string) => {
-    requestAnimationFrame(() => {
-      const el = document.getElementById(id);
-      el?.scrollIntoView({ behavior: "smooth", block: "center" });
-      (el as HTMLElement | null)?.focus?.({ preventScroll: true });
-    });
-  };
-
-  // Watch fields for validation feedback
-  const watchSsn = watch("ssn");
-  const watchLicenseNumber = watch("licenseNumber");
-  const watchAddressLine1 = watch("residentialAddressLine1");
-  const watchCity = watch("residentialCity");
-  const watchState = watch("residentialState");
-  const watchZip = watch("residentialZip");
-  const watchDob = watch("dateOfBirth");
-
-  const ssnIsValid = watchSsn?.trim() && /^\d{9}$/.test(watchSsn);
-  const dobTouched = !!watchDob && watchDob !== (data?.dateOfBirthDisplay ?? "");
-
-  const handleSSNChange = useCallback(
-    (e: React.ChangeEvent<HTMLInputElement>) => {
-      const rawDigits = e.target.value.replace(/\D/g, "").slice(0, 9);
-      // A fresh edit dismisses a server "already registered" error — the
-      // driver is correcting the value, the red state should follow.
-      clearErrors("ssn");
-      setSsnDisplay(rawDigits);
-      setValue("ssn", rawDigits, { shouldValidate: true });
-    },
-    [setValue, clearErrors]
-  );
-
-  const handleStateChange = useCallback(
-    (value: string) => {
-      setValue("residentialState", value, { shouldValidate: true });
-    },
-    [setValue]
-  );
-
   const handleLicenseStateChange = useCallback(
     (value: string) => {
       setValue("licenseState", value, { shouldValidate: true });
@@ -387,25 +243,7 @@ export function DriverOnboardingEdit() {
     [setValue]
   );
 
-  const handleDobChange = useCallback(
-    (e: React.ChangeEvent<HTMLInputElement>) => {
-      const formatted = formatDOB(e.target.value);
-      setDobDisplay(formatted);
-      setValue("dateOfBirth", formatted, { shouldValidate: true });
-    },
-    [setValue]
-  );
-
-  const submitEdit = async (formData: OnboardingEditFormData) => {
-    // Client-side real-date check for a changed DOB (the server re-checks).
-    if (dobTouched && !isRealDate(formData.dateOfBirth)) {
-      setError("dateOfBirth", {
-        type: "manual",
-        message: "Enter a real date in MM/DD/YYYY format",
-      });
-      focusField("dateOfBirth");
-      return;
-    }
+  const submitEdit = async (formData: LicenseUpdateFormData) => {
     try {
       setIsSubmitting(true);
       const payload: Record<string, unknown> = {
@@ -413,21 +251,6 @@ export function DriverOnboardingEdit() {
         licenseState: formData.licenseState,
         licenseFrontUrl: formData.licenseFrontUrl,
         licenseBackUrl: formData.licenseBackUrl,
-        residentialAddressLine1: formData.residentialAddressLine1,
-        residentialAddressLine2: formData.residentialAddressLine2 || undefined,
-        residentialCity: formData.residentialCity,
-        residentialState: formData.residentialState,
-        selfiePhotoUrl: formData.selfiePhotoUrl,
-        // Optional fields are sent only when the driver actually entered
-        // something — an omitted SSN keeps the one already on file, and an
-        // omitted ZIP keeps the stored one (the completion-form contract).
-        ...(ssnEditEnabled && formData.ssn ? { ssn: formData.ssn } : {}),
-        ...(formData.residentialZip
-          ? { residentialZip: formData.residentialZip }
-          : {}),
-        ...(dobTouched && formData.dateOfBirth
-          ? { dateOfBirth: formData.dateOfBirth }
-          : {}),
       };
 
       // The touch hint lets the server's mobile-only gate classify the
@@ -447,18 +270,16 @@ export function DriverOnboardingEdit() {
         const message: string =
           errData?.message || `Request failed (${res.status})`;
 
-        // Identity reuse (one driver account per SSN / per license): the
-        // server answers a NEUTRAL 409 — surface it ON the field, scroll
-        // the driver there, skip the generic error toast.
-        if (code === "SSN_ALREADY_REGISTERED") {
-          setSsnEditEnabled(true);
-          setError("ssn", { type: "manual", message });
-          focusField("ssn");
-          return;
-        }
+        // License reuse (one driver account per license): the server
+        // answers a NEUTRAL 409 — surface it ON the field, scroll the
+        // driver there, skip the generic error toast.
         if (code === "LICENSE_ALREADY_REGISTERED") {
           setError("licenseNumber", { type: "manual", message });
-          focusField("licenseNumber");
+          requestAnimationFrame(() => {
+            const el = document.getElementById("licenseNumber");
+            el?.scrollIntoView({ behavior: "smooth", block: "center" });
+            (el as HTMLElement | null)?.focus?.({ preventScroll: true });
+          });
           return;
         }
 
@@ -466,7 +287,7 @@ export function DriverOnboardingEdit() {
       }
 
       toast.success("Changes saved!", {
-        description: "Your application information has been updated.",
+        description: "Your license information has been updated.",
       });
       setSaved(true);
     } catch (error: unknown) {
@@ -478,7 +299,7 @@ export function DriverOnboardingEdit() {
     }
   };
 
-  const onSubmit = (formData: OnboardingEditFormData) => {
+  const onSubmit = (formData: LicenseUpdateFormData) => {
     submitEdit(formData);
   };
 
@@ -510,7 +331,7 @@ export function DriverOnboardingEdit() {
                   Changes Saved!
                 </h2>
                 <p className="text-sm text-slate-600 dark:text-slate-400 max-w-sm mx-auto leading-relaxed">
-                  Your application information has been updated. Your status
+                  Your license information has been updated. Your status
                   hasn&apos;t changed — our team reviews the latest version on
                   file.
                 </p>
@@ -553,7 +374,7 @@ export function DriverOnboardingEdit() {
           <div className="text-center space-y-4">
             <Loader2 className="w-10 h-10 text-lime-500 animate-spin mx-auto" />
             <p className="text-sm text-slate-600 dark:text-slate-400">
-              Loading your application information...
+              Loading your license information...
             </p>
           </div>
         </main>
@@ -599,10 +420,13 @@ export function DriverOnboardingEdit() {
   }
 
   // ==================== NOT EDITABLE ====================
+  // Only PENDING_APPROVAL drivers reach the form — every other status gets
+  // this card (the board hides the button for them too; this is the
+  // direct-URL safety net matching the server's gate).
   if (!data.editable) {
     const lockedCopy =
       STATUS_LOCKED_COPY[data.driverStatus] ??
-      "Your application information can't be edited for your current status. Please contact support if something needs to be corrected.";
+      "License updates are only available while your application is pending approval. Please contact support if something needs to be corrected.";
     return (
       <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col">
         <Header
@@ -657,7 +481,7 @@ export function DriverOnboardingEdit() {
           <div className="flex flex-wrap gap-2">
             <Badge className="bg-lime-100 dark:bg-lime-900/20 text-lime-800 dark:text-lime-200 border-lime-200">
               <Pencil className="h-3 w-3 mr-1" />
-              Edit Application
+              License Update
             </Badge>
             <Badge variant="outline" className="bg-slate-100 dark:bg-slate-800/50">
               <FileCheck className="h-3 w-3 mr-1" />
@@ -667,24 +491,27 @@ export function DriverOnboardingEdit() {
 
           <div>
             <h1 className="text-3xl lg:text-4xl font-black text-slate-900 dark:text-white">
-              Edit your application
+              Update your driver&apos;s license
             </h1>
             <p className="text-slate-600 dark:text-slate-400 text-lg max-w-2xl mt-4">
-              Everything you submitted is right here — review it, correct it,
-              and save. Photos are prefilled too; tap one to retake it. All
-              fields marked with <span className="text-red-500">*</span> are
-              required.
+              These are the license details and photos you submitted — shown
+              exactly as they are on file. Correct the number, switch the
+              issuing state, or tap a photo to retake it. All fields marked
+              with <span className="text-red-500">*</span> are required.
             </p>
           </div>
 
           <Alert className="max-w-2xl bg-sky-50 dark:bg-sky-900/10 border-sky-200 dark:border-sky-900/30">
             <Info className="h-4 w-4 text-sky-500" />
             <AlertTitle className="text-sky-900 dark:text-sky-200">
-              Saving won&apos;t change your status
+              Only your license can be updated here
             </AlertTitle>
             <AlertDescription className="text-sky-900/80 dark:text-sky-200/80 text-xs">
-              Updates only refresh the information our team reviews — your
-              application status stays exactly as it is.
+              While your application is pending approval, this page is limited
+              to your license number, issuing state, and photos — everything
+              else (address, SSN, date of birth, selfie) stays locked. Saving
+              won&apos;t change your status; our team reviews the updated
+              version.
             </AlertDescription>
           </Alert>
         </section>
@@ -692,168 +519,10 @@ export function DriverOnboardingEdit() {
         {/* Form Card */}
         <Card className="border-slate-200 dark:border-slate-800 shadow-lg">
           <form onSubmit={handleSubmit(onSubmit)}>
-            {/* ---- Personal Information ---- */}
+            {/* ---- Driver's License Information ---- */}
             <CardHeader className="border-b border-slate-100 dark:border-slate-800">
               <CardDescription className="text-[11px] font-black uppercase tracking-widest">
-                Section 1
-              </CardDescription>
-              <CardTitle className="text-xl font-black mt-1 flex items-center gap-2">
-                <User className="w-5 h-5 text-lime-500" />
-                Personal Information
-              </CardTitle>
-              <p className="text-sm text-slate-500 dark:text-slate-400">
-                Date of birth and SSN as you originally submitted them.
-              </p>
-            </CardHeader>
-            <CardContent className="space-y-5 pt-6 pb-6">
-              {/* DOB */}
-              <div
-                className={cn(
-                  "space-y-2 p-4 rounded-2xl border transition-all duration-300",
-                  errors.dateOfBirth
-                    ? "border-red-400 dark:border-red-600 bg-red-50 dark:bg-red-950/20"
-                    : dobTouched && watchDob
-                      ? "border-green-300 dark:border-green-700"
-                      : "border-transparent"
-                )}
-              >
-                <Label htmlFor="dateOfBirth" className="text-xs font-bold">
-                  Date of Birth
-                  <span className="text-slate-400 dark:text-slate-500 ml-1 font-normal text-[10px]">
-                    (leave unchanged to keep what&apos;s on file)
-                  </span>
-                </Label>
-                <div className="relative">
-                  <CalendarIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                  <Input
-                    id="dateOfBirth"
-                    type="text"
-                    value={dobDisplay}
-                    onChange={handleDobChange}
-                    className={cn(
-                      "h-14 pl-12 rounded-2xl font-mono transition-colors",
-                      errors.dateOfBirth
-                        ? "border-red-400 dark:border-red-500"
-                        : dobTouched && watchDob
-                          ? "border-green-300 dark:border-green-700"
-                          : ""
-                    )}
-                    placeholder="MM/DD/YYYY"
-                    autoComplete="bday"
-                    inputMode="numeric"
-                    maxLength={10}
-                  />
-                </div>
-                {errors.dateOfBirth ? (
-                  <p className="text-xs text-red-500 font-medium">
-                    {errors.dateOfBirth.message}
-                  </p>
-                ) : (
-                  <p className="text-[10px] text-slate-500 dark:text-slate-400">
-                    Currently on file: {data.dateOfBirthDisplay ?? "—"}
-                  </p>
-                )}
-              </div>
-
-              {/* SSN — masked "on file" until the driver chooses to change it */}
-              <div
-                className={cn(
-                  "space-y-2 p-4 rounded-2xl border transition-all duration-300",
-                  errors.ssn
-                    ? "border-red-400 dark:border-red-600 bg-red-50 dark:bg-red-950/20"
-                    : "border-transparent"
-                )}
-              >
-                <Label className="text-xs font-bold">
-                  Social Security Number
-                </Label>
-                <p className="text-[10px] text-slate-500 dark:text-slate-400">
-                  Used for background check purposes only — kept private and
-                  encrypted.
-                </p>
-                {!ssnEditEnabled ? (
-                  <div className="flex items-center justify-between gap-3 p-3 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700">
-                    <div className="flex items-center gap-2">
-                      <Lock className="w-4 h-4 text-slate-400" />
-                      <span className="font-mono tracking-widest text-sm text-slate-700 dark:text-slate-300">
-                        ••• - {data.ssnLastFour ?? "••••"}
-                      </span>
-                      <Badge
-                        variant="outline"
-                        className="bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300 border-green-200 dark:border-green-800 text-[10px]"
-                      >
-                        on file
-                      </Badge>
-                    </div>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="rounded-xl font-bold"
-                      onClick={() => {
-                        setSsnEditEnabled(true);
-                        setSsnDisplay("");
-                        setValue("ssn", "");
-                      }}
-                    >
-                      <Pencil className="w-3.5 h-3.5 mr-1" />
-                      Update
-                    </Button>
-                  </div>
-                ) : (
-                  <div className="relative">
-                    <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                    <Input
-                      ref={ssnInputRef}
-                      id="ssn"
-                      type={ssnVisible ? "text" : "password"}
-                      value={ssnDisplay}
-                      onChange={handleSSNChange}
-                      className={cn(
-                        "h-14 pl-12 pr-10 rounded-2xl tracking-widest font-mono transition-colors",
-                        errors.ssn
-                          ? "border-red-400 dark:border-red-500"
-                          : ssnIsValid
-                            ? "border-green-300 dark:border-green-700"
-                            : ""
-                      )}
-                      placeholder="Enter 9 digits to replace"
-                      autoComplete="off"
-                      inputMode="numeric"
-                      maxLength={9}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setSsnVisible(!ssnVisible)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-                      tabIndex={-1}
-                    >
-                      {ssnVisible ? (
-                        <EyeOff className="w-5 h-5 text-slate-400" />
-                      ) : (
-                        <Eye className="w-5 h-5 text-slate-400" />
-                      )}
-                    </button>
-                  </div>
-                )}
-                {errors.ssn && (
-                  <p className="text-xs text-red-500 font-medium">
-                    {errors.ssn.message}
-                  </p>
-                )}
-                {!ssnEditEnabled && (
-                  <p className="text-[10px] text-slate-500 dark:text-slate-400">
-                    Leave it as is — your SSN is only replaced if you tap
-                    Update and enter a new one.
-                  </p>
-                )}
-              </div>
-            </CardContent>
-
-            {/* ---- Driver's License Information ---- */}
-            <CardHeader className="border-b border-t border-slate-100 dark:border-slate-800">
-              <CardDescription className="text-[11px] font-black uppercase tracking-widest">
-                Section 2
+                On File
               </CardDescription>
               <CardTitle className="text-xl font-black mt-1 flex items-center gap-2">
                 <FileCheck className="w-5 h-5 text-lime-500" />
@@ -871,7 +540,7 @@ export function DriverOnboardingEdit() {
                   "space-y-2 p-4 rounded-2xl border transition-all duration-300",
                   errors.licenseNumber
                     ? "border-red-400 dark:border-red-600 bg-red-50 dark:bg-red-950/20"
-                    : watchLicenseNumber?.trim()
+                    : watch("licenseNumber")?.trim()
                       ? "border-green-300 dark:border-green-700"
                       : "border-transparent"
                 )}
@@ -888,21 +557,21 @@ export function DriverOnboardingEdit() {
                       onChange: () => {
                         // Any edit dismisses a server "already registered" error.
                         clearErrors("licenseNumber");
-                        if (watchLicenseNumber?.trim()) trigger("licenseNumber");
+                        if (watch("licenseNumber")?.trim()) trigger("licenseNumber");
                       },
                     })}
                     className={cn(
                       "h-14 rounded-2xl pr-10 transition-colors",
                       errors.licenseNumber
                         ? "border-red-400 dark:border-red-500"
-                        : watchLicenseNumber?.trim()
+                        : watch("licenseNumber")?.trim()
                           ? "border-green-300 dark:border-green-700"
                           : ""
                     )}
                     placeholder="e.g. D1234567"
                     autoComplete="off"
                   />
-                  {watchLicenseNumber?.trim() && !errors.licenseNumber && (
+                  {watch("licenseNumber")?.trim() && !errors.licenseNumber && (
                     <div className="absolute right-3 top-1/2 -translate-y-1/2">
                       <CheckCircle className="w-5 h-5 text-green-500" />
                     </div>
@@ -1059,296 +728,6 @@ export function DriverOnboardingEdit() {
                     </p>
                   )}
                 </div>
-              </div>
-            </CardContent>
-
-            {/* ---- Residential Address ---- */}
-            <CardHeader className="border-b border-t border-slate-100 dark:border-slate-800">
-              <CardDescription className="text-[11px] font-black uppercase tracking-widest">
-                Section 3
-              </CardDescription>
-              <CardTitle className="text-xl font-black mt-1 flex items-center gap-2">
-                <MapPin className="w-5 h-5 text-lime-500" />
-                Residential Address
-              </CardTitle>
-              <p className="text-sm text-slate-500 dark:text-slate-400">
-                Your current residential address as it appears on official
-                documents. Moving? Update it here so your service area stays
-                correct.
-              </p>
-            </CardHeader>
-            <CardContent className="space-y-5 pt-6 pb-8">
-              {/* Address Line 1 */}
-              <div
-                className={cn(
-                  "space-y-2 p-4 rounded-2xl border transition-all duration-300",
-                  errors.residentialAddressLine1
-                    ? "border-red-400 dark:border-red-600 bg-red-50 dark:bg-red-950/20"
-                    : "border-transparent"
-                )}
-              >
-                <Label htmlFor="addressLine1" className="text-xs font-bold">
-                  Street address
-                  {!watchAddressLine1?.trim() && (
-                    <span className="text-red-500 ml-1">*</span>
-                  )}
-                </Label>
-                <div className="relative">
-                  <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                  <Input
-                    id="addressLine1"
-                    {...register("residentialAddressLine1")}
-                    className={cn(
-                      "h-14 pl-12 pr-10 rounded-2xl transition-colors",
-                      errors.residentialAddressLine1
-                        ? "border-red-400 dark:border-red-500"
-                        : watchAddressLine1?.trim()
-                          ? "border-green-300 dark:border-green-700"
-                          : ""
-                    )}
-                    placeholder="123 Main Street"
-                    autoComplete="address-line1"
-                  />
-                  {watchAddressLine1?.trim() && !errors.residentialAddressLine1 && (
-                    <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                      <CheckCircle className="w-5 h-5 text-green-500" />
-                    </div>
-                  )}
-                </div>
-                {errors.residentialAddressLine1 && (
-                  <p className="text-xs text-red-500 font-medium">
-                    {errors.residentialAddressLine1.message}
-                  </p>
-                )}
-              </div>
-
-              {/* Address Line 2 */}
-              <div className="space-y-2 p-4 rounded-2xl">
-                <Label
-                  htmlFor="addressLine2"
-                  className="text-xs font-bold text-slate-600 dark:text-slate-400"
-                >
-                  Apartment, suite, unit, etc.
-                  <span className="text-slate-400 dark:text-slate-500 ml-1 font-normal text-[10px]">
-                    (optional)
-                  </span>
-                </Label>
-                <Input
-                  id="addressLine2"
-                  {...register("residentialAddressLine2")}
-                  className="h-14 rounded-2xl"
-                  placeholder="Apt 4B"
-                  autoComplete="address-line2"
-                />
-              </div>
-
-              {/* City */}
-              <div
-                className={cn(
-                  "space-y-2 p-4 rounded-2xl border transition-all duration-300",
-                  errors.residentialCity
-                    ? "border-red-400 dark:border-red-600 bg-red-50 dark:bg-red-950/20"
-                    : "border-transparent"
-                )}
-              >
-                <Label htmlFor="city" className="text-xs font-bold">
-                  City
-                  {!watchCity?.trim() && (
-                    <span className="text-red-500 ml-1">*</span>
-                  )}
-                </Label>
-                <div className="relative">
-                  <Input
-                    id="city"
-                    {...register("residentialCity")}
-                    className={cn(
-                      "h-14 rounded-2xl pr-10 transition-colors",
-                      errors.residentialCity
-                        ? "border-red-400 dark:border-red-500"
-                        : watchCity?.trim()
-                          ? "border-green-300 dark:border-green-700"
-                          : ""
-                    )}
-                    placeholder="Los Angeles"
-                    autoComplete="address-level2"
-                  />
-                  {watchCity?.trim() && !errors.residentialCity && (
-                    <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                      <CheckCircle className="w-5 h-5 text-green-500" />
-                    </div>
-                  )}
-                </div>
-                {errors.residentialCity && (
-                  <p className="text-xs text-red-500 font-medium">
-                    {errors.residentialCity.message}
-                  </p>
-                )}
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {/* State */}
-                <div
-                  className={cn(
-                    "space-y-2 p-4 rounded-2xl border transition-all duration-300",
-                    errors.residentialState
-                      ? "border-red-400 dark:border-red-600 bg-red-50 dark:bg-red-950/20"
-                      : "border-transparent"
-                  )}
-                >
-                  <Label className="text-xs font-bold">
-                    State<span className="text-red-500 ml-1">*</span>
-                  </Label>
-                  <Select
-                    value={watchState || undefined}
-                    onValueChange={handleStateChange}
-                  >
-                    <SelectTrigger
-                      className={cn(
-                        "h-14 rounded-2xl transition-colors",
-                        errors.residentialState
-                          ? "border-red-400 dark:border-red-500"
-                          : watchState
-                            ? "border-green-300 dark:border-green-700"
-                            : ""
-                      )}
-                    >
-                      <SelectValue placeholder="Select state" />
-                    </SelectTrigger>
-                    <SelectContent
-                      position="popper"
-                      className="max-h-64 overflow-y-auto z-50"
-                      sideOffset={4}
-                    >
-                      {US_STATES.map((s) => (
-                        <SelectItem key={s.value} value={s.value}>
-                          {s.value} — {s.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  {watchState && !errors.residentialState && (
-                    <div className="flex items-center gap-1.5">
-                      <CheckCircle className="w-4 h-4 text-green-500" />
-                      <span className="text-[10px] text-green-600 dark:text-green-400 font-medium">
-                        {US_STATES.find((s) => s.value === watchState)?.label}
-                      </span>
-                    </div>
-                  )}
-                  {errors.residentialState && (
-                    <p className="text-xs text-red-500 font-medium">
-                      {errors.residentialState.message}
-                    </p>
-                  )}
-                </div>
-
-                {/* ZIP — prefilled from the signup value; optional so an
-                    untouched field never overwrites what's stored. */}
-                <div
-                  className={cn(
-                    "space-y-2 p-4 rounded-2xl border transition-all duration-300",
-                    errors.residentialZip
-                      ? "border-red-400 dark:border-red-600 bg-red-50 dark:bg-red-950/20"
-                      : "border-transparent"
-                  )}
-                >
-                  <Label htmlFor="zip" className="text-xs font-bold">
-                    ZIP Code
-                    <span className="text-slate-400 dark:text-slate-500 ml-1 font-normal text-[10px]">
-                      (optional)
-                    </span>
-                  </Label>
-                  <Input
-                    id="zip"
-                    {...register("residentialZip")}
-                    className={cn(
-                      "h-14 rounded-2xl font-mono transition-colors",
-                      errors.residentialZip
-                        ? "border-red-400 dark:border-red-500"
-                        : watchZip
-                          ? "border-green-300 dark:border-green-700"
-                          : ""
-                    )}
-                    placeholder="90001"
-                    autoComplete="postal-code"
-                    inputMode="numeric"
-                    maxLength={10}
-                  />
-                  {errors.residentialZip && (
-                    <p className="text-xs text-red-500 font-medium">
-                      {errors.residentialZip.message}
-                    </p>
-                  )}
-                </div>
-              </div>
-            </CardContent>
-
-            {/* ---- Selfie Photo ---- */}
-            <CardHeader className="border-b border-t border-slate-100 dark:border-slate-800">
-              <CardDescription className="text-[11px] font-black uppercase tracking-widest">
-                Section 4
-              </CardDescription>
-              <CardTitle className="text-xl font-black mt-1 flex items-center gap-2">
-                <Camera className="w-5 h-5 text-lime-500" />
-                Verification Photo
-              </CardTitle>
-              <p className="text-sm text-slate-500 dark:text-slate-400">
-                The selfie on file is shown — tap it to retake a clearer one.
-              </p>
-            </CardHeader>
-            <CardContent className="space-y-5 pt-6 pb-6">
-              <div
-                className={cn(
-                  "space-y-2 p-4 rounded-2xl border transition-all duration-300",
-                  errors.selfiePhotoUrl
-                    ? "border-red-400 dark:border-red-600 bg-red-50 dark:bg-red-950/20"
-                    : selfiePreview
-                      ? "border-green-300 dark:border-green-700 bg-green-50 dark:bg-green-900/10"
-                      : "border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/30"
-                )}
-              >
-                <Label className="text-xs font-bold">
-                  Selfie Photo<span className="text-red-500 ml-1">*</span>
-                </Label>
-                <div className="flex items-center gap-4">
-                  <LivePhotoCapture
-                    kind="selfie"
-                    facing="user"
-                    hint="Center your face in the frame"
-                    variant="square"
-                    previewUrl={selfiePreview}
-                    uploading={selfieUploading}
-                    disabled={isSubmitting}
-                    onCapture={handleSelfieCapture}
-                    onRetake={() => setSelfiePreview(null)}
-                  />
-                  <div className="flex-1">
-                    <LivePhotoCapture
-                      kind="selfie"
-                      facing="user"
-                      hint="Center your face in the frame"
-                      variant="button"
-                      buttonLabel={
-                        selfieUploading
-                          ? "Uploading..."
-                          : selfiePreview
-                            ? "Retake Selfie"
-                            : "Take Selfie"
-                      }
-                      disabled={isSubmitting || selfieUploading}
-                      onCapture={handleSelfieCapture}
-                    />
-                    {selfiePreview && (
-                      <p className="text-[10px] text-green-600 dark:text-green-400 mt-1 font-medium">
-                        Photo on file
-                      </p>
-                    )}
-                  </div>
-                </div>
-                {errors.selfiePhotoUrl && (
-                  <p className="text-xs text-red-500 font-medium">
-                    {errors.selfiePhotoUrl.message}
-                  </p>
-                )}
               </div>
             </CardContent>
 

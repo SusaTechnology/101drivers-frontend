@@ -103,40 +103,33 @@ export class DriverOnboardingController {
     };
   }
 
-  // ── Onboarding-data edit (self-service) ────────────────────────────────
-  // Prefill + update for the driver's Application Status board "Edit
-  // Application Info" page. GET returns everything the form prefills with
-  // (including the stored photo URLs and DOB; SSN only as last four) plus
-  // an `editable` flag so the page can render an honest not-available card.
-  // PATCH re-validates with the same rules the completion form enforces
-  // (identity uniqueness, 25+ DOB, California ZIP) and never touches the
+  // ── Driver license update (self-service) ───────────────────────────────
+  // Prefill + update for the Application Status board "Update Driver's
+  // License" page, reachable ONLY while the driver is PENDING_APPROVAL
+  // (owner decision: the background check starts after approval, so license
+  // documents can never change underneath a running check — every other
+  // status goes through support). GET returns the stored license number,
+  // issuing state and photo URLs plus an `editable` flag so the page can
+  // render an honest not-available card. PATCH re-validates identity
+  // uniqueness (excluding the driver's own row) and never touches the
   // driver's status or onboardingCompletedAt. The PATCH keeps the same
   // PHONE/TABLET-ONLY gate as onboarding-complete — re-capturing license
-  // and selfie photos requires the live camera, and desktops are refused
-  // on both layers by design.
+  // photos requires the live camera, and desktops are refused on both
+  // layers by design.
 
   @common.Get("/onboarding-data")
   @swagger.ApiOkResponse({
-    description: "The driver's submitted onboarding data for prefill",
+    description: "The driver's stored license data for prefill",
     schema: {
       type: "object",
       properties: {
         driverStatus: { type: "string" },
         onboardingCompleted: { type: "boolean" },
         editable: { type: "boolean" },
-        dateOfBirth: { type: "string", nullable: true },
         licenseNumber: { type: "string", nullable: true },
         licenseState: { type: "string", nullable: true },
         licenseFrontUrl: { type: "string", nullable: true },
         licenseBackUrl: { type: "string", nullable: true },
-        selfiePhotoUrl: { type: "string", nullable: true },
-        residentialAddressLine1: { type: "string", nullable: true },
-        residentialAddressLine2: { type: "string", nullable: true },
-        residentialCity: { type: "string", nullable: true },
-        residentialState: { type: "string", nullable: true },
-        residentialZip: { type: "string", nullable: true },
-        ssnLastFour: { type: "string", nullable: true },
-        agreementAcceptedAt: { type: "string", nullable: true },
       },
     },
   })
@@ -156,12 +149,12 @@ export class DriverOnboardingController {
 
   @common.Patch("/onboarding-data")
   @common.UseGuards(MobileOnlySignupGuard)
-  @swagger.ApiOkResponse({ description: "Onboarding data updated" })
+  @swagger.ApiOkResponse({ description: "Driver license information updated" })
   @swagger.ApiBadRequestResponse({
-    description: "Invalid input or the data is not editable for this status",
+    description: "Invalid input or the license is not editable for this status",
   })
   @swagger.ApiConflictResponse({
-    description: "SSN or license already registered on another account",
+    description: "License already registered on another account",
   })
   @swagger.ApiForbiddenResponse({ description: "Driver profile not found" })
   @nestAccessControl.UseRoles({

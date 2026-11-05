@@ -257,17 +257,14 @@ export function DriverApplicationSubmitted() {
     },
   ];
 
-  // Statuses whose driver may edit the submitted onboarding data (mirrors
-  // the backend's ONBOARDING_EDITABLE_STATUSES — the edit page re-checks
-  // server-side, this only decides whether to show the button).
-  const EDITABLE_STATUSES = [
-    "PENDING_APPROVAL",
-    "MEETING_REQUESTED",
-    "ON_HOLD",
-    "REJECTED",
-  ];
+  // Only PENDING_APPROVAL drivers may edit (mirrors the backend's
+  // ONBOARDING_EDITABLE_STATUSES — the edit page re-checks server-side,
+  // this only decides whether to show the button). Owner decision: the
+  // background check starts after approval, so license documents can
+  // never change underneath a running check; every other status goes
+  // through support instead.
   const canEditApplication =
-    onboardingCompleted && EDITABLE_STATUSES.includes(driverStatus);
+    onboardingCompleted && driverStatus === "PENDING_APPROVAL";
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 p-6">
@@ -320,7 +317,7 @@ export function DriverApplicationSubmitted() {
                   className="w-full h-12 rounded-2xl font-bold"
                 >
                   <Pencil className="w-5 h-5 mr-2 text-slate-500 dark:text-slate-400" />
-                  Edit Application Info
+                  Update Driver&apos;s License
                 </Button>
               </Link>
             )}

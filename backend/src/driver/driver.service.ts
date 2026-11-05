@@ -650,10 +650,10 @@ async driverLookupList(): Promise<
    * Throws a NEUTRAL 409: no hint about who the existing account is.
    */
   private async assertIdentityNotTaken(
-    dto: Pick<
-      CompleteDriverOnboardingDto,
-      "ssn" | "licenseNumber" | "licenseState"
-    >,
+    // ssn stays optional in the caller's shape: the license-update path
+    // (which has no SSN at all) passes only the license fields, and an
+    // absent SSN never runs the clash check below.
+    dto: { ssn?: string; licenseNumber: string; licenseState: string },
     excludeDriverId?: string
   ): Promise<void> {
     const [ssnClash, licenseClash] = await Promise.all([
@@ -919,65 +919,32 @@ async completeOnboardingByToken(
   // ─────────────────────────────────────────────────────────────────────
 
   /**
-   * Statuses in which the driver may edit their submitted onboarding data.
-   * APPROVED is excluded on purpose (approved drivers keep using the
-   * profile endpoint for phone/photo/ZIP), SUSPENDED is excluded because it
-   * is an enforcement state, and INVITED/WAITLISTED have not completed
-   * onboarding yet (their path is the onboarding-complete form).
+   * The ONE status in which the driver may edit their submitted onboarding
+   * data — PENDING_APPROVAL only (owner decision). The background check
+   * starts after approval, so restricting edits to this window means the
+   * identity documents can never change underneath a running check;
+   * MEETING_REQUESTED / ON_HOLD / REJECTED and everything later go through
+   * support instead.
    */
   private static readonly ONBOARDING_EDITABLE_STATUSES: EnumDriverStatus[] = [
     EnumDriverStatus.PENDING_APPROVAL,
-    EnumDriverStatus.MEETING_REQUESTED,
-    EnumDriverStatus.ON_HOLD,
-    EnumDriverStatus.REJECTED,
   ];
 
-  /** Same 25+ rule as signup (auth.service.validateDriverAge) — duplicated
-   *  here so the edit path enforces it without importing the auth service,
-   *  plus a real calendar-date check (02/31/1990 must not reach the DB). */
-  private validateEditDriverAge(dateOfBirth: string): void {
-    const [month, day, year] = dateOfBirth.split("/");
-    const dob = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
-    if (
-      dob.getFullYear() !== parseInt(year) ||
-      dob.getMonth() !== parseInt(month) - 1 ||
-      dob.getDate() !== parseInt(day)
-    ) {
-      throw new BadRequestException("Date of birth is not a valid date");
-    }
-    const today = new Date();
-    let age = today.getFullYear() - dob.getFullYear();
-    const monthDiff = today.getMonth() - dob.getMonth();
-    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < dob.getDate())) {
-      age--;
-    }
-    if (age < 25) {
-      throw new BadRequestException("Driver must be at least 25 years old");
-    }
-  }
-
-  /** Full prefill payload for the driver's own onboarding-edit page. */
+  /**
+   * Prefill payload for the driver's license-update page (own data only).
+   * License fields only — the page cannot touch anything else, so the GET
+   * never ships DOB, address, or SSN material either (minimal exposure).
+   */
   async getOnboardingData(driverId: string): Promise<any> {
     const driver = await this.prisma.driver.findUnique({
       where: { id: driverId },
       select: {
         status: true,
         onboardingCompletedAt: true,
-        dateOfBirth: true,
         licenseNumber: true,
         licenseState: true,
         licenseFrontUrl: true,
         licenseBackUrl: true,
-        selfiePhotoUrl: true,
-        residentialAddressLine1: true,
-        residentialAddressLine2: true,
-        residentialCity: true,
-        residentialState: true,
-        residentialZip: true,
-        // The raw SSN (encrypted at rest) is NEVER returned — only the
-        // display last four, so the edit form can show "on file".
-        ssnLastFour: true,
-        agreementAcceptedAt: true,
       },
     });
 
@@ -992,26 +959,10 @@ async completeOnboardingByToken(
       editable:
         !!driver.onboardingCompletedAt &&
         DriverService.ONBOARDING_EDITABLE_STATUSES.includes(driver.status),
-      dateOfBirth: driver.dateOfBirth?.toISOString() ?? null,
-      // The same date as MM/DD/YYYY built from the LOCAL parts of the stored
-      // Date. toISOString() is UTC and can shift a local-midnight DOB one
-      // day off depending on server timezone; the edit form prefills from
-      // this display value instead of re-deriving it.
-      dateOfBirthDisplay: driver.dateOfBirth
-        ? `${String(driver.dateOfBirth.getMonth() + 1).padStart(2, "0")}/${String(driver.dateOfBirth.getDate()).padStart(2, "0")}/${driver.dateOfBirth.getFullYear()}`
-        : null,
       licenseNumber: driver.licenseNumber,
       licenseState: driver.licenseState,
       licenseFrontUrl: driver.licenseFrontUrl,
       licenseBackUrl: driver.licenseBackUrl,
-      selfiePhotoUrl: driver.selfiePhotoUrl,
-      residentialAddressLine1: driver.residentialAddressLine1,
-      residentialAddressLine2: driver.residentialAddressLine2,
-      residentialCity: driver.residentialCity,
-      residentialState: driver.residentialState,
-      residentialZip: driver.residentialZip,
-      ssnLastFour: driver.ssnLastFour,
-      agreementAcceptedAt: driver.agreementAcceptedAt?.toISOString() ?? null,
     };
   }
 
@@ -1029,14 +980,7 @@ async completeOnboardingByToken(
         licenseState: true,
         licenseFrontUrl: true,
         licenseBackUrl: true,
-        selfiePhotoUrl: true,
-        residentialAddressLine1: true,
-        residentialAddressLine2: true,
-        residentialCity: true,
-        residentialState: true,
-        residentialZip: true,
-        dateOfBirth: true,
-        ssnLastFour: true,
+        user: { select: { fullName: true } },
       },
     });
 
@@ -1054,82 +998,39 @@ async completeOnboardingByToken(
       !DriverService.ONBOARDING_EDITABLE_STATUSES.includes(driver.status)
     ) {
       throw new BadRequestException(
-        "Your application information can no longer be edited for your current status. Please contact support if something needs to be corrected."
+        "Your license information can no longer be edited for your current status. Please contact support if something needs to be corrected."
       );
     }
 
-    // Optional DOB change — same 25+ rule as signup, impossible calendar
-    // dates rejected before they reach the database.
-    let dobData: { dateOfBirth: Date } | {} = {};
-    if (dto.dateOfBirth) {
-      this.validateEditDriverAge(dto.dateOfBirth);
-      const [month, day, year] = dto.dateOfBirth.split("/");
-      dobData = {
-        dateOfBirth: new Date(parseInt(year), parseInt(month) - 1, parseInt(day)),
-      };
-    }
-
-    // One driver account per SSN / per license — same neutral 409 as the
+    // One driver account per license — the same neutral 409 as the
     // completion paths, but EXCLUDING this driver's own row (their stored
-    // hashes must not collide with themselves).
+    // hash must not collide with itself). No SSN in the DTO, so the SSN
+    // clash check is skipped inside.
     await this.assertIdentityNotTaken(
       {
-        ssn: dto.ssn ?? "",
         licenseNumber: dto.licenseNumber,
         licenseState: dto.licenseState,
       },
       driverId
     );
 
-    // ZIP backstop — same authoritative rule as updateDriverProfile and the
-    // signup guard: 5 digits, California range 90001–96199 (a ZIP+4 is
-    // accepted but normalized to its 5-digit base so Driver.residentialZip
-    // never drifts out of the uniform format).
-    let zipData: { residentialZip: string } | {} = {};
-    if (dto.residentialZip) {
-      const zipBase = dto.residentialZip.trim().slice(0, 5);
-      if (!/^\d{5}$/.test(zipBase)) {
-        throw new BadRequestException("A valid 5-digit ZIP code is required.");
-      }
-      const zipNumeric = parseInt(zipBase, 10);
-      if (zipNumeric < 90001 || zipNumeric > 96199) {
-        throw new BadRequestException(
-          "ZIP code must be a California ZIP (90001–96199)."
-        );
-      }
-      zipData = { residentialZip: zipBase };
-    }
-
     // License hash is ALWAYS rewritten (number/state may have been
     // corrected; unchanged prefilled values produce the identical hash).
-    // The SSN writes happen only when the driver actually re-entered one —
-    // otherwise the stored hash/encryption stays untouched.
-    const identityData = {
-      licenseNumberHash: licenseIdentityHash(dto.licenseNumber, dto.licenseState),
-      ...(dto.ssn
-        ? {
-            ssnLastFour: normalizeSsn(dto.ssn).slice(-4),
-            ssnHash: ssnIdentityHash(dto.ssn),
-            ssnEncrypted: encryptSsn(dto.ssn),
-          }
-        : {}),
-    };
+    const licenseNumberHash = licenseIdentityHash(
+      dto.licenseNumber,
+      dto.licenseState
+    );
 
-    // Audit snapshot: the subset a driver edit can touch. Deliberately
-    // excludes ssnHash/ssnEncrypted — no identity material in the log.
+    // Audit snapshot — the license subset a driver edit can touch, plus
+    // the driver's name so the admin Audit Logs summary names the person.
+    // Deliberately excludes ssnHash/ssnEncrypted/licenseNumberHash — no
+    // identity material in the log.
     const auditFields = (row: Record<string, any>) => ({
+      driverName: row.user?.fullName ?? null,
       licenseNumber: row.licenseNumber ?? null,
       licenseState: row.licenseState ?? null,
       licenseFrontUrl: row.licenseFrontUrl ?? null,
       licenseBackUrl: row.licenseBackUrl ?? null,
-      selfiePhotoUrl: row.selfiePhotoUrl ?? null,
-      residentialAddressLine1: row.residentialAddressLine1 ?? null,
-      residentialAddressLine2: row.residentialAddressLine2 ?? null,
-      residentialCity: row.residentialCity ?? null,
-      residentialState: row.residentialState ?? null,
-      residentialZip: row.residentialZip ?? null,
-      dateOfBirth: row.dateOfBirth ?? null,
-      ssnChanged: dto.ssn ? true : false,
     });
 
     try {
@@ -1141,19 +1042,9 @@ async completeOnboardingByToken(
             licenseState: dto.licenseState.trim(),
             licenseFrontUrl: dto.licenseFrontUrl.trim(),
             licenseBackUrl: dto.licenseBackUrl.trim(),
-            ...identityData,
-            residentialAddressLine1: dto.residentialAddressLine1.trim(),
-            residentialAddressLine2: dto.residentialAddressLine2
-              ? dto.residentialAddressLine2.trim()
-              : null,
-            residentialCity: dto.residentialCity.trim(),
-            residentialState: dto.residentialState.trim(),
-            // Same contract as completion: honor a sent ZIP (validated and
-            // normalized above), keep the stored one when omitted.
-            ...zipData,
-            selfiePhotoUrl: dto.selfiePhotoUrl.trim(),
-            ...dobData,
-            // status / onboardingCompletedAt are intentionally NOT here.
+            licenseNumberHash,
+            // status / onboardingCompletedAt are intentionally NOT here —
+            // an edit never changes the application state.
           },
         }),
       ]);
@@ -1165,18 +1056,6 @@ async completeOnboardingByToken(
       throw err;
     }
 
-    // Same best-effort, non-blocking zip → service-area re-derivation as
-    // the completion paths: a geocode outage must never fail an edit.
-    if (dto.residentialZip) {
-      void this.serviceArea
-        .evaluateDriverByZip({
-          driverId,
-          zipRaw: dto.residentialZip,
-          source: "onboarding data edit",
-        })
-        .catch(() => {});
-    }
-
     const updated = await this.prisma.driver.findUnique({
       where: { id: driverId },
       select: {
@@ -1184,26 +1063,23 @@ async completeOnboardingByToken(
         licenseState: true,
         licenseFrontUrl: true,
         licenseBackUrl: true,
-        selfiePhotoUrl: true,
-        residentialAddressLine1: true,
-        residentialAddressLine2: true,
-        residentialCity: true,
-        residentialState: true,
-        residentialZip: true,
-        dateOfBirth: true,
-        ssnLastFour: true,
+        user: { select: { fullName: true } },
       },
     });
 
     await this.prisma.adminAuditLog.create({
       data: {
         action: EnumAdminAuditLogAction.OTHER,
-        // Self-service edit: no admin actor — driverId + the before/after
-        // snapshots tell admins what changed and when.
+        // Driver-initiated: no admin user behind it, so actorType SYSTEM —
+        // the admin Audit Logs page labels actor-less USER rows "Admin
+        // User", which would be wrong. Admins find these rows by picking
+        // the driver in the filter, by action OTHER, or by searching the
+        // reason text below.
         actorUserId: null,
-        actorType: EnumAdminAuditLogActorType.USER,
+        actorType: EnumAdminAuditLogActorType.SYSTEM,
         driverId,
-        reason: "Driver edited their submitted onboarding information",
+        reason:
+          "Driver license info updated by driver during PENDING_APPROVAL (self-service edit)",
         beforeJson: (auditFields(driver) as any) ?? Prisma.JsonNull,
         afterJson: (updated ? auditFields(updated) : null) as any ?? Prisma.JsonNull,
       },
