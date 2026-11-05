@@ -2686,3 +2686,57 @@ Stage Summary:
   everywhere: board button, guard auto-redirect on any /driver page,
   and the guard's own needs_onboarding flow all land on the unguarded
   /driver-onboarding-complete?token=… form, which now renders fully.
+
+---
+
+Task ID: 49
+Agent: main agent (Super Z)
+Task: Owner completed driver onboarding from a LAPTOP — driver onboarding must be phone/tablet/iPad only (desktop gate was missing from the onboarding-complete flow)
+
+Work Log:
+- Root cause: the mobile-only rule existed ONLY on the driver signup
+  page. Task 48's fixes made /driver-onboarding-complete the one live
+  onboarding path (board button + guard auto-redirect), and that page
+  never grew the gate — so a desktop/laptop could open the form and
+  submit onboarding data. The backend endpoints had no gate either.
+- Frontend (src/components/pages/driverOnboardingComplete.tsx):
+  `shouldShowMobileOnlySignup()` now runs FIRST in the component, before
+  every other branch — a desktop/laptop gets the shared
+  MobileOnlySignupCard instead of the form, from BOTH entry routes
+  (covers the top-level route and the nested /driver route with one
+  change, so a route wrapper can never bypass it again). Placed after
+  all hooks (verified none after the branch point) so React rules hold.
+- Frontend submit headers: both onboarding-complete POSTs (public
+  token-based fetch and auth-based authFetchRaw) now send
+  `x-device-touch: deviceTouchHint()` — required so the server gate can
+  tell the iPadOS desktop-mode iPad (Macintosh UA + touch) apart from a
+  real Mac, exactly like the signup request already does.
+- Backend: MobileOnlySignupGuard (the same guard that protects POST
+  /auth/signup/driver — classifies UA + touch hint, writes every
+  desktop rejection to the BlockedSignup audit ledger) now guards BOTH
+  onboarding-complete endpoints: public POST /public/drivers/
+  onboarding-complete and authenticated POST /drivers/onboarding-
+  complete. PrismaService/AppEventsService are @Global so the guard's
+  DI works in DriverModule unchanged. The read-only onboarding-status
+  GET stays open (no data entry).
+- Verified in the headless browser:
+  • Desktop viewer (no touch, desktop UA): top-level route direct →
+    MOBILE-ONLY CARD, no form. Nested route with an INVITED session →
+    guard auto-redirects to the top-level route → MOBILE-ONLY CARD.
+  • Faithful iPhone profile (real iPhone UA + maxTouchPoints 5 + 390px
+    viewport): board → "Complete Your Application" →
+    /driver-onboarding-complete?token=… → FULL FORM renders ("License",
+    "Verification Photo"), no device card, no invalid-token card.
+    (Note: an iPhone-UA viewer with ZERO touch points is correctly
+    blocked — real iPhones always report touch, so the no-touch branch
+    can only catch spoofed/devtools viewers, as designed.)
+- Gates: FE tsc 131 errors (baseline — no new), vite build passes,
+  backend tsc clean except the 2 pre-existing spec-file errors; no
+  errors in the touched controllers.
+
+Stage Summary:
+- The owner's rule is now enforced end to end: the onboarding form
+  cannot be opened on a desktop/laptop (FE gate on both routes) and
+  cannot be submitted from one (server guard on both endpoints, every
+  attempt audited). Phones, tablets and iPads — including iPadOS
+  desktop-mode iPads — keep working unchanged.

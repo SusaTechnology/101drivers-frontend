@@ -5,6 +5,7 @@ import { DriverService } from "./driver.service";
 import * as defaultAuthGuard from "../auth/defaultAuth.guard";
 import { Request } from "express";
 import { CompleteDriverOnboardingDto } from "./dto/driverOnboardingComplete.dto";
+import { MobileOnlySignupGuard } from "../auth/guards/mobile-only-signup.guard";
 
 @swagger.ApiTags("drivers")
 @common.Controller("drivers")
@@ -16,6 +17,10 @@ export class DriverOnboardingController {
   ) {}
 
   @common.Post("/onboarding-complete")
+  // Driver onboarding is PHONE/TABLET ONLY — same desktop gate as driver
+  // signup (runs after DefaultAuthGuard, so the identity is already
+  // resolved; it then classifies the device like the public route).
+  @common.UseGuards(MobileOnlySignupGuard)
   @swagger.ApiOkResponse({ description: "Onboarding completed successfully" })
   @swagger.ApiBadRequestResponse({ description: "Invalid input or driver not eligible" })
   @swagger.ApiForbiddenResponse({ description: "Driver profile not found" })

@@ -54,6 +54,8 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { LivePhotoCapture } from "@/components/shared/LivePhotoCapture";
+import { MobileOnlySignupCard } from "../shared/MobileOnlySignupCard";
+import { deviceTouchHint, shouldShowMobileOnlySignup } from "@/lib/device";
 import {
   useDataQuery,
   useDataMutation,
@@ -362,10 +364,16 @@ export function DriverOnboardingComplete({ token }: DriverOnboardingCompleteProp
       };
       let res: Response;
       if (usingToken) {
-        // Token-based: call public endpoint (no auth needed)
+        // Token-based: call public endpoint (no auth needed). The touch
+        // hint lets the server's mobile-only gate tell the iPadOS
+        // desktop-mode iPad (touch) apart from a real Mac — same header
+        // the signup request sends.
         res = await fetch(`${API_URL}/api/public/drivers/onboarding-complete`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            "x-device-touch": deviceTouchHint(),
+          },
           body: JSON.stringify({ ...payload, token }),
         });
       } else {
@@ -373,7 +381,10 @@ export function DriverOnboardingComplete({ token }: DriverOnboardingCompleteProp
         // retries automatically on 401 when the access token has expired.
         res = await authFetchRaw(`${API_URL}/api/drivers/onboarding-complete`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            "x-device-touch": deviceTouchHint(),
+          },
           body: JSON.stringify(payload),
         });
       }
@@ -521,6 +532,16 @@ export function DriverOnboardingComplete({ token }: DriverOnboardingCompleteProp
       (el as HTMLElement | null)?.focus?.({ preventScroll: true });
     });
   };
+
+  // ==================== DEVICE GATE ====================
+  // Driver onboarding is PHONE/TABLET ONLY (owner rule) — the same gate
+  // as the signup form. Runs FIRST, before every other branch, so a
+  // desktop/laptop never sees the form from either entry path (the
+  // status-board button or the guard's auto-redirect). The server
+  // enforces the same rule on both onboarding-complete endpoints.
+  if (shouldShowMobileOnlySignup()) {
+    return <MobileOnlySignupCard />;
+  }
 
   // ==================== AUTH / TOKEN GUARD RENDERING ====================
 
