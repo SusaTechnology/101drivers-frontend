@@ -10,6 +10,10 @@ import {
   AlertTriangle,
 } from "lucide-react";
 import { getUser } from "@/lib/tanstack/dataQuery";
+import {
+  useWhatsAppSupportUrl,
+  WhatsAppIcon,
+} from "@/components/shared/WhatsAppSupportButton";
 
 // ─── Driver status board (post-login home for EVERY driver status) ────
 // Owner decision: all driver statuses land here after sign-in instead of
@@ -30,6 +34,10 @@ type DriverBoardStatus =
   | null;
 
 export function DriverApplicationSubmitted() {
+  // Admin-configurable WhatsApp chat-support URL (falls back to a
+  // constant while loading) — the suspended / rejected cards render it
+  // as a second way to reach support.
+  const whatsappSupportUrl = useWhatsAppSupportUrl();
   // One synchronous read per mount — the login payload is already in
   // localStorage; no API call on this page.
   const user = React.useMemo(() => getUser(), []);
@@ -95,6 +103,7 @@ export function DriverApplicationSubmitted() {
       chipWrap: string;
       chipIconColor: string;
       action?: { label: string; to: string; search?: { token: string } };
+      whatsapp?: boolean;
     }
   > = {
     WAITLISTED: {
@@ -187,6 +196,8 @@ export function DriverApplicationSubmitted() {
       chip: "Suspended",
       chipWrap: "bg-rose-50 dark:bg-rose-900/20 border-rose-200 dark:border-rose-800",
       chipIconColor: "text-rose-600 dark:text-rose-400",
+      action: { label: "Contact Support", to: "/driver-issue-report" },
+      whatsapp: true,
     },
     REJECTED: {
       icon: (
@@ -198,6 +209,8 @@ export function DriverApplicationSubmitted() {
       chip: "Not Approved",
       chipWrap: "bg-rose-50 dark:bg-rose-900/20 border-rose-200 dark:border-rose-800",
       chipIconColor: "text-rose-600 dark:text-rose-400",
+      action: { label: "Contact Support", to: "/driver-issue-report" },
+      whatsapp: true,
     },
   };
 
@@ -246,6 +259,22 @@ export function DriverApplicationSubmitted() {
                   <ArrowRight className="w-5 h-5 ml-2" />
                 </Button>
               </Link>
+            )}
+            {view.whatsapp && (
+              <a
+                href={whatsappSupportUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="block"
+              >
+                <Button
+                  variant="outline"
+                  className="w-full h-12 rounded-2xl font-bold"
+                >
+                  <WhatsAppIcon className="w-5 h-5 mr-2 text-[#25D366]" />
+                  Chat on WhatsApp
+                </Button>
+              </a>
             )}
             <Link to="/" className="flex-1">
               <Button

@@ -2870,3 +2870,65 @@ Stage Summary:
   and a mid-session suspension is enforced by the layout's server
   revalidation, closing the stale-snapshot hole that let suspended
   drivers keep the dashboard.
+
+---
+
+Task ID: 52
+Agent: main agent (Super Z)
+Task: "Contact support" was a dead end for suspended/rejected drivers, and the PM2 log showed Prisma 500s from invalid delivery status filters ("OPEN", comma-joined legacy list)
+
+Work Log:
+- Contact support (frontend):
+  - The SUSPENDED and REJECTED board cards said "Please contact support"
+    with NO action, and the support pages themselves sit behind the
+    central driver guard — a suspended driver bounced off them could
+    never open a ticket. Two fixes:
+    1. DriverRouteGuard exempts the support routes (support-list,
+       issue-report, inbox + the nested /driver/* variants) for EVERY
+       authenticated driver regardless of status: the ticket pages are
+       the contact channel the cards point to; they never expose
+       dashboard data.
+    2. Both cards gained actions: a primary "Contact Support" button
+       (to /driver-issue-report) and a secondary "Chat on WhatsApp"
+       anchor using useWhatsAppSupportUrl() — the admin-configurable
+       URL from Config Hub (GET /api/appSettings/public/
+       whatsapp-support) with the built-in fallback constant. The
+       PolicySheet already lists driver@101drivers.com for email.
+- PM2 log errors (backend):
+  - The log lines came from GET /api/deliveryRequests/admin:
+    getAdminDeliveries spread the raw query string straight into the
+    Prisma where (status: input.status as any). EnumDeliveryRequestStatus
+    has no "OPEN" and no "UNASSIGNED", so a single invalid value or a
+    comma-joined list crashed with "Invalid value for argument `status`.
+    Expected EnumDeliveryRequestStatus."
+  - The current web admin page only sends valid enum values (the 'all'
+    option is never sent), so the callers are older cached PWA bundles
+    or the mobile app — hardening the backend is the central fix.
+  - getAdminDeliveries now normalizes the filter: split on commas, keep
+    only real enum values, query with { in }. Legacy "all" (and empty)
+    means no filter. A filter whose values are ALL unknown stays
+    impossible — { in: [] } matches ZERO rows, never silently
+    "everything". So "OPEN" returns an empty list instead of a 500, and
+    the comma list filters on its five valid statuses, dropping
+    UNASSIGNED.
+- Verified:
+  - Node simulation of the normalizer on the exact logged inputs:
+    "OPEN" -> filter applied, zero rows; "DRAFT,QUOTED,LISTED,BOOKED,
+    UNASSIGNED,ACTIVE" -> in:[DRAFT,QUOTED,LISTED,BOOKED,ACTIVE];
+    LISTED / CLOSED / ACTIVE,CLOSED -> matched rows; "all"/"" -> no
+    filter.
+  - Backend tsc: only the two pre-existing spec-file errors (baseline).
+  - FE tsc 128 (= baseline), vite build passes.
+  - Headless browser: suspended driver on the board sees "Account
+    Suspended" with both contact actions (wa.me link present); clicking
+    Contact Support renders /driver-issue-report (no bounce); the
+    suspended driver typing /driver/dashboard is still bounced to the
+    board — the exemption did not leak into the status rule.
+
+Stage Summary:
+- "Contact support" is now real for suspended and rejected drivers: an
+  in-app ticket button, an admin-configurable WhatsApp chat link, and
+  the existing driver@ email — and the support pages accept every
+  authenticated driver. The admin deliveries endpoint can no longer 500
+  on legacy or malformed status filters: unknown statuses yield zero
+  rows, comma lists are validated, and valid multi-status filters work.

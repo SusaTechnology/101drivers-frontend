@@ -1,11 +1,31 @@
 "use client";
 import React, { useEffect, useState } from "react";
-import { useNavigate } from "@tanstack/react-router";
+import { useNavigate, useLocation } from "@tanstack/react-router";
 import {
   isAuthenticated,
   getUser,
 } from "@/lib/tanstack/dataQuery";
 import { AlertTriangle } from "lucide-react";
+
+/**
+ * Support routes stay reachable for EVERY authenticated driver, whatever
+ * their status. The suspended and rejected cards literally say "contact
+ * support" — the in-app ticket pages ARE that contact channel, so the
+ * status rule must not bounce drivers off them. These pages never hand
+ * out dashboard data; they are how a driver talks to us.
+ */
+const SUPPORT_PATH_PREFIXES = [
+  "/driver-support-list",
+  "/driver-issue-report",
+  "/driver-inbox",
+  "/driver/support",
+  "/driver/issue-report",
+  "/driver/inbox",
+];
+
+function isSupportRoute(pathname: string): boolean {
+  return SUPPORT_PATH_PREFIXES.some((prefix) => pathname.startsWith(prefix));
+}
 
 /**
  * CENTRAL driver access decision — owner rule: ONLY an APPROVED driver
@@ -34,7 +54,9 @@ type GuardState =
   | "needs_onboarding"   // APPROVED but onboarding incomplete → the form
   | "status_board";      // every non-approved status → the board
 
-function computeDriverGuardAccess(): { state: GuardState; message: string } {
+function computeDriverGuardAccess(
+  pathname: string,
+): { state: GuardState; message: string } {
   // Step 1: authentication
   if (!isAuthenticated()) {
     return { state: "needs_signin", message: "" };
@@ -48,6 +70,12 @@ function computeDriverGuardAccess(): { state: GuardState; message: string } {
       state: "forbidden_role",
       message: "You don't have driver access.",
     };
+  }
+
+  // Step 2.5: support pages are open to every authenticated driver —
+  // this is the channel the suspended / rejected cards point to.
+  if (isSupportRoute(pathname)) {
+    return { state: "authenticated", message: "" };
   }
 
   // Step 3: status — the owner's rule in one place.
@@ -76,10 +104,11 @@ function computeDriverGuardAccess(): { state: GuardState; message: string } {
  */
 export function DriverRouteGuard({ children }: { children: React.ReactNode }) {
   const navigate = useNavigate();
+  const location = useLocation();
   // Resolved synchronously in the useState initializer — once per guard
   // mount (once per navigation), during the first render.
   const [guard] = useState<ReturnType<typeof computeDriverGuardAccess>>(
-    computeDriverGuardAccess
+    () => computeDriverGuardAccess(location.pathname)
   );
   const guardState = guard.state;
   const statusMessage = guard.message;
