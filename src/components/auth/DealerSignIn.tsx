@@ -67,9 +67,15 @@ interface LoginResponse {
   refreshToken?: string;
   email?: string;
   name?: string;
+  fullName?: string;
   // Approval status for customers and drivers
   customerApprovalStatus?: 'PENDING' | 'APPROVED' | 'REJECTED' | 'SUSPENDED';
   driverStatus?: 'WAITLISTED' | 'INVITED' | 'PENDING' | 'PENDING_APPROVAL' | 'MEETING_REQUESTED' | 'APPROVED' | 'SUSPENDED' | 'REJECTED';
+  // Driver onboarding state (resolveAuthMeta attaches both for DRIVERs);
+  // drives the post-login destination — approved + onboarded go straight
+  // to the dashboard, approved but not yet onboarded to the form.
+  onboardingCompleted?: boolean;
+  onboardingToken?: string | null;
   // User active status
   isActive?: boolean;
 }
@@ -235,14 +241,29 @@ export function DealerSignIn({
           // customerType from the API.
           navigate({ to: "/dealer-dashboard" });
         } else if (userType === "driver") {
-          // Owner decision: EVERY driver status lands on the status board
-          // (/driver-application-submitted) after sign-in — the dashboard is
-          // no longer the post-login home. The board is status-aware: it
-          // reads driverStatus from the login payload stored above; INVITED
-          // drivers get a "Complete Your Application" action there (the
-          // onboarding token rides along in localStorage), APPROVED drivers
-          // a dashboard shortcut.
-          navigate({ to: "/driver-application-submitted" });
+          // Owner decision: APPROVED drivers go straight to work — the
+          // dashboard when their onboarding is done, the onboarding form
+          // when it isn't. Only drivers with pending business (invited /
+          // pending / waitlisted / on hold / rejected) land on the status
+          // board. One navigation per destination, no intermediate screen.
+          if (data.driverStatus === "APPROVED" && data.onboardingCompleted) {
+            navigate({ to: "/driver/dashboard" });
+          } else if (
+            data.driverStatus === "APPROVED" &&
+            data.onboardingToken
+          ) {
+            navigate({
+              to: "/driver-onboarding-complete",
+              search: { token: data.onboardingToken } as never,
+            });
+          } else if (data.driverStatus === "APPROVED") {
+            // Approved but neither onboarded nor holding a token — send
+            // them to the dashboard; the driver route guard decides from
+            // there instead of this handler guessing again.
+            navigate({ to: "/driver/dashboard" });
+          } else {
+            navigate({ to: "/driver-application-submitted" });
+          }
         } else {
           navigate({ to: "/admin-dashboard" });
         }

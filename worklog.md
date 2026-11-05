@@ -2740,3 +2740,61 @@ Stage Summary:
   cannot be submitted from one (server guard on both endpoints, every
   attempt audited). Phones, tablets and iPads — including iPadOS
   desktop-mode iPads — keep working unchanged.
+
+---
+
+Task ID: 50
+Agent: main agent (Super Z)
+Task: APPROVED driver saw the "You're Approved!" status board after login — approved drivers must go login → dashboard with no intermediate screens; only drivers with pending business may see the board
+
+Work Log:
+- Root cause: DealerSignIn's onSuccess sent EVERY driver to
+  /driver-application-submitted after sign-in (an explicit older owner
+  decision recorded in the comment: "EVERY driver status lands on the
+  status board... APPROVED drivers a dashboard shortcut"), with a 1s
+  setTimeout in front of it. The approved driver therefore always
+  painted the board's "You're Approved!" card and had to click through
+  to the dashboard themselves. The board route also had no beforeLoad,
+  so even a stale link to the board would paint it for an approved
+  driver.
+- Fix 1 — DealerSignIn driver branch is now status-aware with ONE
+  navigation per destination: APPROVED + onboardingCompleted →
+  /driver/dashboard; APPROVED + onboardingToken (not yet onboarded) →
+  /driver-onboarding-complete?token=…; APPROVED with neither →
+  /driver/dashboard (the driver route guard owns that edge case);
+  every other status → the status board. LoginResponse gained the
+  onboardingCompleted/onboardingToken/fullName fields it already
+  carried at runtime — killing the three pre-existing TS2339s on those
+  lines.
+- Fix 2 — the board route now has a beforeLoad guard: an
+  authenticated APPROVED driver who lands on
+  /driver-application-submitted by ANY path (stale link, manual URL,
+  redirect race) is thrown a redirect during route matching — BEFORE
+  any paint, so the board can never flash for them: onboarded →
+  /driver/dashboard, not-onboarded + token → the onboarding form.
+  Sync localStorage reads only; INVITED/PENDING/WAITLISTED/ON_HOLD/
+  REJECTED drivers still see the board unchanged, and the board's
+  "You're Approved!" card remains as a live-status fallback for a
+  driver sitting on the board when the admin approves them mid-session.
+- Verified in the headless browser (all four paths):
+  1. APPROVED+onboarded → /driver-application-submitted → redirected
+     to /driver/dashboard before any board paint; dashboard renders
+     (its pre-existing one-time proof-cam explainer fires on first
+     visit via the hasSeenProofCam flag — existing product step, not
+     part of this change).
+  2. APPROVED+not-onboarded+token → board URL → redirected to
+     /driver-onboarding-complete?token=… (device gate applies there on
+     a desktop, by design).
+  3. INVITED driver → board renders as before (regression check).
+  4. APPROVED+onboarded → /driver/dashboard directly → dashboard
+     content renders (map + AVAILABLE/MY BOOKINGS/ACTIVE tabs).
+- Gates: FE tsc 128 errors — three BELOW the 131 baseline (the
+  LoginResponse typing fixed the pre-existing errors); vite build
+  passes.
+
+Stage Summary:
+- The post-login rule now matches the owner's spec exactly: approved
+  drivers go login → dashboard (no intermediate screens, no flicker —
+  the board redirects before paint on every path), drivers still in
+  the application pipeline see the status board, and the board's
+  approved card is a live fallback rather than a mandatory stop.
