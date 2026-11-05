@@ -8,6 +8,11 @@ import {
   Home,
   PauseCircle,
   AlertTriangle,
+  User,
+  FileCheck,
+  ShieldCheck,
+  LifeBuoy,
+  Pencil,
 } from "lucide-react";
 import { getUser } from "@/lib/tanstack/dataQuery";
 import {
@@ -216,6 +221,54 @@ export function DriverApplicationSubmitted() {
 
   const view = board[driverStatus];
 
+  // ── Application checklist (dev instructions: "Checklist only for …") ──
+  // Three honest rows derived from data that actually exists today:
+  //   • Personal info  — collected at signup (name/email/phone/ZIP), so a
+  //     signed-in driver always has it.
+  //   • Driver's license — "uploaded" once onboarding is completed
+  //     (user.onboardingCompleted from the login payload); before that it
+  //     is waiting on the application form.
+  //   • Background check — the backend has no background-check fields yet,
+  //     so the only truthful state is "Not started"; it begins after
+  //     approval (the onboarding-complete screen says the same).
+  const onboardingCompleted = !!user?.onboardingCompleted;
+  const checklist = [
+    {
+      Icon: User,
+      label: "Personal info",
+      state: "Submitted",
+      done: true,
+    },
+    {
+      Icon: FileCheck,
+      label: "Driver's license",
+      state: onboardingCompleted
+        ? "Uploaded"
+        : driverStatus === "INVITED"
+          ? "Not uploaded yet"
+          : "Not started yet",
+      done: onboardingCompleted,
+    },
+    {
+      Icon: ShieldCheck,
+      label: "Background check",
+      state: "Not started",
+      done: false,
+    },
+  ];
+
+  // Statuses whose driver may edit the submitted onboarding data (mirrors
+  // the backend's ONBOARDING_EDITABLE_STATUSES — the edit page re-checks
+  // server-side, this only decides whether to show the button).
+  const EDITABLE_STATUSES = [
+    "PENDING_APPROVAL",
+    "MEETING_REQUESTED",
+    "ON_HOLD",
+    "REJECTED",
+  ];
+  const canEditApplication =
+    onboardingCompleted && EDITABLE_STATUSES.includes(driverStatus);
+
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 p-6">
       <div className="max-w-2xl mx-auto pt-10">
@@ -260,6 +313,17 @@ export function DriverApplicationSubmitted() {
                 </Button>
               </Link>
             )}
+            {canEditApplication && (
+              <Link to="/driver-onboarding-edit" className="block">
+                <Button
+                  variant="outline"
+                  className="w-full h-12 rounded-2xl font-bold"
+                >
+                  <Pencil className="w-5 h-5 mr-2 text-slate-500 dark:text-slate-400" />
+                  Edit Application Info
+                </Button>
+              </Link>
+            )}
             {view.whatsapp && (
               <a
                 href={whatsappSupportUrl}
@@ -276,6 +340,20 @@ export function DriverApplicationSubmitted() {
                 </Button>
               </a>
             )}
+            {/* Support access on every status card (suspended / rejected
+                already get the WhatsApp route above; this is the standard
+                issue-report page for everything else). */}
+            {!view.whatsapp && (
+              <Link to="/driver-issue-report" className="block">
+                <Button
+                  variant="outline"
+                  className="w-full h-12 rounded-2xl font-bold"
+                >
+                  <LifeBuoy className="w-5 h-5 mr-2 text-slate-500 dark:text-slate-400" />
+                  Contact Support
+                </Button>
+              </Link>
+            )}
             <Link to="/" className="flex-1">
               <Button
                 variant="outline"
@@ -287,6 +365,66 @@ export function DriverApplicationSubmitted() {
             </Link>
           </div>
         </div>
+
+        {/* ── Application checklist card ────────────────────────────────
+            Only for signed-in, non-approved drivers — APPROVED never
+            renders this page (its beforeLoad redirects to the dashboard),
+            so the guard is belt-and-braces. The checklist is informational:
+            it never gates anything, and the license row says "Uploaded" only
+            when the backend confirms onboardingCompleted. */}
+        {driverStatus && driverStatus !== "APPROVED" && (
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl overflow-hidden shadow-lg mt-4">
+            <div className="px-6 sm:px-10 pt-6 pb-2">
+              <p className="text-[11px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400">
+                Application Checklist
+              </p>
+              <h3 className="text-lg font-black text-slate-900 dark:text-white mt-1">
+                Where your application stands
+              </h3>
+            </div>
+            <div className="px-6 sm:px-10 pb-6 pt-2 space-y-1">
+              {checklist.map(({ Icon, label, state, done }) => (
+                <div
+                  key={label}
+                  className="flex items-center gap-3 py-3 px-3 rounded-2xl hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors"
+                >
+                  <div
+                    className={`w-9 h-9 shrink-0 rounded-full flex items-center justify-center ${
+                      done
+                        ? "bg-green-100 dark:bg-green-900/30"
+                        : "bg-slate-100 dark:bg-slate-800/60"
+                    }`}
+                  >
+                    {done ? (
+                      <CheckCircle className="w-5 h-5 text-green-600 dark:text-green-400" />
+                    ) : (
+                      <Icon className="w-5 h-5 text-slate-500 dark:text-slate-400" />
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-bold text-slate-900 dark:text-white">
+                      {label}
+                    </p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">
+                      {label === "Background check" && !done
+                        ? "Begins after your application is approved"
+                        : `Status: ${state}`}
+                    </p>
+                  </div>
+                  <span
+                    className={`shrink-0 text-xs font-bold px-3 py-1 rounded-full border ${
+                      done
+                        ? "bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300 border-green-200 dark:border-green-800"
+                        : "bg-slate-50 dark:bg-slate-800/40 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700"
+                    }`}
+                  >
+                    {state}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

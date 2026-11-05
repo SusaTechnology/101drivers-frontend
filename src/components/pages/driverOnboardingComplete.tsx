@@ -73,7 +73,10 @@ const isValidZipFormat = (zip: string | null | undefined): boolean =>
 
 const API_URL = import.meta.env.VITE_API_URL;
 
-const US_STATES = [
+// Exported for the onboarding-data EDIT page — same visual language, same
+// state list (only CA is enabled; the dropdown stays editable for
+// out-of-state licenses).
+export const US_STATES = [
   // { value: "AL", label: "Alabama" },
   // { value: "AK", label: "Alaska" },
   // { value: "AZ", label: "Arizona" },
@@ -1303,8 +1306,9 @@ export function DriverOnboardingComplete({ token }: DriverOnboardingCompleteProp
 }
 
 // ==================== HEADER SUB-COMPONENT ====================
+// Exported for the onboarding-data EDIT page (identical shell).
 
-function Header({
+export function Header({
   mobileMenuOpen,
   setMobileMenuOpen,
 }: {
@@ -1409,8 +1413,9 @@ function Header({
 }
 
 // ==================== FOOTER SUB-COMPONENT ====================
+// Exported for the onboarding-data EDIT page (identical shell).
 
-function Footer() {
+export function Footer() {
   return (
     <footer className="bg-white dark:bg-slate-950 border-t border-slate-200 dark:border-slate-800 pt-10 pb-10">
       <div className="max-w-[1440px] mx-auto px-6 lg:px-8">

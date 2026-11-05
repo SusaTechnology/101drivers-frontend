@@ -2997,3 +2997,31 @@ Stage Summary:
   and the device gate is provably driver-only (3 routes, 3 pages, no
   global header). The pasted board button (Contact Support) is the
   unchanged primary action and still works.
+---
+Task ID: 50
+Agent: Main Agent
+Task: Pending-driver access — onboarding-data edit page + Application Status board checklist/support (client dev instructions)
+
+Work Log:
+- Confirmed the onboarding-token lifecycle against the engine before building: token is generated ONLY by admin invite (WAITLISTED → INVITED) and resend; completion requires INVITED and flips status to PENDING_APPROVAL; approval only runs from PENDING_APPROVAL. So "APPROVED + token + not onboarded" cannot exist — the login/guard token branches are defensive only. Corrected the earlier test-matrix assumption (mock artifact).
+- Backend, additive only:
+  - New DTO `driverOnboardingUpdate.dto.ts` (PATCH body): same contract as CompleteDriverOnboardingDto but ssn OPTIONAL (omitted → stored hash/encryption kept), dateOfBirth OPTIONAL (MM/DD/YYYY), zip optional.
+  - `driver.service.getOnboardingData(driverId)` — full prefill payload (license fields, photo URLs, address, DOB incl. a TZ-safe `dateOfBirthDisplay`, ssnLastFour ONLY — raw SSN never leaves the vault) + an `editable` flag (onboardingCompleted && status ∈ PENDING_APPROVAL/MEETING_REQUESTED/ON_HOLD/REJECTED).
+  - `driver.service.updateOnboardingData(driverId, dto)` — reuses the completion rulebook: identity uniqueness via `assertIdentityNotTaken(..., excludeDriverId)` (signature extended with an optional exclude param; both completion callers unchanged), 25+ DOB rule with real-calendar-date check, CA ZIP backstop (5-digit, 90001–96199, ZIP+4 normalized), license hash always rewritten, SSN writes only when re-entered, best-effort zip → service-area re-derivation, audit log (OTHER, actor null, before/after snapshots of the editable subset — ssnHash/ssnEncrypted never logged). status/onboardingCompletedAt are intentionally NOT written.
+  - `driverOnboarding.controller.ts`: GET /drivers/onboarding-data (own read) + PATCH /drivers/onboarding-data with the SAME MobileOnlySignupGuard as onboarding-complete (live-camera rule, refused on both layers for desktops).
+- Frontend:
+  - New page `driverOnboardingEdit.tsx` + route `/driver-onboarding-edit` (top-level, OUTSIDE the /driver DriverRouteGuard so non-approved drivers can reach it; self-guards: device gate → auth → GET editable check with per-status locked copy). UI mirrors onboarding-complete (reuses its exported Header/Footer/US_STATES): everything prefilled incl. photos shown as "tap to retake", DOB prefilled with "currently on file" hint, SSN shown masked "••• - last4 on file" behind an Update toggle, ZIP collected here (prefilled; completion form never asks). Submit → PATCH with x-device-touch; 409 SSN/LICENSE codes surface on-field; "Changes Saved" screen.
+  - Board (`driverApplicationSubmitted.tsx`) — dev-instruction gaps closed, no existing behavior changed:
+    - "Application Checklist" card for non-approved drivers: Personal info (Submitted), Driver's license (Uploaded / Not uploaded yet / Not started yet — driven by onboardingCompleted), Background check (Not started — begins after approval; the schema has no background-check fields yet, so this is the only truthful state).
+    - Contact Support button on EVERY status card (suspended/rejected keep their WhatsApp; the extra standard button is hidden there to avoid duplicates — REJECTED/SUSPENDED's primary action already IS Contact Support).
+    - "Edit Application Info" outline button for the editable statuses.
+  - driverOnboardingComplete.tsx: only three `export` keywords added (US_STATES, Header, Footer) — zero behavior change.
+- Verification:
+  - `nest build` clean; backend jest = exact baseline (8 failed / 445 passed suites+tests unchanged — failures pre-date this work); `vite build` clean.
+  - Live UI run-through with vite dev + a CORS mock of the two new endpoints (no DB in this sandbox): board asserted for PENDING_APPROVAL (checklist Uploaded + Edit + Support), REJECTED (primary Contact Support + WhatsApp + Edit), INVITED (Complete Your Application, license "Not uploaded yet", no Edit), SUSPENDED (WhatsApp, no dup support), WAITLISTED (Support only). Edit page: desktop shows the mobile-only card; touch-injected SPA nav renders the form; prefill verified field-by-field (DOB 05/14/1990, SSN •••-6789 on file, both photos loaded from stored URLs); PATCH payload captured — ssn/dateOfBirth omitted when untouched, ssn present after Update, x-device-touch:1 + Bearer present; Changes Saved screen; unauthenticated → redirects to /driver-signin; editable:false → "Editing not available" card with status chip; API-down → load-error card.
+  - Known limitation: no Postgres/docker in this sandbox, so the Nest handlers themselves were verified by types/build + baseline tests, not against a live DB; the mock captured the exact wire payloads the handlers will receive.
+
+Stage Summary:
+- Non-approved drivers can now log in, see an honest status board (status, short message, 3-row checklist, support always reachable) and edit everything they submitted at onboarding — prefilled, including images and dates — from a phone, without ever reaching jobs/map/earnings (guard untouched).
+- An edit never changes status or onboarding-completion state; identity uniqueness, 25+ DOB and CA ZIP rules still hold; SSN stays masked unless actively replaced; every edit is audit-logged with before/after snapshots and no identity material.
+- Deferred (needs owner decisions, backend fields that don't exist yet): background-check real states (waiting-on-authorization/in-progress/complete) and an admin-set "DL needs re-upload" flag; the board currently shows only the truthful "Not started"/"Uploaded" states and the edit page doubles as the DL re-upload path.
