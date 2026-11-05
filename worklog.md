@@ -2798,3 +2798,75 @@ Stage Summary:
   the board redirects before paint on every path), drivers still in
   the application pipeline see the status board, and the board's
   approved card is a live fallback rather than a mandatory stop.
+
+---
+
+Task ID: 51
+Agent: main agent (Super Z)
+Task: Central management for "only APPROVED drivers see the dashboard" — a SUSPENDED driver could reach the dashboard, and per-status messaging was scattered across guard screens
+
+Work Log:
+- Root causes found:
+  1. The central guard (DriverRouteGuard) had SEVEN inline outcomes: it
+     rendered its own full-screen cards for pending/waitlisted/on-hold/
+     invited/rejected and a special suspended "Access Denied", while the
+     status board (/driver-application-submitted) ALSO has a card for
+     every status (including SUSPENDED). Two parallel message systems —
+     the classic setup for drift.
+  2. The stale-snapshot hole: every gate (login redirect, root and /home
+     beforeLoad, the guard) reads driverStatus from localStorage, which
+     is a snapshot from LOGIN time. A driver the admin suspends or
+     rejects MID-SESSION keeps a valid token with a stored status of
+     APPROVED — every gate passes and they keep the dashboard for the
+     life of the (refreshable) session.
+  3. DealerSignIn hard-blocked SUSPENDED/REJECTED logins with a toast,
+     contradicting the owner rule that non-approved drivers should be
+     navigated to a screen showing their status.
+- Central rewrite (src/components/auth/DriverRouteGuard.tsx, the guard
+  that wraps the /driver layout AND every standalone driver page — one
+  function, one decision):
+  authenticated ⇔ DRIVER && APPROVED && onboardingCompleted.
+  needs_onboarding (APPROVED, form outstanding) → the onboarding form.
+  EVERY other driver status → /driver-application-submitted (the board
+  owns the per-status card + message). Non-DRIVER role keeps the access-
+  denied screen (a role problem, not a status one). The five inline
+  status screens and the suspended special case are DELETED — one
+  destination, so a future status only needs a board card, never a
+  guard change.
+- Mid-session enforcement (src/routes/driver.tsx layout): the driver
+  layout mounts once for ALL /driver/* pages, so it now revalidates the
+  driver's CURRENT status (GET /api/drivers/:profileId, read-own ACL)
+  with a 30s-stale query. If the server status (or onboarding flag)
+  differs from the stored snapshot, the stored user is refreshed and —
+  when no longer APPROVED — the driver is navigated to the board, which
+  renders the fresh card. First paint still uses localStorage, so
+  approved drivers never see a flicker or spinner; the suspended driver
+  is evicted within the first second of any driver page.
+- Login (DealerSignIn): the driver SUSPENDED/REJECTED door-blocks are
+  removed — every driver logs in; the Task 50 redirect sends APPROVED to
+  the dashboard and everyone else to the board with their status card.
+- Consistency: the root "/" and /home beforeLoad bounces now require
+  APPROVED + onboardingCompleted (was APPROVED only), matching the login
+  redirect and the guard.
+- Verified in the headless browser against a local stub API (built with
+  VITE_API_URL pointed at it; stub status file flipped per scenario):
+  A. Stale-session eviction: stored APPROVED + server SUSPENDED →
+     /driver/dashboard → redirected to the board, "Account Suspended"
+     card, stored user refreshed to SUSPENDED.
+  B. Approved regression: server APPROVED → dashboard renders, status
+     untouched.
+  C. REJECTED direct URL → board, "Application Not Approved" card.
+  D. INVITED direct URL → board, "You've Been Invited!" card (CTA to the
+     onboarding form remains on the card).
+  (First attempt with a window.fetch patch failed — location.href is a
+  full page load and the patch dies with the document; the stub-API
+  approach replaced it. scripts/stub-api.js kept for future proofs.)
+- Gates: FE tsc 128 errors (= baseline), vite build passes.
+
+Stage Summary:
+- One rule, one place: only an APPROVED + onboarded driver can render a
+  driver page, enforced by the central guard; every other status lands
+  on the status board that shows exactly their status and its message;
+  and a mid-session suspension is enforced by the layout's server
+  revalidation, closing the stale-snapshot hole that let suspended
+  drivers keep the dashboard.

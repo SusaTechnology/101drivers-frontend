@@ -18,12 +18,12 @@ export const Route = createFileRoute('/home/')({
           replace: true,
         })
       } else if (roles.includes('DRIVER')) {
-        // Only bounce drivers that have a dashboard to serve. Pending /
-        // waitlisted / on-hold / invited / rejected drivers have no dashboard
-        // — /driver/dashboard's DriverRouteGuard would just bounce them back
-        // to its status screen, which made the "Done" button on the
-        // "Application Pending Approval" screen appear to do nothing.
-        if (user?.driverStatus === 'APPROVED') {
+        // Owner rule, matching the login redirect and the driver route
+        // guard: only an APPROVED driver with completed onboarding has a
+        // dashboard to serve. Every other status sees the status board —
+        // reachable from the landing page's nav, and the guard sends
+        // them there if they type a driver URL.
+        if (user?.driverStatus === 'APPROVED' && user?.onboardingCompleted) {
           throw redirect({
             to: '/driver/dashboard',
             replace: true,

@@ -188,26 +188,14 @@ export function DealerSignIn({
         }
       }
 
-      // Check 4: Approval status for drivers
-      // WAITLISTED and INVITED drivers are allowed to log in — they see a waiting screen
-      // REJECTED drivers are blocked
-      if (isDriver && data.driverStatus) {
-        const status = data.driverStatus;
-        if (status === 'SUSPENDED') {
-          setLoginError(
-            "Your driver account has been suspended. Please contact support for assistance."
-          );
-          toast.error("Account suspended.");
-          return;
-        }
-        if (status === 'REJECTED') {
-          setLoginError(
-            "Your driver application was not approved. Please contact support for more information."
-          );
-          toast.error("Application not approved.");
-          return;
-        }
-      }
+      // Check 4: Driver status — NO status is blocked at the door anymore.
+      // Owner rule: every driver logs in and is navigated to the screen
+      // that shows their status. The login redirect below sends
+      // APPROVED drivers to the dashboard and everyone else (invited /
+      // pending / waitlisted / on hold / suspended / rejected) to the
+      // status board, whose cards carry each status's specific message.
+      // Mid-session changes are enforced by the driver layout's server
+      // revalidation, not here.
 
       // All checks passed - proceed with login
       setAccessToken(data.accessToken);
