@@ -3120,6 +3120,23 @@ Work Log:
 Stage Summary:
 - Pull and retest: the admin Users table has a "Last Updated" column (drivers show the date their onboarding details last changed; other roles show —); the user-detail Driver Profile card shows "Last updated <datetime> by <actor email>". Save a license edit from a phone → the stamp moves. Run `prisma migrate deploy` on deploy (migration 20261106090000).
 - Rows onboarded before this ship show "—" / hide the row (NULL, no backfill) — intentional and consistent with the invitedAt policy.
+---
+Task ID: 56
+Agent: Main Agent
+Task: Rotate button on the shared PhotoDialog (admin license/selfie viewing) + senior-dev recommendation for image-quality detection at capture
+
+Work Log:
+- User: license pics on the admin user-detail page need a rotate function on the click-to-view dialog. Second ask (question only): some DL images are so blurred they are unreadable — what tools/how to detect image quality when the driver captures license + selfie. Answered in conversation (client-side heuristics at capture, server-side sharp-based scoring with a flag-not-block policy, commercial ID-capture SDKs as the buy option).
+- Rotate is VIEW-ONLY by design: license/selfie/delivery-proof images are submitted evidence — rewriting the stored file from a viewer (rotate → re-encode → re-upload) would silently change what the driver submitted, with no audit trail. Rotation resets whenever the dialog opens or the image swaps (front → back), so a stale angle never leaks into the next photo.
+- src/components/ui/photo-dialog.tsx: always-visible Rotate button (RotateCw, 90° steps, aria-label), CSS transform with transition. A transform never changes the layout box, so while sideways (90/270) the img is constrained to max-w-[60vh] — a wide license photo rotated upright then fits the same area instead of overflowing the dialog. The button row now renders for every dialog (previously hidden when neither Download nor Update was shown — view-only dialogs gain Rotate).
+- One shared component → 10+ pages get it for free: admin-user-detail (license front/back, selfie), admin-support-detail, dealer-support-detail/-request, admin-delivery-details, driver-issue-report, driver-preferences, dealer-dashboard, dealer-delivery-details, driver-support-detail. No caller changes needed (no new props).
+- Sandbox note: the flaky file-sync reverted repo files AND .git mid-session again (HEAD fell back to 09828203; backend/src/upload/*, worklog and node_modules vanished). Recovered with git fetch + reset --hard origin/master (17c0c62f intact on GitHub) + bun install + prisma generate. Everything verified before editing.
+- Verification: vite build clean. No FE component tests exist for the dialog (pricing lib tests only); the change is purely presentational local state — no data flow touched.
+
+Stage Summary:
+- Pull and retest: open any license/selfie image on the admin user-detail page → Rotate button under the photo; each click turns it 90° clockwise, image stays inside the dialog when rotated upright; closing and reopening (or switching front/back) resets the angle. Same button now appears on every evidence-photo dialog across the app.
+- If ops later wants rotation PERSISTED on the stored file, that is a deliberate v2: canvas re-encode → the same upload endpoint the admin Update Photo path uses → new URL on the driver record + AdminAuditLog row — it rewrites evidence, so it needs the audit trail by design.
+
 
 
 
