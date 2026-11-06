@@ -65,12 +65,17 @@ function seedDriver() {
     licenseFrontUrl: "https://files.example/front.jpg",
     licenseBackUrl: "https://files.example/back.jpg",
     fullName: "E2E Driver",
+    // The actor email the "Last Updated" stamp carries (the driver
+    // themself on self-service paths).
+    email: "e2edriver@101drivers.test",
   });
 }
 
 function fullDriverRow(id: string) {
   const row = driverRows.get(id);
-  return row ? { ...row, user: { fullName: row.fullName } } : null;
+  return row
+    ? { ...row, user: { fullName: row.fullName, email: row.email } }
+    : null;
 }
 
 const auditWrites: any[] = [];
@@ -320,6 +325,15 @@ describe("Driver self-service onboarding — real pipeline", () => {
     expect(auditWrites).toHaveLength(1);
     expect(auditWrites[0].driverId).toBe(DRIVER_PROFILE_ID);
     expect(auditWrites[0].reason).toContain("PENDING_APPROVAL");
+
+    // "Last Updated" stamp (admin Users surface): the edit went through,
+    // so the row now carries WHEN it changed and WHO did it — the
+    // driver's own email on this self-service path.
+    const stampedRow = driverRows.get(DRIVER_PROFILE_ID);
+    expect(stampedRow.lastOnboardingUpdateAt).toBeInstanceOf(Date);
+    expect(stampedRow.lastOnboardingUpdateBy).toBe(
+      "e2edriver@101drivers.test"
+    );
   });
 
   test("PATCH /api/drivers/onboarding-data — desktop browser stays blocked by the mobile-only gate", async () => {

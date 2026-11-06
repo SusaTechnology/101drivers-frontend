@@ -132,6 +132,17 @@ model Driver {
   id               String                     @id @default(cuid())
   notifications    NotificationEvent[]
   onboardingCompletedAt  DateTime?
+  // ── Last onboarding-detail update (admin Users surface) ──
+  // Stamped by the service on every DRIVER self-service write of onboarding
+  // data: completeOnboarding / completeOnboardingByToken (initial
+  // submission) and updateOnboardingData (the license edit page).
+  // lastOnboardingUpdateBy holds the actor's email — the driver themself —
+  // so the admin Users table column and the user-detail card can show when
+  // the onboarding details last changed and who changed them. NULL = the
+  // row never went through those paths (drivers onboarded before the
+  // column existed — no backfill, same policy as invitedAt/ssnEncrypted).
+  lastOnboardingUpdateAt DateTime?
+  lastOnboardingUpdateBy String?
   onboardingToken  String?
   payoutBatches    PayoutBatch[]
   payouts          DriverPayout[]

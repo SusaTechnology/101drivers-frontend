@@ -715,6 +715,9 @@ async driverLookupList(): Promise<
       userId: true,
       status: true,
       onboardingCompletedAt: true,
+      // The actor email for the lastOnboardingUpdateBy stamp (the driver
+      // themself on this path).
+      user: { select: { email: true } },
     },
   });
 
@@ -765,6 +768,10 @@ async driverLookupList(): Promise<
           selfiePhotoUrl: dto.selfiePhotoUrl.trim(),
           status: EnumDriverStatus.PENDING_APPROVAL,
           onboardingCompletedAt: new Date(),
+          // "Last Updated" stamp for the admin Users surface — the
+          // initial submission IS the first onboarding-detail update.
+          lastOnboardingUpdateAt: new Date(),
+          lastOnboardingUpdateBy: driver.user?.email ?? null,
           ...(dto.agreementAcceptedAt
             ? { agreementAcceptedAt: new Date(dto.agreementAcceptedAt) }
             : {}),
@@ -832,6 +839,9 @@ async completeOnboardingByToken(
       userId: true,
       status: true,
       onboardingCompletedAt: true,
+      // The actor email for the lastOnboardingUpdateBy stamp (the driver
+      // themself on this path).
+      user: { select: { email: true } },
     },
   });
 
@@ -881,6 +891,10 @@ async completeOnboardingByToken(
           selfiePhotoUrl: dto.selfiePhotoUrl.trim(),
           status: EnumDriverStatus.PENDING_APPROVAL,
           onboardingCompletedAt: new Date(),
+          // "Last Updated" stamp for the admin Users surface — the
+          // initial submission IS the first onboarding-detail update.
+          lastOnboardingUpdateAt: new Date(),
+          lastOnboardingUpdateBy: driver.user?.email ?? null,
           ...(dto.agreementAcceptedAt
             ? { agreementAcceptedAt: new Date(dto.agreementAcceptedAt) }
             : {}),
@@ -980,7 +994,7 @@ async completeOnboardingByToken(
         licenseState: true,
         licenseFrontUrl: true,
         licenseBackUrl: true,
-        user: { select: { fullName: true } },
+        user: { select: { fullName: true, email: true } },
       },
     });
 
@@ -1043,6 +1057,11 @@ async completeOnboardingByToken(
             licenseFrontUrl: dto.licenseFrontUrl.trim(),
             licenseBackUrl: dto.licenseBackUrl.trim(),
             licenseNumberHash,
+            // "Last Updated" stamp for the admin Users surface — the edit
+            // page is the main path that changes onboarding details after
+            // the initial submission; the actor is the driver themself.
+            lastOnboardingUpdateAt: new Date(),
+            lastOnboardingUpdateBy: driver.user?.email ?? null,
             // status / onboardingCompletedAt are intentionally NOT here —
             // an edit never changes the application state.
           },

@@ -3100,5 +3100,26 @@ Work Log:
 Stage Summary:
 - Pull and retest: phone/tablet (any iPad mode) → the whole flow works as before; desktop → the client gate shows the phone/tablet card immediately and the server refuses every onboarding route; UA-switcher extension or scripted replay → server 403 + BlockedSignup audit row. DevTools device-toolbar emulation still passes at the HTTP layer (physically undetectable from headers alone) but is now documented, pinned in tests, and every other spoof class lands in the audit trail.
 - The touch hint is now a load-bearing signal: any new driver-onboarding FE call MUST attach x-device-touch (deviceTouchHint()) or the server will read it as a scripted replay — device.ts and the e2e specs document this.
+---
+Task ID: 55
+Agent: Main Agent
+Task: "Last Updated" tracking for driver onboarding details on the admin Users surface — new Driver columns, table column on admin-users, date + actor on the user-detail card
+
+Work Log:
+- Owner rule: admins must see WHEN a driver last updated their onboarding details (license edit page or any other self-service path) and BY WHOM.
+- Schema (backend/prisma/schema.prisma + migration 20261106090000_driver_last_onboarding_update): Driver.lastOnboardingUpdateAt (TIMESTAMP(3), nullable) + Driver.lastOnboardingUpdateBy (TEXT, actor email). Nullable on purpose — rows that predate the column stay NULL, no backfill (same policy as invitedAt/ssnEncrypted); the UI hides the empty state instead of showing a fake date.
+- Stamped at every DRIVER self-service write of onboarding data (backend/src/driver/driver.service.ts), actor = the driver's own email (read from the row's user relation the service already loads — no extra query):
+  1. updateOnboardingData (PATCH /api/drivers/onboarding-data — the edit page; the main post-completion path).
+  2. completeOnboarding (authed POST /api/drivers/onboarding-complete) and 3. completeOnboardingByToken (public token path) — the initial submission IS the first onboarding-detail update, so both stamp it.
+  Deliberate scope: admin-side profile tweaks (adminUpdateUser edits phone/photo/zip) do NOT restamp — that surface is already covered row-by-row by AdminAuditLog; this column answers "when did the DRIVER last submit onboarding details".
+- Exposed on the admin surface (backend/src/user/user.service.ts): the V2 unified list select (GET /api/users/admin/v2 rows → driver embed) and getAdminUserDetail (GET /api/users/:id/admin-detail) now include both fields. The driver endpoints' own response shapes are UNCHANGED (the onboarding-data GET/PATCH responses still return the license payload only — no FE contract drift on the driver side).
+- FE: src/types/users.ts AdminDriverEmbed + AdminUserDriverDetail carry lastOnboardingUpdateAt/By (string | null). admin-users.tsx: new "Last Updated" column (Created → Actions) rendering the date for driver rows and "—" for customers/admins (they have no onboarding to update); both colSpans widened 7 → 8 (loading skeleton + empty state). admin-user-detail.tsx Driver Profile card: "Last updated" row (formatDateTime) with "by <actor email>", hidden when the stamp is NULL — same conditional pattern as the Invited row.
+- Sandbox note: the recycle restored a STALE snapshot this session — local .git sat at an Oct 30 commit, backend/node_modules and the Task-54 guard file were missing. Recovered by git fetch + reset --hard origin/master (remote tip b7a4c92c held everything) and `bun install` for backend deps; prisma client regenerated with the pinned CLI (npx pulls prisma@8 which has no `generate` — always use node_modules/.bin/prisma).
+- Verification: driverOnboarding.e2e.spec.ts now seeds the driver's email and asserts the PATCH stamp (lastOnboardingUpdateAt instanceof Date, lastOnboardingUpdateBy = the driver email) against the in-memory store. Affected suites green (driver e2e/routing/base, user base). Full serial suite: failure set IDENTICAL to baseline — 8 suites / 29 tests, all pre-existing; 473 passed (unchanged count — the stamp assertions extend an existing e2e test). vite build clean.
+
+Stage Summary:
+- Pull and retest: the admin Users table has a "Last Updated" column (drivers show the date their onboarding details last changed; other roles show —); the user-detail Driver Profile card shows "Last updated <datetime> by <actor email>". Save a license edit from a phone → the stamp moves. Run `prisma migrate deploy` on deploy (migration 20261106090000).
+- Rows onboarded before this ship show "—" / hide the row (NULL, no backfill) — intentional and consistent with the invitedAt policy.
+
 
 

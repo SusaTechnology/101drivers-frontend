@@ -1190,6 +1190,12 @@ async getAdminUsersV2(query: {
             approvedByUserId: true,
             createdAt: true,
             updatedAt: true,
+            // When the driver last (re)submitted onboarding details and who
+            // did it (actor email — the driver themself on self-service
+            // paths). Feeds the admin Users table "Last Updated" column;
+            // null for rows that predate the stamp.
+            lastOnboardingUpdateAt: true,
+            lastOnboardingUpdateBy: true,
             referredBy: {
               select: {
                 id: true,
@@ -1475,6 +1481,12 @@ async getAdminUserDetail(id: string): Promise<any> {
           // When the driver submitted his information (documents, license,
           // selfie, SSN) — through an invite link or the signup form.
           onboardingCompletedAt: true,
+          // When the onboarding details last changed after (or at) that
+          // submission and who changed them (actor email). Feeds the
+          // user-detail card's "Last updated" row; null for rows that
+          // predate the stamp.
+          lastOnboardingUpdateAt: true,
+          lastOnboardingUpdateBy: true,
           // Hold context — the detail page shows when the hold was placed
           // and which funnel stage "Release Hold" restores.
           heldFromStatus: true,

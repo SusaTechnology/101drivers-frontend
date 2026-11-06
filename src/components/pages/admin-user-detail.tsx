@@ -2758,6 +2758,25 @@ export default function AdminUserDetailPage({ userId }: AdminUserDetailPageProps
                               <div className="text-sm">{formatDate(user.driver.onboardingCompletedAt)}</div>
                             </div>
                           )}
+                          {/* Last updated — when the onboarding details last
+                              changed (initial completion, or a later
+                              self-service edit from the license edit page)
+                              and who did it: the actor's email, so the admin
+                              can tell a driver's own edit from any other
+                              writer. Hidden for rows that predate the stamp. */}
+                          {user.driver.lastOnboardingUpdateAt && (
+                            <div>
+                              <Label className="text-xs font-bold text-slate-500">Last updated</Label>
+                              <div className="text-sm">
+                                {formatDateTime(user.driver.lastOnboardingUpdateAt)}
+                                {user.driver.lastOnboardingUpdateBy && (
+                                  <span className="text-xs text-slate-500 dark:text-slate-400">
+                                    {' '}by {user.driver.lastOnboardingUpdateBy}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          )}
                           {user.driver.approvedAt && (
                             <div>
                               <Label className="text-xs font-bold text-slate-500">Approved</Label>

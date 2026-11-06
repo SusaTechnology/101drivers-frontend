@@ -1935,6 +1935,7 @@ export default function AdminUsersPage() {
                       <TableHead className="px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-slate-400">Customer Info</TableHead>
                       <TableHead className="px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-slate-400">Driver Info</TableHead>
                       <TableHead className="px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-slate-400">Created</TableHead>
+                      <TableHead className="px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-slate-400">Last Updated</TableHead>
                       <TableHead className="px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-slate-400 text-right">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -1945,7 +1946,7 @@ export default function AdminUsersPage() {
                         reuse the TableSkeleton defined below the page. */}
                     {usersLoading && (
                       <TableRow className="border-b border-slate-100 dark:border-slate-800">
-                        <TableCell colSpan={7} className="px-0 py-0">
+                        <TableCell colSpan={8} className="px-0 py-0">
                           <TableSkeleton rows={6} />
                         </TableCell>
                       </TableRow>
@@ -2125,6 +2126,21 @@ export default function AdminUsersPage() {
                             <div className="text-[10px] text-slate-400 mt-0.5">
                               Last login: {formatDate(user.lastLoginAt)}
                             </div>
+                          )}
+                        </TableCell>
+                        {/* Last Updated — when the driver last (re)submitted
+                            onboarding details (initial completion, or the
+                            license edit page). Driver rows only: customers
+                            and admins have no onboarding to update. The
+                            "by whom" detail lives on the user-detail page. */}
+                        <TableCell className="px-4 py-3 text-sm text-slate-600">
+                          {user.driver?.lastOnboardingUpdateAt ? (
+                            <div className="flex items-center gap-1">
+                              <Calendar className="w-3 h-3" />
+                              {formatDate(user.driver.lastOnboardingUpdateAt)}
+                            </div>
+                          ) : (
+                            <span className="text-xs text-slate-400">—</span>
                           )}
                         </TableCell>
                         <TableCell className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
@@ -2334,7 +2350,7 @@ export default function AdminUsersPage() {
                         so rows are [] mid-fetch too. */}
                     {!usersLoading && users.length === 0 && (
                       <TableRow>
-                        <TableCell colSpan={7} className="px-4 py-14 text-center">
+                        <TableCell colSpan={8} className="px-4 py-14 text-center">
                           <div className="flex flex-col items-center gap-2">
                             <p className="text-sm font-semibold text-slate-600 dark:text-slate-300">
                               No users match the current filters
