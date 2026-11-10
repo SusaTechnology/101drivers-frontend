@@ -95,13 +95,21 @@ const TEMPLATE_LABELS: Record<string, string> = {
   'payment-receipt': 'Payment receipts',
   'payment-failed': 'Payment failures',
   'support-created': 'Support tickets',
+  'support-replied': 'Support replies',
+  'support-assigned': 'Support assignments',
+  'support-status': 'Support status updates',
   'email-verification': 'Email verifications',
 }
 
 // Same allow-list as backend/scripts/audit-email-urls.ts — anything else in
 // an email body is exactly the kind of wrong-domain link (techbee.et) this
-// page exists to catch.
-const ALLOWED_HOSTS = new Set(['101drivers.com', 'www.101drivers.com'])
+// page exists to catch. cdn.101drivers.com is the upload host (license
+// images, support attachments) and is always legitimate.
+const ALLOWED_HOSTS = new Set([
+  '101drivers.com',
+  'www.101drivers.com',
+  'cdn.101drivers.com',
+])
 
 function extractUrls(text: string): string[] {
   const matches = text.match(/https?:\/\/[^\s"'<>)]+/g) ?? []
@@ -128,6 +136,23 @@ function rowHosts(row: EmailRow): string[] {
 
 function isCompliantHost(host: string): boolean {
   return ALLOWED_HOSTS.has(host)
+}
+
+const IMAGE_EXT_RE = /\.(png|jpe?g|gif|webp|bmp|svg)$/i
+
+// Attachment images uploaded through the app live on the CDN with real
+// extensions (…/101-drivers/<file>.png) — render those in the dialog instead
+// of just another link row.
+function isImageUrl(url: string): boolean {
+  try {
+    return IMAGE_EXT_RE.test(new URL(url).pathname)
+  } catch {
+    return false
+  }
+}
+
+function rowImages(row: EmailRow): string[] {
+  return rowUrls(row).filter(isImageUrl)
 }
 
 function fmtDate(iso: string | null): string {
@@ -245,11 +270,8 @@ export default function AdminEmailsPage() {
   const total = data?.total ?? 0
   const totalPages = Math.max(1, Math.ceil(total / pageSize))
 
-  const flaggedCount = useMemo(
-    () =>
-      items.filter((row) =>
-        rowHosts(row).some((host) => !isCompliantHost(host))
-      ).length,
+  const failedCount = useMemo(
+    () => items.filter((row) => row.status === 'FAILED').length,
     [items]
   )
 
@@ -303,18 +325,20 @@ export default function AdminEmailsPage() {
           <div>
             <h1 className="text-2xl lg:text-3xl font-bold text-slate-900 dark:text-white flex items-center gap-2.5">
               <Mail className="w-7 h-7 text-lime-500" />
-              Emails Sent
+              Email &amp; Support Log
             </h1>
             <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">
-              Every email the system sent, exactly as recorded in the
-              notification ledger. URLs outside 101drivers.com are flagged.
+              Every email the system sent — invites, approvals, meeting
+              requests, support tickets — exactly as recorded in the
+              notification ledger. Failed sends are highlighted; URLs outside
+              101drivers.com are flagged.
             </p>
           </div>
           <div className="flex items-center gap-3">
-            {flaggedCount > 0 && (
+            {failedCount > 0 && (
               <Badge className="bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300 hover:bg-red-100">
-                <AlertTriangle className="w-3.5 h-3.5 mr-1" />
-                {flaggedCount} flagged on this page
+                <XCircle className="w-3.5 h-3.5 mr-1" />
+                {failedCount} failed on this page
               </Badge>
             )}
             <Button
@@ -555,12 +579,11 @@ export default function AdminEmailsPage() {
                   <tbody>
                     {items.map((row) => {
                       const hosts = rowHosts(row)
-                      const badHosts = hosts.filter((h) => !isCompliantHost(h))
                       return (
                         <tr
                           key={row.id}
                           className={`border-b border-slate-100 dark:border-slate-800 ${
-                            badHosts.length > 0
+                            row.status === 'FAILED'
                               ? 'bg-red-50/60 dark:bg-red-950/20'
                               : ''
                           }`}
@@ -712,6 +735,32 @@ export default function AdminEmailsPage() {
                   </ul>
                 )}
               </div>
+              {rowImages(selected).length > 0 && (
+                <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-3 overflow-hidden">
+                  <p className="text-xs font-medium uppercase tracking-wide text-slate-500 mb-2">
+                    Images in this email
+                  </p>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                    {rowImages(selected).map((url) => (
+                      <a
+                        key={url}
+                        href={url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="group block min-w-0"
+                        title={url}
+                      >
+                        <img
+                          src={url}
+                          alt="Attachment image from this email"
+                          loading="lazy"
+                          className="w-full h-32 object-cover rounded-lg border border-slate-200 dark:border-slate-700 group-hover:border-lime-400 transition-colors"
+                        />
+                      </a>
+                    ))}
+                  </div>
+                </div>
+              )}
               <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-3 overflow-hidden">
                 <p className="text-xs font-medium uppercase tracking-wide text-slate-500 mb-2">
                   Full body

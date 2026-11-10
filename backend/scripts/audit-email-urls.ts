@@ -33,7 +33,11 @@ import { PrismaClient } from "@prisma/client";
 dotenv.config(); // process.cwd()/.env  (run from backend/)
 dotenv.config({ path: path.resolve(__dirname, "../../.env"), override: false });
 
-const ALLOWED_HOSTS = new Set(["101drivers.com", "www.101drivers.com"]);
+const ALLOWED_HOSTS = new Set([
+  "101drivers.com",
+  "www.101drivers.com",
+  "cdn.101drivers.com", // upload host — license images, support attachments
+]);
 
 // ── Args ──────────────────────────────────────────────────────────────────
 const argv = process.argv.slice(2);

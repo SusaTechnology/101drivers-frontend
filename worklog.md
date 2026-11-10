@@ -3216,6 +3216,24 @@ Work Log:
 Stage Summary:
 - Deploy both apps → Emails Sent page now opens with stat cards (invites, approvals, meeting requests, …, per selected window) and a Campaign dropdown listing the last 20 bulk campaigns with sent counts; picking one filters the table. Dialog no longer scrolls horizontally and the close button no longer covers the title.
 - If a campaign ran with --all-recipients it includes dealer emails — the audience filter still applies on top of the campaign filter.
+---
+Task ID: 62
+Agent: Main Agent
+Task: Email & Support Log rename, cdn.101drivers.com allow-list, FAILED-row highlighting, image attachments in dialog
+
+Work Log:
+- User: (1) the page includes support requests → rename away from "Emails Sent"; (2) cdn.101drivers.com is a right link → no red rows for it; (3) red should mark FAILED rows instead; (4) dialog should show images, not just attachment text.
+- Rename: nav item + page title → "Email & Support Log" (route /admin-emails and files unchanged — no churn for a label change). Subtitle now names the page's scope: invites, approvals, meeting requests, support tickets. TEMPLATE_LABELS gains support-replied/assigned/status so support traffic shows friendly names in the stat cards (the support-* templates exist: the support-request-orchestrator emails ops@101drivers.com with templateCode support-created and the driver's message as body).
+- cdn.101drivers.com added to the allow-list in all three places that share it: FE page, audit-email-urls.ts, email-proof-report.ts. Root cause it's legit: upload.service serves uploads at https://cdn.101drivers.com/101-drivers/<file> — license images and support attachments ride in email bodies as CDN links, which the audit would otherwise flag as foreign hosts.
+- Row tint switched from "has non-compliant host" to `status === 'FAILED'` (per user: red = failed sends). The header badge now counts failed rows ("N failed on this page") instead of wrong-domain rows. Host badges keep flagging non-compliant domains — still the audit trail, just no longer drives the row color.
+- Image attachments in the dialog: new isImageUrl (path extension png/jpe?g/gif/webp/bmp/svg) + rowImages helpers; the dialog renders an "Images in this email" section between Links and Full body — grid of thumbnails (h-32 object-cover, rounded, lime hover border) linking to the full image in a new tab. So a support email whose body says "attachment" now shows the actual image(s).
+- Verification: FE vite build clean; both backend scripts pass standalone tsc. isImageUrl handles query strings via pathname-only test (CDN URLs are extension-terminated; presigned/query URLs still match by path). Images render via <img> directly from the CDN — no backend proxy, no upload change.
+- Sandbox: no sync incidents; edits applied on freshly read files.
+
+Stage Summary:
+- Deploy both apps → sidebar shows "Email & Support Log"; cdn.101drivers.com links count as compliant everywhere (page + email:audit + email:proof); failed sends glow red instead of wrong-domain rows; the View dialog shows image attachments inline.
+- Note for the audit scripts: re-running them on the server now yields fewer flagged rows — cdn hosts are expected, techbee.et still flags.
+
 
 
 
