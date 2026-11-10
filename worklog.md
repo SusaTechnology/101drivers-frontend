@@ -3153,6 +3153,22 @@ Work Log:
 Stage Summary:
 - Pull and deploy the backend on current master, then re-send invites/approvals to any driver who received a techbee.et link — current code + the user's env can only emit 101drivers.com. The bulk campaign (`npm run email:campaign:dry` first) now logs its resolved link base at startup: "[email-campaign] invite/approval links will use: https://…".
 - Recommend: set ROOT_DOMAIN=101drivers.com (no scheme) in the server env — the cookie code uses the value raw.
+---
+Task ID: 58
+Agent: Main Agent
+Task: email:audit script — extract the URLs actually sent to drivers and confirm they point at 101drivers.com
+
+Work Log:
+- User: "we need to extract the latest email we sent to drivers and confirm if the urls sent are correct… sent this week."
+- Where sent emails live: every email goes through NotificationEventEngine.queueAndSend → NotificationEvent ledger row (channel EMAIL, status SENT/FAILED/QUEUED, full email text in `body`, plus templateCode/toEmail/driverId/sentAt). No SMTP access needed — the ledger IS the source of truth for "what did we send".
+- New backend/scripts/audit-email-urls.ts (read-only, standalone PrismaClient, same dotenv pattern as the campaign script): window via --days N (default 7) or --since YYYY-MM-DD; default scope = driver emails (driverId set), --all-recipients to widen; extracts every URL from body + payload (JSON.stringify), histogram by host, allow-list = 101drivers.com/www.101drivers.com, flags every row containing a foreign host (e.g. techbee.et) with status/template/recipient/sentAt so re-sends can be targeted; writes email-url-audit-<timestamp>.csv (one row per email, hosts+urls joined) for spreadsheets.
+- npm script "email:audit" added next to the campaign entries.
+- Verification: standalone tsc --noEmit passes (skipLibCheck, commonjs). NOT executed against a live DB — the sandbox has no production DATABASE_URL; the query is a plain findMany against the schema-verified NotificationEvent model (enums EMAIL/SENT/FAILED/QUEUED confirmed, no @@map so table name is "NotificationEvent"). First real run happens on the server.
+- Companion instant check that needs no deploy (psql against prod DB): SELECT count(*) FROM "NotificationEvent" WHERE channel='EMAIL' AND status='SENT' AND "sentAt" >= now() - interval '7 days' AND body LIKE '%techbee.et%';
+
+Stage Summary:
+- Pull on the server, then from backend/: `npm run email:audit` (or `-- --since 2026-11-03` to bracket the Nov 3 domain fix). The console prints the host histogram — every host must be 101drivers.com; any ⚠ row is a driver to re-send (tokens stay valid). The CSV lands in backend/ for a spreadsheet review.
+
 
 
 
