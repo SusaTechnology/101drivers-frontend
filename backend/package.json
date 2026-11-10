@@ -12,6 +12,7 @@
     "email:campaign": "ts-node scripts/send-invite-approval-emails.ts",
     "email:campaign:dry": "ts-node scripts/send-invite-approval-emails.ts --dry-run",
     "email:audit": "ts-node scripts/audit-email-urls.ts",
+    "email:proof": "ts-node scripts/email-proof-report.ts",
     "seed:referral": "ts-node scripts/seed-referral-settings.ts",
     "referral:backfill": "ts-node scripts/backfill-referral-payouts.ts",
     "pricing:backfill-personal-flat": "ts-node scripts/backfill-personal-flat-pricing.ts",

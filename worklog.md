@@ -3185,6 +3185,22 @@ Stage Summary:
 
 Stage Summary:
 - Pull on the server, then from backend/: `npm run email:audit` (or `-- --since 2026-11-03` to bracket the Nov 3 domain fix). The console prints the host histogram — every host must be 101drivers.com; any ⚠ row is a driver to re-send (tokens stay valid). The CSV lands in backend/ for a spreadsheet review.
+---
+Task ID: 60
+Agent: Main Agent
+Task: email:proof — one-command per-driver evidence pack ("we sent the correct email to every driver")
+
+Work Log:
+- User: "how can I show a proof that we sent the correct email for all drivers. invitation and that campaign proof. is there any?"
+- Proof that ALREADY existed: (1) NotificationEvent ledger rows — per-email toEmail/templateCode/status SENT-FAILED/sentAt + full body text (URLs included); (2) the bulk campaign stamps a campaignId into every row's payload and writes its own per-recipient report files (backend/email-campaign-reports/email-campaign-report-<timestamp>.json + .md) when it runs; (3) Task 58's email:audit CSV + Task 59's Emails Sent page. What was missing: a driver-completeness cross-check — the audit only looks at emails that were sent, not at drivers who should have received one and didn't.
+- New backend/scripts/email-proof-report.ts (npm run email:proof, read-only): joins Driver × NotificationEvent — default scope = drivers with status INVITED/APPROVED/REJECTED (every status that passes through the invite flow; --statuses to override); for each driver evaluates the latest driver-invited + driver-approved ledger rows: send status (SENT/FAILED/QUEUED/MISSING), sentAt, distinct URL hosts from the body, compliance vs the 101drivers.com allow-list (same constant as email:audit), campaignIds from payload. Verdicts: OK / NO_EMAIL / SEND_FAILED / PENDING / URL_BAD — non-OK rows ARE the re-send worklist. Optional --campaign <id> filters ledger rows to one bulk campaign; --since narrows which sends count as proof. Console prints per-verdict counts + problem list + explicit "✓ PROOF" line when clean; CSV lands in email-campaign-reports/email-proof-<timestamp>.csv next to the campaign reports (one proof folder).
+- Fixed two draft artifacts before commit (no-op filter with `|| true`, unused summarize param); added missing driverId to the EmailRow type + select after tsc caught it.
+- Verification: standalone tsc --noEmit passes. Not executed against a live DB (no prod DATABASE_URL in sandbox) — plain findMany on schema-verified models (Driver.status EnumDriverStatus, driver.user.email/fullName as used by DriverApprovalEngine itself). First real run is on the server.
+- Deliberate choice: report is all-time by default — completeness ("every driver got it") is a timeless claim; window filters exist for proving post-fix sends only.
+
+Stage Summary:
+- The evidence pack, end to end: `npm run email:proof` → console verdicts + email-campaign-reports/email-proof-<stamp>.csv; the campaign's own per-recipient reports (email-campaign-reports/*.json/.md) cover "that campaign"; the Emails Sent admin page covers ad-hoc eyeballing. Any non-OK verdict = re-send that driver (Resend Invite / campaign --retry-failed-from) — tokens stay valid.
+
 
 
 
