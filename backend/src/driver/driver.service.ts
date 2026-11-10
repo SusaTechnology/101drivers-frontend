@@ -534,11 +534,15 @@ async requestMeetingDriver(input: {
   driverId: string;
   actorUserId?: string | null;
   message: string;
+  fromMode?: "platform" | "mine" | null;
+  fromEmail?: string | null;
 }): Promise<any> {
   await this.driverApprovalEngine.requestMeetingDriver({
     driverId: input.driverId,
     actorUserId: input.actorUserId ?? null,
     message: input.message,
+    fromMode: input.fromMode ?? null,
+    fromEmail: input.fromEmail ?? null,
   });
 
   return this.domain.findUnique({ id: input.driverId });

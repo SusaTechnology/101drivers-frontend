@@ -2336,6 +2336,8 @@ async requestMeetingDriverFromUser(input: {
   userId: string;
   actorUserId?: string | null;
   message: string;
+  fromMode?: "platform" | "mine" | null;
+  fromEmail?: string | null;
 }) {
   const driver = await this.getUserDriverOrThrow(input.userId);
 
@@ -2343,6 +2345,8 @@ async requestMeetingDriverFromUser(input: {
     driverId: driver.id,
     actorUserId: input.actorUserId ?? null,
     message: input.message,
+    fromMode: input.fromMode ?? null,
+    fromEmail: input.fromEmail ?? null,
   });
 
   // Status change — ping admin stat surfaces (live Users-page cards).

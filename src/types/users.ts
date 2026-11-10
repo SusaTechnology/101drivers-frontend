@@ -594,6 +594,10 @@ export interface InviteDriverRequest {
 export interface RequestDriverMeetingRequest {
   message: string;
   actorUserId?: string;
+  /** "mine" = admin address as Reply-To + BCC copy; "platform" = official send. */
+  fromMode?: 'platform' | 'mine';
+  /** The (editable) admin address used when fromMode is "mine". */
+  fromEmail?: string;
 }
 
 export interface SuspendCustomerRequest {

@@ -47,6 +47,15 @@ import {
 
 // Mirrors backend/src/adminEmails — the NotificationEvent ledger is the
 // single source of truth for "what did we actually send".
+interface EmailPayloadMeta {
+  triggeredBy?: string
+  triggeredByName?: string
+  triggeredByUserId?: string
+  fromMode?: 'platform' | 'mine'
+  replyTo?: string
+  bcc?: string
+}
+
 interface EmailRow {
   id: string
   status: 'SENT' | 'FAILED' | 'QUEUED'
@@ -59,6 +68,10 @@ interface EmailRow {
   failedAt: string | null
   errorMessage: string | null
   body: string | null
+  // Admin-sent emails (meeting requests) carry provenance — who triggered
+  // it and the From scope — so the team sees the full record without
+  // hunting through personal Sent folders.
+  payload?: EmailPayloadMeta | null
 }
 
 interface EmailsListResponse {
@@ -1096,6 +1109,22 @@ export default function AdminEmailsPage() {
                   <StatusBadge status={selected.status} />
                 </DialogDescription>
               </DialogHeader>
+              {selected.payload?.triggeredBy && (
+                <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/40 p-3 text-sm">
+                  <p className="font-medium text-slate-700 dark:text-slate-300">
+                    Triggered by {selected.payload.triggeredByName ?? ''}{' '}
+                    {selected.payload.triggeredBy}
+                  </p>
+                  <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
+                    {selected.payload.fromMode === 'mine'
+                      ? `From scope: admin's address (${selected.payload.replyTo ?? selected.payload.triggeredBy}) as Reply-To`
+                      : 'From scope: platform address (info@101drivers.com)'}
+                    {selected.payload.bcc
+                      ? ` · BCC copy: ${selected.payload.bcc}`
+                      : ''}
+                  </p>
+                </div>
+              )}
               {selected.errorMessage && (
                 <div className="rounded-xl border border-red-200 bg-red-50 dark:bg-red-950/30 dark:border-red-800 p-3 text-sm text-red-800 dark:text-red-300">
                   <p className="font-medium">Send error</p>

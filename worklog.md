@@ -3290,3 +3290,19 @@ Stage Summary:
 
 
 
+
+---
+Task ID: 66
+Agent: Main Agent
+Task: Meeting request From-scope choice (mine/platform) + always-BCC triggerer + provenance in the emails log
+
+Work Log:
+- User: admins should choose "send from my email" (pre-filled, editable) vs "send from platform"; the mail keeps leaving from the shared address; the triggerer always gets a copy; the panel must show who triggered it, when, and the exact email.
+- MailService.sendMail gains optional replyTo/bcc (nodemailer supports both; from stays the platform address — an arbitrary personal From would fail SPF/DKIM and land in spam).
+- DTO UserAdminRequestMeetingDto gains fromMode (platform|mine, IsIn) + fromEmail (IsString/MaxLength); controller -> user.service -> driver.service -> DriverApprovalEngine passthrough. Engine: validates the address in mine mode, resolves the acting admin (email+name) from actorUserId BEFORE the tx, computes replyTo (mine only) and bcc (always — the chosen address in mine mode, the admin's account email in platform mode). A personal send signs with the admin's name and adds a small footer "Sent by <name (email)> ... replies go directly to them"; platform keeps the plain 101 Drivers signature.
+- Provenance: audit afterJson gains email{fromMode,replyTo,bcc,triggeredBy}; NotificationEvent payload gains fromMode/replyTo/bcc/triggeredBy/triggeredByName/triggeredByUserId. adminEmails list select now returns payload; the Emails & Support Log detail dialog shows a "Triggered by ..." block (name, email, From scope, BCC) for meeting-request sends — who/when/exact body all visible without anyone's Sent folder.
+- FE: RequestMeetingDialog gains a "Send from" Select (default "My email address", pre-filled from getUser().email, editable; alternative "Platform — info@101drivers.com"), a validity check disabling Send, and helper copy explaining Reply-To + BCC mechanics; onConfirm(message, fromMode, fromEmail); both call sites (admin-users table + driver profile page) pass fromMode/fromEmail into the mutation; RequestDriverMeetingRequest typed; currentUser store type gains email.
+
+REPO RESCUE (same task): mid-turn the sandbox came back with local master parked on 09828203 (another session's last commit — an ANCESTOR of origin/master, missing the whole adminEmails module) and wiped backend node_modules. Recovered by: reinstalling BE deps (--legacy-peer-deps), restoring git-deleted backend/src/upload, saving the in-progress Task 66 diff to a patch, `git checkout -B master origin/master` (back to 439b5078 with Tasks 60-65), `git apply --3way` the code-only patch (all 11 files clean). The other session's uncommitted worklog entry is preserved in /home/z/my-project/task66-on-other-lineage.patch; their tip is an ancestor of master, nothing lost.
+
+Verification: backend nest build 0 errors; vite build clean. Deliverability reasoning: platform From + Reply-To/BCC is the only safe personal-send mechanism for a single-mailbox SMTP account.

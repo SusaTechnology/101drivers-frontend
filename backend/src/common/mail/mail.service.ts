@@ -87,6 +87,10 @@ export class MailService {
     subject: string;
     text?: string | null;
     html?: string | null;
+    /** Replies go to this address (admin meeting requests "from my address"). */
+    replyTo?: string | null;
+    /** Silent copy — used to always BCC the admin who triggered a send. */
+    bcc?: string | null;
   }): Promise<void> {
     if (!this.smtpConfigured || !this.transporter) {
       this.logger.warn(
@@ -99,12 +103,19 @@ export class MailService {
       const info = await this.transporter.sendMail({
         from: this.from,
         to: params.to,
+        ...(params.replyTo ? { replyTo: params.replyTo } : {}),
+        ...(params.bcc ? { bcc: params.bcc } : {}),
         subject: params.subject,
         text: params.text ?? undefined,
         html: params.html ?? undefined,
       });
 
-      this.logger.log(`Email sent to ${params.to}: ${info.messageId}`);
+      this.logger.log(
+        `Email sent to ${params.to}` +
+          (params.replyTo ? ` (reply-to ${params.replyTo})` : "") +
+          (params.bcc ? ` (bcc ${params.bcc})` : "") +
+          `: ${info.messageId}`
+      );
     } catch (error: any) {
       this.logger.error(
         `Failed to send email to ${params.to}: ${error?.message ?? error}`

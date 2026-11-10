@@ -38,6 +38,7 @@ let lastRefreshSucceeded: boolean = false;
 let currentUser: {
   id: string;
   username: string;
+  email?: string | null;
   fullName?: string | null;
   profileId: string | null;
   roles: string[];

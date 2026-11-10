@@ -1364,24 +1364,31 @@ export default function AdminUsersPage() {
   // Request Meeting — sends the composed email + flips the status in one
   // backend transaction. Error messages surface the SMTP failure so the
   // admin knows nothing changed and can retry.
-  const handleRequestMeeting = useCallback((message: string) => {
-    if (!requestMeetingUser) return;
-    requestMeetingMutation.mutate(
-      { pathParams: { id: requestMeetingUser.id }, message, actorUserId },
-      {
-        onSuccess: () => {
-          toast.success('Meeting request sent', {
-            description: 'The driver was emailed and moved to Meeting Requested.',
-          });
-          setRequestMeetingOpen(false);
+  const handleRequestMeeting = useCallback(
+    (message: string, fromMode: 'platform' | 'mine', fromEmail: string) => {
+      if (!requestMeetingUser) return;
+      requestMeetingMutation.mutate(
+        {
+          pathParams: { id: requestMeetingUser.id },
+          message,
+          actorUserId,
+          fromMode,
+          fromEmail,
         },
-        onError: (error: any) =>
-          toast.error('Failed to send meeting request', {
-            description: error?.message ||
-              'The email could not be sent — the driver stays in Pending Approval. Fix the issue and retry.',
-          }),
-      }
-    );
+        {
+          onSuccess: () => {
+            toast.success('Meeting request sent', {
+              description: 'The driver was emailed and moved to Meeting Requested.',
+            });
+            setRequestMeetingOpen(false);
+          },
+          onError: (error: any) =>
+            toast.error('Failed to send meeting request', {
+              description: error?.message ||
+                'The email could not be sent — the driver stays in Pending Approval. Fix the issue and retry.',
+            }),
+        }
+      );
   }, [requestMeetingUser, actorUserId, requestMeetingMutation]);
 
   const handleRejectDriver = useCallback((data: RejectFormData) => {

@@ -345,10 +345,31 @@ export class DriverApprovalEngine {
     driverId: string;
     actorUserId?: string | null;
     message: string;
+    /** "mine" = the admin's address as Reply-To + BCC copy; "platform" = plain official send. */
+    fromMode?: "platform" | "mine" | null;
+    /** The editable admin address used when fromMode is "mine". */
+    fromEmail?: string | null;
   }): Promise<void> {
     const message = (input.message ?? "").trim();
     if (!message) {
       throw new BadRequestException("A meeting request message is required");
+    }
+
+    // FROM SCOPE: the mail always LEAVES from the shared platform address
+    // (the SMTP account is only authorized for it — an arbitrary personal
+    // From would fail SPF/DKIM and land in spam). "mine" sets the chosen
+    // address as Reply-To (replies reach the admin directly) and BCCs them
+    // a tracking copy; "platform" BCCs the acting admin's account email so
+    // there is ALWAYS a copy for whoever clicked the button.
+    const fromMode = input.fromMode === "mine" ? "mine" : "platform";
+    const requestedFromEmail = input.fromEmail?.trim().toLowerCase() || null;
+    const emailShape = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (fromMode === "mine") {
+      if (!requestedFromEmail || !emailShape.test(requestedFromEmail)) {
+        throw new BadRequestException(
+          "A valid email address is required to send the meeting request from your address"
+        );
+      }
     }
 
     // Fail fast BEFORE opening the transaction when SMTP is not configured
@@ -358,6 +379,24 @@ export class DriverApprovalEngine {
         "Email sending is not configured on the server (SMTP). Cannot send a meeting request."
       );
     }
+
+    // Who triggered the send (audit + ledger + BCC fallback): the acting
+    // admin's account email and name, resolved from actorUserId.
+    const actor = input.actorUserId
+      ? await this.prisma.user.findUnique({
+          where: { id: input.actorUserId },
+          select: { email: true, fullName: true },
+        })
+      : null;
+    const actorEmail = actor?.email?.trim().toLowerCase() || null;
+    const actorName = actor?.fullName?.trim() || null;
+
+    const replyTo = fromMode === "mine" ? requestedFromEmail : null;
+    const bccCandidate =
+      fromMode === "mine" ? requestedFromEmail : actorEmail;
+    // Never BCC the recipient's own address (harmless paranoia).
+    const bcc =
+      bccCandidate && bccCandidate.length > 0 ? bccCandidate : null;
 
     // Pre-read for a friendly 404 + email presence + the before/after
     // audit snapshot. The AUTHORITATIVE status guard is the updateMany
@@ -397,15 +436,28 @@ export class DriverApprovalEngine {
 
     const displayName = driver.user?.fullName || "Driver";
     const subject = "Let's schedule your 101 Drivers onboarding meeting";
+    // A personal send signs with the admin's name (falls back to their
+    // address); the platform send keeps the plain team signature.
+    const signatureName =
+      fromMode === "mine" ? actorName || replyTo || "101 Drivers" : "101 Drivers";
+    const senderLabel = actorName
+      ? `${actorName} (${replyTo ?? actorEmail ?? "101 Drivers"})`
+      : replyTo || actorEmail || "101 Drivers";
     const text = [
       `Hi ${displayName},`,
       "",
       message,
       "",
       "Thanks,",
-      "101 Drivers",
+      signatureName,
+      ...(signatureName !== "101 Drivers" ? ["101 Drivers"] : []),
     ].join("\n");
-    const html = this.wrapMeetingEmailHtml(displayName, message);
+    const html = this.wrapMeetingEmailHtml(
+      displayName,
+      message,
+      fromMode === "mine" ? signatureName : null,
+      fromMode === "mine" ? senderLabel : null
+    );
 
     // The interactive transaction carries an SMTP round-trip (bounded by
     // MailService's 15s/30s socket timeouts), so the default 5s transaction
@@ -432,7 +484,9 @@ export class DriverApprovalEngine {
         }
 
         // 2. Audit trail — who requested the meeting, when, the exact
-        //    message that went out, and the before/after status.
+        //    message that went out, and the before/after status. The email
+        //    block records the From scope the admin picked (mine/platform),
+        //    the Reply-To, and the BCC copy address.
         await tx.adminAuditLog.create({
           data: {
             action: EnumAdminAuditLogAction.DRIVER_MEETING_REQUEST,
@@ -443,6 +497,12 @@ export class DriverApprovalEngine {
             beforeJson: { status: driver.status } as Prisma.JsonObject,
             afterJson: {
               status: EnumDriverStatus.MEETING_REQUESTED,
+              email: {
+                fromMode,
+                ...(replyTo ? { replyTo } : {}),
+                ...(bcc ? { bcc } : {}),
+                ...(actorEmail ? { triggeredBy: actorEmail } : {}),
+              },
             } as Prisma.JsonObject,
           },
         });
@@ -450,7 +510,9 @@ export class DriverApprovalEngine {
         // 3. Driver-facing NotificationEvent row (driver inbox / bell data
         //    source). Created with status SENT + sentAt because the send
         //    below happens before commit — if it throws, this row never
-        //    materializes.
+        //    materializes. The payload carries the full provenance so the
+        //    admin panel can show exactly who triggered the email without
+        //    anyone hunting through personal Sent folders.
         await tx.notificationEvent.create({
           data: {
             actorUserId: input.actorUserId ?? null,
@@ -467,6 +529,12 @@ export class DriverApprovalEngine {
             payload: {
               driverId: input.driverId,
               message,
+              fromMode,
+              ...(replyTo ? { replyTo } : {}),
+              ...(bcc ? { bcc } : {}),
+              ...(actorEmail ? { triggeredBy: actorEmail } : {}),
+              ...(actorName ? { triggeredByName: actorName } : {}),
+              ...(input.actorUserId ? { triggeredByUserId: input.actorUserId } : {}),
             },
           },
         });
@@ -478,6 +546,8 @@ export class DriverApprovalEngine {
           subject,
           text,
           html,
+          replyTo,
+          bcc,
         });
       },
       { maxWait: 10_000, timeout: 60_000 }
@@ -485,8 +555,16 @@ export class DriverApprovalEngine {
   }
 
   /** Plain-text meeting email → simple branded HTML (same style the
-   *  NotificationEventEngine uses for its generic emails). */
-  private wrapMeetingEmailHtml(displayName: string, message: string): string {
+   *  NotificationEventEngine uses for its generic emails). `signatureName`
+   *  and `senderLabel` are set for personal ("from my address") sends:
+   *  the signature names the admin and a small footer line tells the
+   *  driver who sent it and that replies go directly to them. */
+  private wrapMeetingEmailHtml(
+    displayName: string,
+    message: string,
+    signatureName?: string | null,
+    senderLabel?: string | null
+  ): string {
     const escape = (value: string): string =>
       value
         .replace(/&/g, "&amp;")
@@ -507,7 +585,16 @@ export class DriverApprovalEngine {
         <h2>Let's schedule your onboarding meeting</h2>
         <p>Hi ${escape(displayName)},</p>
         <p>${escapedMessage}</p>
-        <p>Thanks,<br />101 Drivers</p>
+        <p>Thanks,${
+          signatureName ? `<br />${escape(signatureName)}<br />` : "<br />"
+        }101 Drivers</p>${
+        senderLabel
+          ? `
+        <p style="color:#666; font-size:12px; margin-top:16px;">Sent by ${escape(
+          senderLabel
+        )} on behalf of the 101 Drivers team — replies go directly to them.</p>`
+          : ""
+      }
       </div>
     `;
   }

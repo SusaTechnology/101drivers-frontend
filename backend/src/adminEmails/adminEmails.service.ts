@@ -124,6 +124,9 @@ export class AdminEmailsService {
           failedAt: true,
           errorMessage: true,
           body: true,
+          // Provenance for admin-sent emails (meeting requests): who
+          // triggered it and the From scope — surfaced in the detail dialog.
+          payload: true,
         },
       }),
       this.prisma.notificationEvent.count({ where }),

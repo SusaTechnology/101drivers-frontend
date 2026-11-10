@@ -356,6 +356,8 @@ async requestMeetingDriverFromUser(
     userId: id,
     actorUserId: body.actorUserId ?? null,
     message: body.message,
+    fromMode: body.fromMode ?? null,
+    fromEmail: body.fromEmail ?? null,
   });
 }
 

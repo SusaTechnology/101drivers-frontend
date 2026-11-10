@@ -248,6 +248,23 @@ export class UserAdminRequestMeetingDto {
   @IsNotEmpty({ message: "A meeting request message is required" })
   @MaxLength(2000, { message: "Meeting request message must be at most 2000 characters" })
   message!: string;
+
+  // WHO the email should represent. The mail always LEAVES from the shared
+  // platform address (deliverability: the SMTP account is only authorized
+  // for that one) — "mine" sets the admin's address as Reply-To and BCCs
+  // them a copy; "platform" sends as the plain official team address.
+  @swagger.ApiPropertyOptional({ enum: ["platform", "mine"] })
+  @IsOptional()
+  @IsIn(["platform", "mine"])
+  fromMode?: "platform" | "mine";
+
+  // The admin's (editable) address for fromMode="mine" — used as Reply-To
+  // and BCC. Validated only when fromMode is "mine" (see the engine).
+  @swagger.ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  @MaxLength(320)
+  fromEmail?: string | null;
 }
 
 /**

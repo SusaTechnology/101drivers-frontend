@@ -1071,25 +1071,32 @@ export default function AdminUserDetailPage({ userId }: AdminUserDetailPageProps
   // Request Meeting — sends the composed email + flips the status in one
   // backend transaction. A failure leaves the driver in Pending Approval
   // and the error surfaces here so the admin can retry.
-  const handleRequestMeeting = useCallback((message: string) => {
-    if (!user) return;
-    requestMeetingMutation.mutate(
-      { pathParams: { id: user.id }, message, actorUserId: getActorUserId() },
-      {
-        onSuccess: () => {
-          toast.success('Meeting request sent', {
-            description: 'The driver was emailed and moved to Meeting Requested.',
-          });
-          setRequestMeetingOpen(false);
-          refetch();
+  const handleRequestMeeting = useCallback(
+    (message: string, fromMode: 'platform' | 'mine', fromEmail: string) => {
+      if (!user) return;
+      requestMeetingMutation.mutate(
+        {
+          pathParams: { id: user.id },
+          message,
+          actorUserId: getActorUserId(),
+          fromMode,
+          fromEmail,
         },
-        onError: (error: any) =>
-          toast.error('Failed to send meeting request', {
-            description: error?.message ||
-              'The email could not be sent — the driver stays in Pending Approval. Fix the issue and retry.',
-          }),
-      }
-    );
+        {
+          onSuccess: () => {
+            toast.success('Meeting request sent', {
+              description: 'The driver was emailed and moved to Meeting Requested.',
+            });
+            setRequestMeetingOpen(false);
+            refetch();
+          },
+          onError: (error: any) =>
+            toast.error('Failed to send meeting request', {
+              description: error?.message ||
+                'The email could not be sent — the driver stays in Pending Approval. Fix the issue and retry.',
+            }),
+        }
+      );
   }, [user, requestMeetingMutation, refetch]);
 
   const handleApproveDriver = () => {
