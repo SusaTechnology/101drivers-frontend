@@ -3,7 +3,11 @@ import * as swagger from "@nestjs/swagger";
 import { plainToInstance } from "class-transformer";
 import { Request } from "express";
 import { AdminEmailsService } from "./adminEmails.service";
-import { AdminEmailsListQueryDto, AdminEmailsListResponseDto } from "./dto/adminEmails.dto";
+import {
+  AdminEmailsListQueryDto,
+  AdminEmailsListResponseDto,
+  AdminEmailsStatsResponseDto,
+} from "./dto/adminEmails.dto";
 import * as defaultAuthGuard from "../auth/defaultAuth.guard";
 import { AdminGuard } from "../auth/adminAuth.guard";
 
@@ -18,6 +22,22 @@ import { AdminGuard } from "../auth/adminAuth.guard";
 @common.UseGuards(defaultAuthGuard.DefaultAuthGuard, AdminGuard)
 export class AdminEmailsController {
   constructor(private readonly service: AdminEmailsService) {}
+
+  /**
+   * Header stats: per-template counts (invites, approvals, meeting
+   * requests, …) and the recent bulk campaigns for the filter dropdown.
+   * Declared before the list route so nesting is unambiguous.
+   */
+  @common.Get("stats")
+  @swagger.ApiOkResponse({ type: AdminEmailsStatsResponseDto })
+  async stats(
+    @common.Req() request: Request
+  ): Promise<AdminEmailsStatsResponseDto> {
+    const query = plainToInstance(AdminEmailsListQueryDto, request.query, {
+      enableImplicitConversion: true,
+    });
+    return this.service.stats(query);
+  }
 
   @common.Get()
   @swagger.ApiOkResponse({ type: AdminEmailsListResponseDto })

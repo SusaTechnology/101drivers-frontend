@@ -3200,6 +3200,23 @@ Work Log:
 
 Stage Summary:
 - The evidence pack, end to end: `npm run email:proof` → console verdicts + email-campaign-reports/email-proof-<stamp>.csv; the campaign's own per-recipient reports (email-campaign-reports/*.json/.md) cover "that campaign"; the Emails Sent admin page covers ad-hoc eyeballing. Any non-OK verdict = re-send that driver (Resend Invite / campaign --retry-failed-from) — tokens stay valid.
+---
+Task ID: 61
+Agent: Main Agent
+Task: Emails Sent page — header stats endpoint + campaign filter + dialog UI fixes
+
+Work Log:
+- User: (1) "show the stat above… in another endpoint. include how many invite email sent, approval, meeting requested, etc"; (2) campaign filter showing how many it sent + filtering the table; (3) dialog is horizontally scrollable instead of wrapping and the close icon overlaps the title.
+- Template codes enumerated (62 total): the meeting one is "driver-meeting-request"; main codes for cards: driver-invited, driver-approved, dealer-approved, driver-meeting-request, payment-receipt/failed, support-*, email-verification. FE keeps a TEMPLATE_LABELS map with raw-code fallback, so any future template shows up unstyled but correct.
+- Backend: new GET /api/adminEmails/stats (declared BEFORE the root list route): same window/audience/recipient-search filters as the list (NOT status/template/campaign — the cards are the overview, the table is the drill-down). Per-template SENT/FAILED/QUEUED via groupBy(templateCode,status). Campaign list via $queryRaw: payload->>'campaignId' GROUP BY with COUNT(*) FILTER (WHERE status='SENT'), lastAt, newest first, LIMIT 20 — Prisma groupBy cannot group on a JSON path, hence SQL. List endpoint gains campaign param: payload { path: ["campaignId"], equals } JSON filter. resolveWindow() extracted (shared by list/stats).
+- FE: stat-card row above the filters — "All emails" card (sent big, failed/queued small, red for failures) + up to 7 per-template cards (sent count big; clicking a card drills the table into that template via the existing template filter; active card highlighted lime). Campaign dropdown added to the filter bar (6-col grid): "All campaigns" default + the 20 most recent campaigns labelled with readable dates (campaign-2026-11-08T14-30… → "2026-11-08 14:30 UTC · N sent"), full id on title; selecting filters the table and the page count below updates.
+- Dialog UI fixes per user report: DialogContent now overflow-x-hidden + w-[calc(100%-2rem)] sm:max-w-2xl; title gets pr-10 + break-words (clears the absolute close icon that overlapped it — pr-6 was not enough) and description pr-10 + break-all; link rows get min-w-0/flex-1 so long URLs wrap instead of forcing horizontal scroll; full-body <pre> gets break-all alongside whitespace-pre-wrap; both body sections overflow-hidden.
+- Verification: backend nest build 0 errors (JSON path filter + raw SQL compile); FE vite build clean, route tree unchanged. Not clicked against a live DB from the sandbox — groupBy + $queryRaw against Postgres enum/JSON literals verified against schema (channel/status are PG enums — string literals cast implicitly; payload is Json → ->> works).
+
+Stage Summary:
+- Deploy both apps → Emails Sent page now opens with stat cards (invites, approvals, meeting requests, …, per selected window) and a Campaign dropdown listing the last 20 bulk campaigns with sent counts; picking one filters the table. Dialog no longer scrolls horizontally and the close button no longer covers the title.
+- If a campaign ran with --all-recipients it includes dealer emails — the audience filter still applies on top of the campaign filter.
+
 
 
 

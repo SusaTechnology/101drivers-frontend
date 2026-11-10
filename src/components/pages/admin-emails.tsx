@@ -62,6 +62,42 @@ interface EmailsListResponse {
   pageSize: number
 }
 
+interface TemplateStat {
+  templateCode: string
+  sent: number
+  failed: number
+  queued: number
+  total: number
+}
+
+interface CampaignStat {
+  campaign: string
+  sent: number
+  total: number
+  lastAt: string
+}
+
+interface EmailsStatsResponse {
+  since: string
+  until: string
+  totals: { sent: number; failed: number; queued: number; all: number }
+  byTemplate: TemplateStat[]
+  campaigns: CampaignStat[]
+}
+
+// Friendly names for the codes admins actually ask about ("how many invite
+// emails went out"); unknown codes fall back to the raw template code.
+const TEMPLATE_LABELS: Record<string, string> = {
+  'driver-invited': 'Invites',
+  'driver-approved': 'Driver approvals',
+  'dealer-approved': 'Dealer approvals',
+  'driver-meeting-request': 'Meeting requests',
+  'payment-receipt': 'Payment receipts',
+  'payment-failed': 'Payment failures',
+  'support-created': 'Support tickets',
+  'email-verification': 'Email verifications',
+}
+
 // Same allow-list as backend/scripts/audit-email-urls.ts — anything else in
 // an email body is exactly the kind of wrong-domain link (techbee.et) this
 // page exists to catch.
@@ -105,6 +141,15 @@ function fmtDate(iso: string | null): string {
   })
 }
 
+// Campaign ids are stamped by the bulk script as
+// "campaign-2026-11-08T14-30-…Z" — show that as a readable date; fall back
+// to a short id tail for anything else.
+function campaignLabel(id: string): string {
+  const m = id.match(/^campaign-(\d{4}-\d{2}-\d{2})T(\d{2})-(\d{2})/)
+  if (m) return `${m[1]} ${m[2]}:${m[3]} UTC`
+  return id.length > 14 ? `…${id.slice(-12)}` : id
+}
+
 function StatusBadge({ status }: { status: EmailRow['status'] }) {
   const map = {
     SENT: {
@@ -140,6 +185,7 @@ export default function AdminEmailsPage() {
   const [days, setDays] = useState<string>('7')
   const [search, setSearch] = useState('')
   const [template, setTemplate] = useState('')
+  const [campaign, setCampaign] = useState<string>('all')
   const [page, setPage] = useState(1)
   const pageSize = 25
   const [selected, setSelected] = useState<EmailRow | null>(null)
@@ -154,10 +200,31 @@ export default function AdminEmailsPage() {
     if (audience === 'drivers') params.set('audience', 'drivers')
     if (debouncedSearch.trim()) params.set('q', debouncedSearch.trim())
     if (debouncedTemplate.trim()) params.set('templateCode', debouncedTemplate.trim())
+    if (campaign !== 'all') params.set('campaign', campaign)
     params.set('page', String(page))
     params.set('pageSize', String(pageSize))
     return params.toString()
-  }, [days, status, audience, debouncedSearch, debouncedTemplate, page])
+  }, [days, status, audience, debouncedSearch, debouncedTemplate, campaign, page])
+
+  // Stats share window + audience + recipient search, but stay stable while
+  // the table is drilled down by status/template/campaign — the cards are
+  // the overview, the table is the drill-down.
+  const statsParams = useMemo(() => {
+    const params = new URLSearchParams()
+    params.set('days', days)
+    if (audience === 'drivers') params.set('audience', 'drivers')
+    if (debouncedSearch.trim()) params.set('q', debouncedSearch.trim())
+    return params.toString()
+  }, [days, audience, debouncedSearch])
+
+  const { data: statsData } = useQuery({
+    queryKey: ['adminEmailsStats', statsParams],
+    queryFn: () =>
+      authFetch<EmailsStatsResponse>(
+        `${import.meta.env.VITE_API_URL}/api/adminEmails/stats?${statsParams}`
+      ),
+    staleTime: 30000,
+  })
 
   const {
     data,
@@ -192,6 +259,7 @@ export default function AdminEmailsPage() {
     setDays('7')
     setSearch('')
     setTemplate('')
+    setCampaign('all')
     setPage(1)
   }
 
@@ -201,6 +269,7 @@ export default function AdminEmailsPage() {
     days !== '7',
     search.trim() !== '',
     template.trim() !== '',
+    campaign !== 'all',
   ].filter(Boolean).length
 
   if (isError) {
@@ -262,6 +331,73 @@ export default function AdminEmailsPage() {
           </div>
         </div>
 
+        {statsData && (
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+            <button
+              type="button"
+              onClick={() => {
+                setTemplate('')
+                setPage(1)
+              }}
+              className={`text-left rounded-xl border p-4 transition-colors ${
+                template === ''
+                  ? 'border-lime-500 bg-lime-50 dark:bg-lime-950/30'
+                  : 'border-slate-200 dark:border-slate-700 hover:border-lime-400'
+              }`}
+            >
+              <p className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                All emails
+              </p>
+              <p className="mt-1 text-2xl font-bold text-slate-900 dark:text-white">
+                {statsData.totals.sent}
+              </p>
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                {statsData.totals.failed > 0 && (
+                  <span className="text-red-600 dark:text-red-400">
+                    {statsData.totals.failed} failed
+                  </span>
+                )}
+                {statsData.totals.queued > 0 &&
+                  `${statsData.totals.failed > 0 ? ' · ' : ''}${statsData.totals.queued} queued`}
+                {statsData.totals.failed === 0 && statsData.totals.queued === 0 && 'all sent ✓'}
+              </p>
+            </button>
+            {statsData.byTemplate
+              .filter((t) => t.total > 0)
+              .slice(0, 7)
+              .map((t) => (
+                <button
+                  key={t.templateCode}
+                  type="button"
+                  onClick={() => {
+                    setTemplate(t.templateCode)
+                    setPage(1)
+                  }}
+                  title={`${t.templateCode} — ${t.sent} sent, ${t.failed} failed, ${t.queued} queued`}
+                  className={`text-left rounded-xl border p-4 transition-colors ${
+                    template === t.templateCode
+                      ? 'border-lime-500 bg-lime-50 dark:bg-lime-950/30'
+                      : 'border-slate-200 dark:border-slate-700 hover:border-lime-400'
+                  }`}
+                >
+                  <p className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400 truncate">
+                    {TEMPLATE_LABELS[t.templateCode] ?? t.templateCode}
+                  </p>
+                  <p className="mt-1 text-2xl font-bold text-slate-900 dark:text-white">
+                    {t.sent}
+                  </p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    {t.failed > 0 && (
+                      <span className="text-red-600 dark:text-red-400">{t.failed} failed</span>
+                    )}
+                    {t.queued > 0 && `${t.failed > 0 ? ' · ' : ''}${t.queued} queued`}
+                    {t.failed === 0 && t.queued === 0 && 'sent ✓'}
+                  </p>
+                </button>
+              ))}
+          </div>
+        )}
+
         <Card className="mb-6">
           <CardHeader className="pb-4">
             <CardTitle className="text-base flex items-center justify-between">
@@ -278,7 +414,7 @@ export default function AdminEmailsPage() {
               )}
             </CardTitle>
           </CardHeader>
-          <CardContent className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+          <CardContent className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4">
             <div>
               <Label className="text-xs text-slate-500">Status</Label>
               <Select
@@ -360,6 +496,28 @@ export default function AdminEmailsPage() {
                 placeholder="driver-invited"
                 className="mt-1"
               />
+            </div>
+            <div>
+              <Label className="text-xs text-slate-500">Campaign</Label>
+              <Select
+                value={campaign}
+                onValueChange={(v) => {
+                  setCampaign(v)
+                  setPage(1)
+                }}
+              >
+                <SelectTrigger className="mt-1">
+                  <SelectValue placeholder="All campaigns" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All campaigns</SelectItem>
+                  {(statsData?.campaigns ?? []).map((c) => (
+                    <SelectItem key={c.campaign} value={c.campaign} title={c.campaign}>
+                      {`${campaignLabel(c.campaign)} · ${c.sent} sent`}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           </CardContent>
         </Card>
@@ -503,14 +661,14 @@ export default function AdminEmailsPage() {
         open={!!selected}
         onOpenChange={(open) => !open && setSelected(null)}
       >
-        <DialogContent className="rounded-2xl max-w-2xl max-h-[85vh] overflow-y-auto">
+        <DialogContent className="rounded-2xl w-[calc(100%-2rem)] sm:max-w-2xl max-h-[85vh] overflow-y-auto overflow-x-hidden">
           {selected && (
             <>
               <DialogHeader>
-                <DialogTitle className="text-lg font-bold pr-6">
+                <DialogTitle className="text-lg font-bold pr-10 break-words">
                   {selected.subject ?? '(no subject)'}
                 </DialogTitle>
-                <DialogDescription className="text-sm">
+                <DialogDescription className="text-sm break-all pr-10">
                   To {selected.toEmail ?? '—'} · {selected.templateCode ?? 'no template'} ·{' '}
                   <StatusBadge status={selected.status} />
                 </DialogDescription>
@@ -521,7 +679,7 @@ export default function AdminEmailsPage() {
                   <p className="mt-1 break-words">{selected.errorMessage}</p>
                 </div>
               )}
-              <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-3">
+              <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-3 overflow-hidden">
                 <p className="text-xs font-medium uppercase tracking-wide text-slate-500 mb-2">
                   Links in this email
                 </p>
@@ -533,7 +691,7 @@ export default function AdminEmailsPage() {
                       const host = hostOf(url)
                       const ok = host ? isCompliantHost(host) : false
                       return (
-                        <li key={url} className="flex items-start gap-2 text-sm">
+                        <li key={url} className="flex items-start gap-2 text-sm min-w-0">
                           {ok ? (
                             <CheckCircle className="w-4 h-4 mt-0.5 text-green-600 shrink-0" />
                           ) : (
@@ -543,7 +701,7 @@ export default function AdminEmailsPage() {
                             href={url}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="break-all text-lime-600 hover:text-lime-700 dark:text-lime-400 underline underline-offset-2"
+                            className="min-w-0 flex-1 break-all text-lime-600 hover:text-lime-700 dark:text-lime-400 underline underline-offset-2"
                           >
                             {url}
                           </a>
@@ -554,11 +712,11 @@ export default function AdminEmailsPage() {
                   </ul>
                 )}
               </div>
-              <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-3">
+              <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-3 overflow-hidden">
                 <p className="text-xs font-medium uppercase tracking-wide text-slate-500 mb-2">
                   Full body
                 </p>
-                <pre className="whitespace-pre-wrap text-sm text-slate-700 dark:text-slate-300 font-sans">
+                <pre className="whitespace-pre-wrap break-all text-sm text-slate-700 dark:text-slate-300 font-sans">
                   {selected.body ?? '(no body recorded)'}
                 </pre>
               </div>

@@ -28,6 +28,9 @@ export class AdminEmailsListQueryDto {
   @ApiPropertyOptional({ enum: EnumAdminEmailsAudience, description: "drivers = driver emails only (default all)" })
   audience?: EnumAdminEmailsAudience;
 
+  @ApiPropertyOptional({ description: "campaignId stored in the event payload — filter to one bulk campaign" })
+  campaign?: string;
+
   @ApiPropertyOptional({ description: "1-based page" })
   page?: number;
 
@@ -55,4 +58,27 @@ export class AdminEmailsListResponseDto {
   page!: number;
   pageSize!: number;
   channel!: EnumNotificationEventChannel;
+}
+
+export class AdminEmailsTemplateStatDto {
+  templateCode!: string;
+  sent!: number;
+  failed!: number;
+  queued!: number;
+  total!: number;
+}
+
+export class AdminEmailsCampaignStatDto {
+  campaign!: string;
+  sent!: number;
+  total!: number;
+  lastAt!: Date;
+}
+
+export class AdminEmailsStatsResponseDto {
+  since!: Date;
+  until!: Date;
+  totals!: { sent: number; failed: number; queued: number; all: number };
+  byTemplate!: AdminEmailsTemplateStatDto[];
+  campaigns!: AdminEmailsCampaignStatDto[];
 }
