@@ -1069,31 +1069,41 @@ export default function AdminUserDetailPage({ userId }: AdminUserDetailPageProps
   }, [user, resendInviteDriverMutation, closeDialog, refetch]);
 
   // Request Meeting — sends the composed email + flips the status in one
-  // backend transaction. A failure leaves the driver in Pending Approval
-  // and the error surfaces here so the admin can retry.
+  // backend transaction. A failure leaves the driver in their current
+  // status and the error surfaces here so the admin can retry. fromMode
+  // 'external' is the mark-only flow: the admin emailed the driver from
+  // their own mailbox, so the platform sends nothing and only the status
+  // moves.
   const handleRequestMeeting = useCallback(
-    (message: string, fromMode: 'platform' | 'mine', fromEmail: string) => {
+    (message: string, fromMode: 'platform' | 'mine' | 'external', fromEmail: string) => {
       if (!user) return;
       requestMeetingMutation.mutate(
         {
           pathParams: { id: user.id },
           message,
           actorUserId: getActorUserId(),
-          fromMode,
-          fromEmail,
+          ...(fromMode === 'external'
+            ? { sentExternally: true, fromMode: 'platform' as const }
+            : { fromMode, fromEmail }),
         },
         {
           onSuccess: () => {
-            toast.success('Meeting request sent', {
-              description: 'The driver was emailed and moved to Meeting Requested.',
-            });
+            toast.success(
+              fromMode === 'external' ? 'Status updated' : 'Meeting request sent',
+              {
+                description:
+                  fromMode === 'external'
+                    ? 'No platform email was sent — the driver was moved to Meeting Requested.'
+                    : 'The driver was emailed and moved to Meeting Requested.',
+              }
+            );
             setRequestMeetingOpen(false);
             refetch();
           },
           onError: (error: any) =>
-            toast.error('Failed to send meeting request', {
+            toast.error('Failed to update meeting request status', {
               description: error?.message ||
-                'The email could not be sent — the driver stays in Pending Approval. Fix the issue and retry.',
+                'The change could not be applied — the driver keeps their current status. Fix the issue and retry.',
             }),
         }
       );
@@ -1524,12 +1534,22 @@ export default function AdminUserDetailPage({ userId }: AdminUserDetailPageProps
                   </Button>
                 )}
                 
-                {/* Driver invited - show Resend Invite + Hold */}
+                {/* Driver invited - Resend Invite + Hold + Request Meeting.
+                    The meeting button lets the admin schedule with a platform
+                    send OR record a personal email ("I emailed them myself")
+                    without leaving INVITED undocumented. */}
                 {!user.disabledAt && user.driver?.status === 'INVITED' && (
                   <>
                     <Button onClick={() => openDialog('resend-invite-driver')} className="inline-flex items-center gap-2 px-6 py-3 rounded-2xl bg-sky-600 text-white hover:opacity-90 transition">
                       <Send className="w-4 h-4" />
                       Resend Invite
+                    </Button>
+                    <Button
+                      onClick={() => setRequestMeetingOpen(true)}
+                      className="inline-flex items-center gap-2 px-6 py-3 rounded-2xl bg-violet-600 text-white hover:opacity-90 transition"
+                    >
+                      <CalendarClock className="w-4 h-4" />
+                      Request Meeting
                     </Button>
                     <Button
                       onClick={() => openDialog('hold-driver')}

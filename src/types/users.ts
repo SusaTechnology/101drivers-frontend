@@ -592,12 +592,15 @@ export interface InviteDriverRequest {
 // The backend sends the email and flips the driver to MEETING_REQUESTED
 // in ONE transaction: if the send fails, everything rolls back.
 export interface RequestDriverMeetingRequest {
-  message: string;
+  message?: string;
   actorUserId?: string;
   /** "mine" = admin address as Reply-To + BCC copy; "platform" = official send. */
   fromMode?: 'platform' | 'mine';
   /** The (editable) admin address used when fromMode is "mine". */
   fromEmail?: string;
+  /** Mark-only: the admin already emailed the driver from their own
+   *  mailbox — the platform sends nothing, the status still flips. */
+  sentExternally?: boolean;
 }
 
 export interface SuspendCustomerRequest {

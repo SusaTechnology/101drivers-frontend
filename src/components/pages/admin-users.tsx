@@ -1363,29 +1363,38 @@ export default function AdminUsersPage() {
 
   // Request Meeting — sends the composed email + flips the status in one
   // backend transaction. Error messages surface the SMTP failure so the
-  // admin knows nothing changed and can retry.
+  // admin knows nothing changed and can retry. fromMode 'external' is the
+  // mark-only flow: the admin emailed the driver from their own mailbox,
+  // so the platform sends nothing and only the status moves.
   const handleRequestMeeting = useCallback(
-    (message: string, fromMode: 'platform' | 'mine', fromEmail: string) => {
+    (message: string, fromMode: 'platform' | 'mine' | 'external', fromEmail: string) => {
       if (!requestMeetingUser) return;
       requestMeetingMutation.mutate(
         {
           pathParams: { id: requestMeetingUser.id },
           message,
           actorUserId,
-          fromMode,
-          fromEmail,
+          ...(fromMode === 'external'
+            ? { sentExternally: true, fromMode: 'platform' as const }
+            : { fromMode, fromEmail }),
         },
         {
           onSuccess: () => {
-            toast.success('Meeting request sent', {
-              description: 'The driver was emailed and moved to Meeting Requested.',
-            });
+            toast.success(
+              fromMode === 'external' ? 'Status updated' : 'Meeting request sent',
+              {
+                description:
+                  fromMode === 'external'
+                    ? 'No platform email was sent — the driver was moved to Meeting Requested.'
+                    : 'The driver was emailed and moved to Meeting Requested.',
+              }
+            );
             setRequestMeetingOpen(false);
           },
           onError: (error: any) =>
-            toast.error('Failed to send meeting request', {
+            toast.error('Failed to update meeting request status', {
               description: error?.message ||
-                'The email could not be sent — the driver stays in Pending Approval. Fix the issue and retry.',
+                'The change could not be applied — the driver keeps their current status. Fix the issue and retry.',
             }),
         }
       );
@@ -2180,11 +2189,20 @@ export default function AdminUsersPage() {
                                 <CheckCircle className="w-3.5 h-3.5 mr-1" /> Unsuspend Driver
                               </Button>
                             )}
-                            {/* Driver invited - show Resend Invite */}
+                            {/* Driver invited - Resend Invite + Request
+                                Meeting. The meeting button lets the admin
+                                schedule with a platform send OR record a
+                                personal email ("I emailed them myself")
+                                without leaving INVITED undocumented. */}
                             {!user.disabledAt && user.driver?.status === 'INVITED' && (
-                              <Button size="sm" className="bg-sky-600 hover:bg-sky-700 text-white rounded-lg" onClick={() => openDialog('resend-invite-driver', user)}>
-                                <Send className="w-3.5 h-3.5 mr-1" /> Resend Invite
-                              </Button>
+                              <>
+                                <Button size="sm" className="bg-sky-600 hover:bg-sky-700 text-white rounded-lg" onClick={() => openDialog('resend-invite-driver', user)}>
+                                  <Send className="w-3.5 h-3.5 mr-1" /> Resend Invite
+                                </Button>
+                                <Button size="sm" className="bg-violet-600 hover:bg-violet-700 text-white rounded-lg" onClick={() => { setRequestMeetingUser(user); setRequestMeetingOpen(true); }}>
+                                  <CalendarClock className="w-3.5 h-3.5 mr-1" /> Request Meeting
+                                </Button>
+                              </>
                             )}
                             {/* Admin with pending OR expired invite - show Resend Invite
                                 (resending is the fix for both states) —

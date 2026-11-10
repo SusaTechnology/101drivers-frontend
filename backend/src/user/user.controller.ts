@@ -358,6 +358,7 @@ async requestMeetingDriverFromUser(
     message: body.message,
     fromMode: body.fromMode ?? null,
     fromEmail: body.fromEmail ?? null,
+    sentExternally: body.sentExternally ?? null,
   });
 }
 

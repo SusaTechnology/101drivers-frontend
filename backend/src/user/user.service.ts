@@ -2335,9 +2335,10 @@ async resendInviteDriverFromUser(input: {
 async requestMeetingDriverFromUser(input: {
   userId: string;
   actorUserId?: string | null;
-  message: string;
+  message?: string | null;
   fromMode?: "platform" | "mine" | null;
   fromEmail?: string | null;
+  sentExternally?: boolean | null;
 }) {
   const driver = await this.getUserDriverOrThrow(input.userId);
 
@@ -2347,6 +2348,7 @@ async requestMeetingDriverFromUser(input: {
     message: input.message,
     fromMode: input.fromMode ?? null,
     fromEmail: input.fromEmail ?? null,
+    sentExternally: input.sentExternally ?? null,
   });
 
   // Status change — ping admin stat surfaces (live Users-page cards).

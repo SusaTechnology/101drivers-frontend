@@ -533,9 +533,10 @@ async approveDriver(input: {
 async requestMeetingDriver(input: {
   driverId: string;
   actorUserId?: string | null;
-  message: string;
+  message?: string | null;
   fromMode?: "platform" | "mine" | null;
   fromEmail?: string | null;
+  sentExternally?: boolean | null;
 }): Promise<any> {
   await this.driverApprovalEngine.requestMeetingDriver({
     driverId: input.driverId,
@@ -543,6 +544,7 @@ async requestMeetingDriver(input: {
     message: input.message,
     fromMode: input.fromMode ?? null,
     fromEmail: input.fromEmail ?? null,
+    sentExternally: input.sentExternally ?? null,
   });
 
   return this.domain.findUnique({ id: input.driverId });

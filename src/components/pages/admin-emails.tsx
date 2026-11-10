@@ -54,6 +54,9 @@ interface EmailPayloadMeta {
   fromMode?: 'platform' | 'mine'
   replyTo?: string
   bcc?: string
+  /** Mark-only meeting request: the admin emailed from their own mailbox;
+   *  the platform sent nothing and only recorded the status move. */
+  sentExternally?: boolean
 }
 
 interface EmailRow {
@@ -1116,9 +1119,11 @@ export default function AdminEmailsPage() {
                     {selected.payload.triggeredBy}
                   </p>
                   <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
-                    {selected.payload.fromMode === 'mine'
-                      ? `From scope: admin's address (${selected.payload.replyTo ?? selected.payload.triggeredBy}) as Reply-To`
-                      : 'From scope: platform address (info@101drivers.com)'}
+                    {selected.payload.sentExternally
+                      ? 'Sent externally: the admin emailed the driver from their own mailbox — no platform email went out; this row only records the status move.'
+                      : selected.payload.fromMode === 'mine'
+                        ? `From scope: admin's address (${selected.payload.replyTo ?? selected.payload.triggeredBy}) as Reply-To`
+                        : 'From scope: platform address (info@101drivers.com)'}
                     {selected.payload.bcc
                       ? ` · BCC copy: ${selected.payload.bcc}`
                       : ''}
