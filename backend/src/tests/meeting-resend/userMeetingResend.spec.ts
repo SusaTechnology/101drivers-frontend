@@ -233,11 +233,14 @@ describe("Meeting request resend (real service chain)", () => {
       status: "MEETING_REQUESTED",
     });
 
-    // Exactly ONE email left, to the driver, Reply-To = the admin, BCC =
-    // the admin's tracking copy + the shared platform record address.
+    // Exactly ONE email left, to the driver, Reply-To = the admin FIRST plus
+    // the shared record address (driver replies reach both), BCC = the
+    // admin's tracking copy + the shared platform record address.
     expect(writes.emails).toHaveLength(1);
     expect(writes.emails[0].to).toBe(DRIVER_EMAIL);
-    expect(writes.emails[0].replyTo).toBe(ADMIN_EMAIL);
+    expect(writes.emails[0].replyTo).toBe(
+      `${ADMIN_EMAIL}, info@101drivers.com`
+    );
     expect(writes.emails[0].bcc).toEqual([
       ADMIN_EMAIL,
       "info@101drivers.com",

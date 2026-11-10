@@ -358,9 +358,11 @@ export class DriverApprovalEngine {
     // FROM SCOPE: the mail always LEAVES from the shared platform address
     // (the SMTP account is only authorized for it — an arbitrary personal
     // From would fail SPF/DKIM and land in spam). "mine" sets the chosen
-    // address as Reply-To (replies reach the admin directly) and BCCs them
-    // a tracking copy; "platform" BCCs the acting admin's account email so
-    // there is ALWAYS a copy for whoever clicked the button.
+    // address as Reply-To (replies reach the admin directly — plus the
+    // platform record address, so the shared mailbox sees the whole
+    // conversation) and BCCs them a tracking copy; "platform" BCCs the
+    // acting admin's account email so there is ALWAYS a copy for whoever
+    // clicked the button.
     const fromMode = input.fromMode === "mine" ? "mine" : "platform";
     const requestedFromEmail = input.fromEmail?.trim().toLowerCase() || null;
     const emailShape = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -391,7 +393,19 @@ export class DriverApprovalEngine {
     const actorEmail = actor?.email?.trim().toLowerCase() || null;
     const actorName = actor?.fullName?.trim() || null;
 
-    const replyTo = fromMode === "mine" ? requestedFromEmail : null;
+    const platformRecord = this.mailService.platformFromAddress;
+    // Reply-To decides where a driver's "Reply" button sends the answer. In
+    // mine mode that is the admin's mailbox FIRST, plus the platform record
+    // address so the shared mailbox sees the whole conversation: the driver's
+    // reply arrives in both, and the admin's "Reply All" keeps info@ on the
+    // thread. Platform mode leaves replies at the From address (info@).
+    let replyTo: string | null = null;
+    if (fromMode === "mine" && requestedFromEmail) {
+      replyTo =
+        platformRecord && platformRecord !== requestedFromEmail
+          ? `${requestedFromEmail}, ${platformRecord}`
+          : requestedFromEmail;
+    }
     const bccCandidate =
       fromMode === "mine" ? requestedFromEmail : actorEmail;
     // Two silent copies: the triggering admin (so they can see what went out
@@ -400,7 +414,6 @@ export class DriverApprovalEngine {
     // The recipient's own address is filtered out once toEmail is known.
     const bccSet = new Set<string>();
     if (bccCandidate && bccCandidate.length > 0) bccSet.add(bccCandidate);
-    const platformRecord = this.mailService.platformFromAddress;
     if (platformRecord) bccSet.add(platformRecord);
 
     // Pre-read for a friendly 404 + email presence + the before/after
@@ -581,7 +594,7 @@ export class DriverApprovalEngine {
    *  NotificationEventEngine uses for its generic emails). `signatureName`
    *  and `senderLabel` are set for personal ("from my address") sends:
    *  the signature names the admin and a small footer line tells the
-   *  driver who sent it and that replies go directly to them. */
+   *  driver who sent it and that replies reach them and the team inbox. */
   private wrapMeetingEmailHtml(
     displayName: string,
     message: string,
@@ -615,7 +628,7 @@ export class DriverApprovalEngine {
           ? `
         <p style="color:#666; font-size:12px; margin-top:16px;">Sent by ${escape(
           senderLabel
-        )} on behalf of the 101 Drivers team — replies go directly to them.</p>`
+        )} on behalf of the 101 Drivers team — replies reach them and the team inbox.</p>`
           : ""
       }
       </div>

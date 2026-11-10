@@ -206,7 +206,7 @@ export function RequestMeetingDialog({
               The email always leaves from the shared platform address, and
               info@101drivers.com gets a hidden record copy of every send.{' '}
               {fromMode === 'mine'
-                ? 'Your address is set as Reply-To — driver replies come straight to your mailbox — and you also get a hidden copy for tracking.'
+                ? 'Your address is set as Reply-To — driver replies reach your mailbox AND info@101drivers.com — and you also get a hidden copy for tracking.'
                 : 'Replies go to info@101drivers.com; you still get a hidden copy of every request you send.'}
             </p>
             {!emailOk && (

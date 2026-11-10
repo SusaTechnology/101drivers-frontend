@@ -3341,3 +3341,19 @@ Verification: backend tsc -p tsconfig.build.json --noEmit clean; userMeetingRese
 
 Stage Summary:
 - Deploy backend + FE → every meeting-request email (first send and resend, both From modes) silently BCCs info@101drivers.com as the shared record in addition to the triggering admin's copy; driver replies keep landing in the admin's own mailbox via Reply-To. Optional ops step if the visible From should be a specific admin: add that address as a verified "Send mail as" alias on the SMTP account (Gmail Settings → Accounts → Send mail as) — no code change needed.
+
+---
+Task ID: 69
+Agent: Main Agent
+Task: Driver replies reach BOTH the admin's mailbox and info@ (dual Reply-To) — completes the shared-inbox workflow
+
+Work Log:
+- User asked to confirm the end-to-end workflow: (1) when a driver replies, the admin (who only has their own mailbox) can see it; (2) the admin can write to those drivers again while info@101drivers.com sees it. (1) already worked via Reply-To (Task 66); (2) was half-covered for panel sends (Task 68's shared-record BCC) but the DRIVER'S REPLY still went only to the admin, so info@ never saw the conversation.
+- Fix (DriverApprovalEngine.requestMeetingDriver, mine mode): Reply-To is now a list — the admin's address FIRST plus the platform record address (info@101drivers.com, deduped if identical). Consequences: a driver's "Reply" arrives in the admin's mailbox AND info@; and because the reply lands in both mailboxes addressed to both, the admin's "Reply All" from their own mailbox keeps info@ on the thread with zero manual steps (plain "Reply" drops info@ — documented to the user). Platform mode unchanged: no Reply-To, replies go to the From address (info@ itself). No deliverability impact — Reply-To headers don't affect SPF/DKIM/DMARC.
+- Footer copy updated: "replies go directly to them" → "replies reach them and the team inbox" (accurate with the dual Reply-To). FE RequestMeetingDialog helper copy now states driver replies reach the admin's mailbox AND info@101drivers.com.
+- REPO RESCUE (same task): sandbox recycled again — local master parked on 09828203 (the other session's ancestor commit), backend node_modules wiped, backend/src/upload git-deleted, and the other session's uncommitted Task 30 worklog entry sitting in the working tree. Recovered identically to the Task 66 rescue: entry preserved to /home/z/my-project/task30-other-session-worklog.patch, worklog.md reverted, `git checkout -B master origin/master` (→ 961ea59c with Tasks 60-68), `git checkout -- backend/src/upload`, backend deps reinstalled (--legacy-peer-deps).
+
+Verification: backend tsc -p tsconfig.build.json --noEmit clean; userMeetingResend.spec 5/5 PASS — mine-mode now asserts replyTo === "admin@101drivers.com, info@101drivers.com" and bcc === [admin copy, info@]; platform-mode still asserts replyTo null. FE tsc -p tsconfig.fe-check.json: 0 errors in RequestMeetingDialog.tsx.
+
+Stage Summary:
+- Deploy backend + FE → the full shared-inbox workflow works with no per-email manual steps: driver replies land in the admin's own mailbox (and info@), every panel send is recorded in info@ via BCC, and the admin's "Reply All" keeps info@ in the ongoing thread. If the admin replies from their own mailbox with plain "Reply" (not Reply All), info@ drops off — adding info@ to BCC by habit covers that case.
