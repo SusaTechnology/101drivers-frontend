@@ -89,6 +89,7 @@ import { Route as AdminNotificationPolicyIndexRouteImport } from './routes/admin
 import { Route as AdminMetricsIndexRouteImport } from './routes/admin-metrics/index'
 import { Route as AdminLandingPageSettingsIndexRouteImport } from './routes/admin-landing-page-settings/index'
 import { Route as AdminInsuranceReportingIndexRouteImport } from './routes/admin-insurance-reporting/index'
+import { Route as AdminEmailsIndexRouteImport } from './routes/admin-emails/index'
 import { Route as AdminDisputesIndexRouteImport } from './routes/admin-disputes/index'
 import { Route as AdminDisputeDetailIndexRouteImport } from './routes/admin-dispute-detail/index'
 import { Route as AdminDeliveryPoliciesIndexRouteImport } from './routes/admin-delivery-policies/index'
@@ -563,6 +564,11 @@ const AdminInsuranceReportingIndexRoute =
     path: '/admin-insurance-reporting/',
     getParentRoute: () => rootRouteImport,
   } as any)
+const AdminEmailsIndexRoute = AdminEmailsIndexRouteImport.update({
+  id: '/admin-emails/',
+  path: '/admin-emails/',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AdminDisputesIndexRoute = AdminDisputesIndexRouteImport.update({
   id: '/admin-disputes/',
   path: '/admin-disputes/',
@@ -853,6 +859,7 @@ export interface FileRoutesByFullPath {
   '/admin-delivery-policies/': typeof AdminDeliveryPoliciesIndexRoute
   '/admin-dispute-detail/': typeof AdminDisputeDetailIndexRoute
   '/admin-disputes/': typeof AdminDisputesIndexRoute
+  '/admin-emails/': typeof AdminEmailsIndexRoute
   '/admin-insurance-reporting/': typeof AdminInsuranceReportingIndexRoute
   '/admin-landing-page-settings/': typeof AdminLandingPageSettingsIndexRoute
   '/admin-metrics/': typeof AdminMetricsIndexRoute
@@ -982,6 +989,7 @@ export interface FileRoutesByTo {
   '/admin-delivery-policies': typeof AdminDeliveryPoliciesIndexRoute
   '/admin-dispute-detail': typeof AdminDisputeDetailIndexRoute
   '/admin-disputes': typeof AdminDisputesIndexRoute
+  '/admin-emails': typeof AdminEmailsIndexRoute
   '/admin-insurance-reporting': typeof AdminInsuranceReportingIndexRoute
   '/admin-landing-page-settings': typeof AdminLandingPageSettingsIndexRoute
   '/admin-metrics': typeof AdminMetricsIndexRoute
@@ -1113,6 +1121,7 @@ export interface FileRoutesById {
   '/admin-delivery-policies/': typeof AdminDeliveryPoliciesIndexRoute
   '/admin-dispute-detail/': typeof AdminDisputeDetailIndexRoute
   '/admin-disputes/': typeof AdminDisputesIndexRoute
+  '/admin-emails/': typeof AdminEmailsIndexRoute
   '/admin-insurance-reporting/': typeof AdminInsuranceReportingIndexRoute
   '/admin-landing-page-settings/': typeof AdminLandingPageSettingsIndexRoute
   '/admin-metrics/': typeof AdminMetricsIndexRoute
@@ -1245,6 +1254,7 @@ export interface FileRouteTypes {
     | '/admin-delivery-policies/'
     | '/admin-dispute-detail/'
     | '/admin-disputes/'
+    | '/admin-emails/'
     | '/admin-insurance-reporting/'
     | '/admin-landing-page-settings/'
     | '/admin-metrics/'
@@ -1374,6 +1384,7 @@ export interface FileRouteTypes {
     | '/admin-delivery-policies'
     | '/admin-dispute-detail'
     | '/admin-disputes'
+    | '/admin-emails'
     | '/admin-insurance-reporting'
     | '/admin-landing-page-settings'
     | '/admin-metrics'
@@ -1504,6 +1515,7 @@ export interface FileRouteTypes {
     | '/admin-delivery-policies/'
     | '/admin-dispute-detail/'
     | '/admin-disputes/'
+    | '/admin-emails/'
     | '/admin-insurance-reporting/'
     | '/admin-landing-page-settings/'
     | '/admin-metrics/'
@@ -1614,6 +1626,7 @@ export interface RootRouteChildren {
   AdminDeliveryPoliciesIndexRoute: typeof AdminDeliveryPoliciesIndexRoute
   AdminDisputeDetailIndexRoute: typeof AdminDisputeDetailIndexRoute
   AdminDisputesIndexRoute: typeof AdminDisputesIndexRoute
+  AdminEmailsIndexRoute: typeof AdminEmailsIndexRoute
   AdminInsuranceReportingIndexRoute: typeof AdminInsuranceReportingIndexRoute
   AdminLandingPageSettingsIndexRoute: typeof AdminLandingPageSettingsIndexRoute
   AdminMetricsIndexRoute: typeof AdminMetricsIndexRoute
@@ -2262,6 +2275,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminInsuranceReportingIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/admin-emails/': {
+      id: '/admin-emails/'
+      path: '/admin-emails'
+      fullPath: '/admin-emails/'
+      preLoaderRoute: typeof AdminEmailsIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/admin-disputes/': {
       id: '/admin-disputes/'
       path: '/admin-disputes'
@@ -2677,6 +2697,7 @@ const rootRouteChildren: RootRouteChildren = {
   AdminDeliveryPoliciesIndexRoute: AdminDeliveryPoliciesIndexRoute,
   AdminDisputeDetailIndexRoute: AdminDisputeDetailIndexRoute,
   AdminDisputesIndexRoute: AdminDisputesIndexRoute,
+  AdminEmailsIndexRoute: AdminEmailsIndexRoute,
   AdminInsuranceReportingIndexRoute: AdminInsuranceReportingIndexRoute,
   AdminLandingPageSettingsIndexRoute: AdminLandingPageSettingsIndexRoute,
   AdminMetricsIndexRoute: AdminMetricsIndexRoute,

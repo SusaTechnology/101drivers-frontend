@@ -3165,6 +3165,23 @@ Work Log:
 - npm script "email:audit" added next to the campaign entries.
 - Verification: standalone tsc --noEmit passes (skipLibCheck, commonjs). NOT executed against a live DB — the sandbox has no production DATABASE_URL; the query is a plain findMany against the schema-verified NotificationEvent model (enums EMAIL/SENT/FAILED/QUEUED confirmed, no @@map so table name is "NotificationEvent"). First real run happens on the server.
 - Companion instant check that needs no deploy (psql against prod DB): SELECT count(*) FROM "NotificationEvent" WHERE channel='EMAIL' AND status='SENT' AND "sentAt" >= now() - interval '7 days' AND body LIKE '%techbee.et%';
+---
+Task ID: 59
+Agent: Main Agent
+Task: Admin "Emails Sent" page — visible ledger of every email the system sent, with wrong-domain URL flagging
+
+Work Log:
+- User: "isn't there any page that shows emails sent. we need to have." → no such page existed; the NotificationEvent ledger was API/script-only. Built the page + its admin endpoint.
+- Backend — new adminEmails module (mirrors the hand-written adminDashboard pattern, NOT the generated ACL CRUD style): GET /api/adminEmails, guarded by DefaultAuthGuard + AdminGuard (the hard DB-backed ADMIN role gate — deliberately no ACL resource, so no grants.json change is needed). GET (not POST/search — read-only, cacheable, query params are simple): filters days (default 7, clamp ≤365) / since / until, status (SENT|FAILED|QUEUED), templateCode + recipient q (both insensitive contains), audience all|drivers (drivers = driverId NOT NULL), page/pageSize (clamp 1..100, default 25). Selects the ledger fields incl. body; excludes payload (bulky, not needed on the page). Plain findMany/count on NotificationEvent — no writes, ever: the ledger is engine-authored.
+- Frontend — src/routes/admin-emails/index.tsx (file route + AdminRouteGuard, same shape as admin-audit-logs) + src/components/pages/admin-emails.tsx + navItems entry "Emails Sent" after "Audit Logs". The page mirrors admin-audit-logs conventions (authFetch + VITE_API_URL, lime accent, Card/Badge/Select, dark classes): filter bar (status, recipients all/drivers, window 1/7/30/90 days, recipient search, template search — debounced), table (sent time, status badge green/red/amber, template, recipient, subject), a Links column with one host badge per distinct link host — red ⚠ badge for anything not 101drivers.com/www.101drivers.com (same allow-list as the email:audit script) and the whole row tinted red — and a View dialog with the full body, every link green-checked/⚠-flagged, plus failed-send errorMessage. Pagination prev/next (25/page), "N flagged on this page" header badge, empty + loading + error states in the house style.
+- Admin sees "emails sent this week" with zero SQL now; the email:audit script stays as the CSV/server-side deep audit (same allow-list constant — update both together).
+- Sandbox: no further sync incidents this task; backend node_modules survived from the earlier reinstall.
+- Verification: backend nest build 0 errors; FE vite build clean, routeTree.gen.ts regenerated with /admin-emails (13 refs). No unit tests exist for admin list endpoints (no harness for Prisma-backed controllers without a live DB) — logic is a plain findMany/count against the schema-verified model; first real click happens after deploy.
+
+Stage Summary:
+- Pull + deploy both apps. Admin sidebar → "Emails Sent": filter to Last 7 days + Drivers only → every invite/approval/reminder email with its status and links; any red host badge = a wrong-domain email → re-send that driver. The list is the live version of `npm run email:audit`.
+- The endpoint is read-only and admin-gated; nothing in the notification flow changes.
+
 
 Stage Summary:
 - Pull on the server, then from backend/: `npm run email:audit` (or `-- --since 2026-11-03` to bracket the Nov 3 domain fix). The console prints the host histogram — every host must be 101drivers.com; any ⚠ row is a driver to re-send (tokens stay valid). The CSV lands in backend/ for a spreadsheet review.

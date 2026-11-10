@@ -41,4 +41,5 @@ export const navItems: AdminNavItem[] = [
   { href: '/admin-reports', label: 'Reports' },
   { href: '/admin-config', label: 'Config' },
   { href: '/admin-audit-logs', label: 'Audit Logs' },
+  { href: '/admin-emails', label: 'Emails Sent' },
 ] as AdminNavItem[];

@@ -58,6 +58,7 @@ import { AuthModule } from "./auth/auth.module";
 import { EmailVerificationModule } from "./auth/email-verification/email-verification.module";
 import { UploadModule } from "./upload/upload.module";
 import { AdminDashboardModule } from "./adminDashboard/adminDashboard.module";
+import { AdminEmailsModule } from "./adminEmails/adminEmails.module";
 import { ReportsModule } from "./reports/reports.module";
 import { EmailVerificationTokenModule } from "./emailVerificationToken/emailVerificationToken.module";
 import { SupportRequestModule } from "./supportRequest/supportRequest.module";
@@ -139,6 +140,7 @@ import { GeoModule } from "./geo/geo.module";
     UploadModule,
     ReferralModule,
     AdminDashboardModule,
+    AdminEmailsModule,
     ReportsModule,
     EmailVerificationModule,
     // MailModule supplies the shared MailService for the root
