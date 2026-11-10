@@ -243,14 +243,11 @@ export class UserAdminRequestMeetingDto {
   @IsString()
   actorUserId?: string | null;
 
-  // Optional at the DTO layer because sentExternally=true (mark-only: the
-  // admin already emailed the driver from their own mailbox) needs no
-  // message. The ENGINE still requires it for every real platform send.
-  @swagger.ApiPropertyOptional()
-  @IsOptional()
+  @swagger.ApiProperty({ minLength: 1 })
   @IsString()
+  @IsNotEmpty({ message: "A meeting request message is required" })
   @MaxLength(2000, { message: "Meeting request message must be at most 2000 characters" })
-  message?: string;
+  message!: string;
 
   // WHO the email should represent. The mail always LEAVES from the shared
   // platform address (deliverability: the SMTP account is only authorized
@@ -268,16 +265,6 @@ export class UserAdminRequestMeetingDto {
   @IsString()
   @MaxLength(320)
   fromEmail?: string | null;
-
-  // MARK-ONLY: true = the admin already sent the meeting email from their
-  // OWN mailbox (their personal Sent folder, their own threading). The
-  // platform sends NOTHING — the driver still moves to MEETING_REQUESTED
-  // in the same atomic transaction, with provenance marking the send as
-  // external. fromMode/fromEmail are ignored in this mode.
-  @swagger.ApiPropertyOptional()
-  @IsOptional()
-  @IsBoolean()
-  sentExternally?: boolean;
 }
 
 /**

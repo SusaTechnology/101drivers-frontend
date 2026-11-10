@@ -50,7 +50,7 @@ import {
  */
 export const DEFAULT_MEETING_MESSAGE = `Hi, we've reviewed your driver application and would like to schedule a short meeting to finish your onboarding. Please reply with a few times that work for you this week, and we'll send you a calendar invite.`;
 
-export type MeetingFromMode = 'platform' | 'mine' | 'external';
+export type MeetingFromMode = 'platform' | 'mine';
 
 export interface RequestMeetingDialogProps {
   open: boolean;
@@ -88,14 +88,9 @@ export function RequestMeetingDialog({
   const [fromMode, setFromMode] = React.useState<MeetingFromMode>('mine');
   const [fromEmail, setFromEmail] = React.useState('');
   const trimmed = message.trim();
-  const emailOk = fromMode !== 'mine' || EMAIL_SHAPE.test(fromEmail.trim());
-  // Valid = a usable From address when "mine" is picked; the message is
-  // required for a real platform send but OPTIONAL in mark-only mode
-  // ("external" — the admin already emailed the driver from their mailbox).
-  const valid =
-    trimmed.length <= MAX_MESSAGE_LENGTH &&
-    emailOk &&
-    (fromMode === 'external' || trimmed.length > 0);
+  const emailOk = fromMode === 'platform' || EMAIL_SHAPE.test(fromEmail.trim());
+  // Valid = message present + a usable From address when "mine" is picked.
+  const valid = trimmed.length > 0 && trimmed.length <= MAX_MESSAGE_LENGTH && emailOk;
   const resend = mode === 'resend';
 
   // Reset the composed text and the From scope each time the dialog opens
@@ -194,9 +189,6 @@ export function RequestMeetingDialog({
                 <SelectItem value="platform">
                   Platform — info@101drivers.com
                 </SelectItem>
-                <SelectItem value="external">
-                  I emailed them myself — only update the status
-                </SelectItem>
               </SelectContent>
             </Select>
             {fromMode === 'mine' && (
@@ -211,13 +203,11 @@ export function RequestMeetingDialog({
               />
             )}
             <p className="text-xs text-slate-500 dark:text-slate-400">
-              {fromMode === 'external'
-                ? 'No platform email is sent: the driver just moves to Meeting Requested, and the log records that you sent it from your own mailbox. Remember to BCC info@101drivers.com from your mailbox so the shared inbox keeps the record.'
-                : 'The email always leaves from the shared platform address, and info@101drivers.com gets a hidden record copy of every send. '}
-              {fromMode === 'mine' &&
-                'Your address is set as Reply-To — driver replies reach your mailbox AND info@101drivers.com — and you also get a hidden copy for tracking.'}
-              {fromMode === 'platform' &&
-                'Replies go to info@101drivers.com; you still get a hidden copy of every request you send.'}
+              The email always leaves from the shared platform address, and
+              info@101drivers.com gets a hidden record copy of every send.{' '}
+              {fromMode === 'mine'
+                ? 'Your address is set as Reply-To — driver replies reach your mailbox AND info@101drivers.com — and you also get a hidden copy for tracking.'
+                : 'Replies go to info@101drivers.com; you still get a hidden copy of every request you send.'}
             </p>
             {!emailOk && (
               <p className="text-xs font-bold text-rose-600">
@@ -231,7 +221,7 @@ export function RequestMeetingDialog({
               htmlFor="request-meeting-message"
               className="text-sm font-bold text-slate-700 dark:text-slate-300"
             >
-              {fromMode === 'external' ? 'Note for the log (optional)' : 'Email message'}
+              Email message
             </label>
             <Textarea
               id="request-meeting-message"
@@ -239,23 +229,17 @@ export function RequestMeetingDialog({
               onChange={(e) => setMessage(e.target.value)}
               rows={6}
               maxLength={MAX_MESSAGE_LENGTH}
-              placeholder={
-                fromMode === 'external'
-                  ? 'Optional note about the email you sent from your own mailbox...'
-                  : 'Write the message the driver will receive...'
-              }
+              placeholder="Write the message the driver will receive..."
               className="rounded-xl"
               disabled={pending}
             />
             <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
               <span>
-                {fromMode === 'external'
-                  ? 'Stored in the log only — no email is sent.'
-                  : trimmed.length === 0
-                    ? 'A message is required.'
-                    : trimmed.length > MAX_MESSAGE_LENGTH
-                      ? 'Message is too long.'
-                      : 'Sent as the body of the scheduling email.'}
+                {trimmed.length === 0
+                  ? 'A message is required.'
+                  : trimmed.length > MAX_MESSAGE_LENGTH
+                    ? 'Message is too long.'
+                    : 'Sent as the body of the scheduling email.'}
               </span>
               <span className={trimmed.length > MAX_MESSAGE_LENGTH ? 'text-rose-600 font-bold' : ''}>
                 {trimmed.length}/{MAX_MESSAGE_LENGTH}
@@ -277,17 +261,7 @@ export function RequestMeetingDialog({
               className="rounded-xl bg-sky-600 hover:bg-sky-700 text-white"
               disabled={pending || !valid}
             >
-              {pending
-                ? fromMode === 'external'
-                  ? 'Updating...'
-                  : resend
-                    ? 'Resending...'
-                    : 'Sending...'
-                : fromMode === 'external'
-                  ? 'Update Status'
-                  : resend
-                    ? 'Resend Email'
-                    : 'Send Email'}
+              {pending ? (resend ? 'Resending...' : 'Sending...') : resend ? 'Resend Email' : 'Send Email'}
             </Button>
           </DialogFooter>
         </div>

@@ -224,10 +224,10 @@ describe("Meeting request resend (real service chain)", () => {
     const res = await postMeetingRequest(DRIVER_USER_ID);
     expect([200, 201]).toContain(res.status);
 
-    // The atomic guard accepts ALL resumable statuses (INVITED joins).
+    // The atomic guard accepts BOTH resumable statuses.
     expect(writes.updateMany).toHaveLength(1);
     expect(writes.updateMany[0].where.status).toEqual({
-      in: ["INVITED", "PENDING_APPROVAL", "MEETING_REQUESTED"],
+      in: ["PENDING_APPROVAL", "MEETING_REQUESTED"],
     });
     expect(writes.updateMany[0].data).toEqual({
       status: "MEETING_REQUESTED",
@@ -266,7 +266,7 @@ describe("Meeting request resend (real service chain)", () => {
     expect([200, 201]).toContain(res.status);
     expect(writes.emails).toHaveLength(1);
     expect(writes.updateMany[0].where.status).toEqual({
-      in: ["INVITED", "PENDING_APPROVAL", "MEETING_REQUESTED"],
+      in: ["PENDING_APPROVAL", "MEETING_REQUESTED"],
     });
     expect(writes.notifications[0].data.payload.resend).toBeUndefined();
     expect(writes.audits[0].data.beforeJson.status).toBe("PENDING_APPROVAL");
@@ -279,7 +279,7 @@ describe("Meeting request resend (real service chain)", () => {
     const res = await postMeetingRequest(DRIVER_USER_ID);
     expect(res.status).toBe(400);
     expect(res.body.message).toMatch(
-      /invited, pending-approval, or outstanding-meeting-request/
+      /pending approval or an outstanding meeting request/
     );
     expect(writes.updateMany).toHaveLength(0);
     expect(writes.audits).toHaveLength(0);
@@ -311,50 +311,5 @@ describe("Meeting request resend (real service chain)", () => {
       "info@101drivers.com",
     ]);
     expect(writes.notifications[0].data.payload.resend).toBe(true);
-  });
-
-  it("MARK-ONLY: sentExternally moves an INVITED driver with NO platform email", async () => {
-    rows.driverStatus = "INVITED";
-    rows.updateCount = 1;
-
-    const res = await postMeetingRequest(DRIVER_USER_ID, {
-      fromMode: "platform",
-      sentExternally: true,
-      message: "",
-    });
-    expect([200, 201]).toContain(res.status);
-
-    // The atomic guard accepts INVITED for the mark-only move.
-    expect(writes.updateMany).toHaveLength(1);
-    expect(writes.updateMany[0].where.status).toEqual({
-      in: ["INVITED", "PENDING_APPROVAL", "MEETING_REQUESTED"],
-    });
-    expect(writes.updateMany[0].data).toEqual({
-      status: "MEETING_REQUESTED",
-    });
-
-    // NOTHING left the platform — zero emails, even with SMTP configured.
-    expect(writes.emails).toHaveLength(0);
-
-    // Provenance marks the send as external in BOTH records; the stored
-    // body carries the provenance line (no composed message existed).
-    expect(writes.notifications[0].data.payload.sentExternally).toBe(true);
-    expect(writes.notifications[0].data.body).toContain("sent externally");
-    expect(writes.audits[0].data.beforeJson.status).toBe("INVITED");
-    expect(writes.audits[0].data.afterJson.email.sentExternally).toBe(true);
-    expect(writes.audits[0].data.afterJson.email.replyTo).toBeUndefined();
-  });
-
-  it("INVITED driver: a normal personal send now works too (guard widened)", async () => {
-    rows.driverStatus = "INVITED";
-    rows.updateCount = 1;
-
-    const res = await postMeetingRequest(DRIVER_USER_ID);
-    expect([200, 201]).toContain(res.status);
-    expect(writes.emails).toHaveLength(1);
-    expect(writes.emails[0].replyTo).toBe(
-      `${ADMIN_EMAIL}, info@101drivers.com`
-    );
-    expect(writes.audits[0].data.beforeJson.status).toBe("INVITED");
   });
 });

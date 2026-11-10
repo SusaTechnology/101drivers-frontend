@@ -344,28 +344,26 @@ export class DriverApprovalEngine {
   async requestMeetingDriver(input: {
     driverId: string;
     actorUserId?: string | null;
-    /** Required for a real platform send; optional in mark-only mode. */
-    message?: string | null;
-    /** "mine" = the admin's address as Reply-To + BCC copy; "platform" = plain official send. Ignored when sentExternally. */
+    message: string;
+    /** "mine" = the admin's address as Reply-To + BCC copy; "platform" = plain official send. */
     fromMode?: "platform" | "mine" | null;
     /** The editable admin address used when fromMode is "mine". */
     fromEmail?: string | null;
-    /** MARK-ONLY: the admin already sent the meeting email from their own
-     *  mailbox. The platform sends nothing — the status still moves to
-     *  MEETING_REQUESTED in the same atomic transaction, with provenance
-     *  marking the send as external. */
-    sentExternally?: boolean | null;
   }): Promise<void> {
     const message = (input.message ?? "").trim();
-    const sentExternally = input.sentExternally === true;
-    if (!message && !sentExternally) {
+    if (!message) {
       throw new BadRequestException("A meeting request message is required");
     }
 
-    // MARK-ONLY sends no email at all, so From-scope validation is moot —
-    // force the platform branch (its replyTo/bcc plumbing stays unused).
-    const fromMode: "mine" | "platform" =
-      sentExternally || input.fromMode !== "mine" ? "platform" : "mine";
+    // FROM SCOPE: the mail always LEAVES from the shared platform address
+    // (the SMTP account is only authorized for it — an arbitrary personal
+    // From would fail SPF/DKIM and land in spam). "mine" sets the chosen
+    // address as Reply-To (replies reach the admin directly — plus the
+    // platform record address, so the shared mailbox sees the whole
+    // conversation) and BCCs them a tracking copy; "platform" BCCs the
+    // acting admin's account email so there is ALWAYS a copy for whoever
+    // clicked the button.
+    const fromMode = input.fromMode === "mine" ? "mine" : "platform";
     const requestedFromEmail = input.fromEmail?.trim().toLowerCase() || null;
     const emailShape = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (fromMode === "mine") {
@@ -378,8 +376,7 @@ export class DriverApprovalEngine {
 
     // Fail fast BEFORE opening the transaction when SMTP is not configured
     // — an otherwise-guaranteed rollback with a clearer, actionable error.
-    // Mark-only sends touch no SMTP, so they work even without it.
-    if (!sentExternally && !this.mailService.isConfigured) {
+    if (!this.mailService.isConfigured) {
       throw new BadRequestException(
         "Email sending is not configured on the server (SMTP). Cannot send a meeting request."
       );
@@ -445,18 +442,12 @@ export class DriverApprovalEngine {
     // RESEND: a driver already in MEETING_REQUESTED goes through the exact
     // same flow — same transaction, same audit, one more email row (the
     // first mail may have gone unanswered, bounced, or landed in spam).
-    // INVITED is also accepted (first request or mark-only): the admin may
-    // email a just-invited driver from their own mailbox and record the
-    // funnel move. Anything else (approved, rejected, on hold, suspended)
-    // is still rejected.
+    // Only the `resend` provenance flag differs. Anything else (approved,
+    // rejected, on hold, suspended) is still rejected.
     const resend = driver.status === EnumDriverStatus.MEETING_REQUESTED;
-    if (
-      driver.status !== EnumDriverStatus.PENDING_APPROVAL &&
-      driver.status !== EnumDriverStatus.INVITED &&
-      !resend
-    ) {
+    if (driver.status !== EnumDriverStatus.PENDING_APPROVAL && !resend) {
       throw new BadRequestException(
-        "Only invited, pending-approval, or outstanding-meeting-request drivers can be moved to meeting requested"
+        "Only drivers with pending approval or an outstanding meeting request can be sent a meeting request email"
       );
     }
 
@@ -473,14 +464,6 @@ export class DriverApprovalEngine {
 
     const displayName = driver.user?.fullName || "Driver";
     const subject = "Let's schedule your 101 Drivers onboarding meeting";
-    // The stored email body: for mark-only sends without a typed note, a
-    // provenance line replaces the (absent) composed message so the emails
-    // log reads sensibly.
-    const bodyMessage =
-      message ||
-      (sentExternally
-        ? `Meeting request email sent externally by ${actorName || actorEmail || "an admin"} from their own mailbox; the platform sent nothing.`
-        : "");
     // A personal send signs with the admin's name (falls back to their
     // address); the platform send keeps the plain team signature.
     const signatureName =
@@ -491,7 +474,7 @@ export class DriverApprovalEngine {
     const text = [
       `Hi ${displayName},`,
       "",
-      bodyMessage,
+      message,
       "",
       "Thanks,",
       signatureName,
@@ -499,7 +482,7 @@ export class DriverApprovalEngine {
     ].join("\n");
     const html = this.wrapMeetingEmailHtml(
       displayName,
-      bodyMessage,
+      message,
       fromMode === "mine" ? signatureName : null,
       fromMode === "mine" ? senderLabel : null
     );
@@ -510,17 +493,16 @@ export class DriverApprovalEngine {
     // and roll back while the email was still in flight.
     await this.prisma.$transaction(
       async (tx) => {
-        // 1. ATOMIC status guard: a first request (INVITED or
-        //    PENDING_APPROVAL) or a resend (MEETING_REQUESTED — the status
-        //    is set idempotently) passes at commit time. count=0 → someone
-        //    approved / rejected / held concurrently → abort with zero side
-        //    effects (no duplicate email).
+        // 1. ATOMIC status guard: a first request (PENDING_APPROVAL) or a
+        //    resend (MEETING_REQUESTED — the status is set idempotently)
+        //    passes at commit time. count=0 → someone approved / rejected /
+        //    held concurrently → abort with zero side effects (no duplicate
+        //    email).
         const updated = await tx.driver.updateMany({
           where: {
             id: input.driverId,
             status: {
               in: [
-                EnumDriverStatus.INVITED,
                 EnumDriverStatus.PENDING_APPROVAL,
                 EnumDriverStatus.MEETING_REQUESTED,
               ],
@@ -531,35 +513,29 @@ export class DriverApprovalEngine {
 
         if (updated.count === 0) {
           throw new BadRequestException(
-            "Driver is no longer invited, pending approval, or awaiting a meeting — refresh and try again"
+            "Driver is no longer pending approval or awaiting a meeting — refresh and try again"
           );
         }
 
         // 2. Audit trail — who requested the meeting, when, the exact
         //    message that went out, and the before/after status. The email
         //    block records the From scope the admin picked (mine/platform),
-        //    the Reply-To, and the BCC copy address — replaced by a plain
-        //    sentExternally marker for mark-only sends (no platform email
-        //    exists, so reply/bcc routing would be misleading).
+        //    the Reply-To, and the BCC copy address.
         await tx.adminAuditLog.create({
           data: {
             action: EnumAdminAuditLogAction.DRIVER_MEETING_REQUEST,
             actorUserId: input.actorUserId ?? null,
             actorType: EnumAdminAuditLogActorType.USER,
             driverId: input.driverId,
-            reason: message || "(mark-only: email sent externally by the admin)",
+            reason: message,
             beforeJson: { status: driver.status } as Prisma.JsonObject,
             afterJson: {
               status: EnumDriverStatus.MEETING_REQUESTED,
               email: {
                 fromMode,
                 ...(resend ? { resend: true } : {}),
-                ...(sentExternally
-                  ? { sentExternally: true }
-                  : {
-                      ...(replyTo ? { replyTo } : {}),
-                      ...(bcc ? { bcc } : {}),
-                    }),
+                ...(replyTo ? { replyTo } : {}),
+                ...(bcc ? { bcc } : {}),
                 ...(actorEmail ? { triggeredBy: actorEmail } : {}),
               },
             } as Prisma.JsonObject,
@@ -590,12 +566,8 @@ export class DriverApprovalEngine {
               message,
               fromMode,
               ...(resend ? { resend: true } : {}),
-              ...(sentExternally
-                ? { sentExternally: true }
-                : {
-                    ...(replyTo ? { replyTo } : {}),
-                    ...(bcc ? { bcc } : {}),
-                  }),
+              ...(replyTo ? { replyTo } : {}),
+              ...(bcc ? { bcc } : {}),
               ...(actorEmail ? { triggeredBy: actorEmail } : {}),
               ...(actorName ? { triggeredByName: actorName } : {}),
               ...(input.actorUserId ? { triggeredByUserId: input.actorUserId } : {}),
@@ -604,19 +576,15 @@ export class DriverApprovalEngine {
         });
 
         // 4. THE SEND — deliberately last. Any throw above already
-        //    aborted; any throw here rolls 1–3 back together. Mark-only
-        //    sends skip it entirely: the admin emailed the driver from
-        //    their own mailbox; the platform only records the funnel move.
-        if (!sentExternally) {
-          await this.mailService.sendMail({
-            to: toEmail,
-            subject,
-            text,
-            html,
-            replyTo,
-            bcc,
-          });
-        }
+        //    aborted; any throw here rolls 1–3 back together.
+        await this.mailService.sendMail({
+          to: toEmail,
+          subject,
+          text,
+          html,
+          replyTo,
+          bcc,
+        });
       },
       { maxWait: 10_000, timeout: 60_000 }
     );
