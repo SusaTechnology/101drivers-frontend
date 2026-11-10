@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useRef, type ReactNode } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, keepPreviousData } from '@tanstack/react-query'
 import { authFetch } from '@/lib/tanstack/dataQuery'
 import { useDebouncedValue } from '@/hooks/useDebounce'
 import { cn } from '@/lib/utils'
@@ -88,6 +88,23 @@ interface EmailsStatsResponse {
   totals: { sent: number; failed: number; queued: number; all: number }
   byTemplate: TemplateStat[]
   campaigns: CampaignStat[]
+}
+
+// Friendly names for the template codes admins actually pick; unknown codes
+// fall back to the raw code in the dropdown.
+const TEMPLATE_LABELS: Record<string, string> = {
+  'driver-invited': 'Invites',
+  'driver-approved': 'Driver approval',
+  'dealer-approved': 'Dealer approval',
+  'compliance-approved': 'Compliance approval',
+  'driver-meeting-request': 'Meeting request',
+  'payment-receipt': 'Payment receipt',
+  'payment-failed': 'Payment failure',
+  'support-created': 'Support ticket',
+  'support-replied': 'Support reply',
+  'support-assigned': 'Support assignment',
+  'support-status': 'Support status',
+  'email-verification': 'Email verification',
 }
 
 // Same allow-list as backend/scripts/audit-email-urls.ts — anything else in
@@ -401,31 +418,35 @@ export default function AdminEmailsPage() {
   const [selected, setSelected] = useState<EmailRow | null>(null)
 
   const debouncedSearch = useDebouncedValue(search, 400)
-  const debouncedTemplate = useDebouncedValue(template, 400)
 
+  // A campaign is its own time scope (it ran on one day) — when one is
+  // selected the window param is dropped for BOTH the table and the stats,
+  // so last month's campaign is fully browsable and the cards count that
+  // campaign only (table total == "All emails" card).
   const queryParams = useMemo(() => {
     const params = new URLSearchParams()
-    params.set('days', days)
+    if (campaign === 'all') params.set('days', days)
     if (status !== 'ALL') params.set('status', status)
     if (audience === 'drivers') params.set('audience', 'drivers')
     if (debouncedSearch.trim()) params.set('q', debouncedSearch.trim())
-    if (debouncedTemplate.trim()) params.set('templateCode', debouncedTemplate.trim())
+    if (template.trim()) params.set('templateCode', template.trim())
     if (campaign !== 'all') params.set('campaign', campaign)
     params.set('page', String(page))
     params.set('pageSize', String(pageSize))
     return params.toString()
-  }, [days, status, audience, debouncedSearch, debouncedTemplate, campaign, page])
+  }, [days, status, audience, debouncedSearch, template, campaign, page])
 
-  // Stats share window + audience + recipient search, but stay stable while
-  // the table is drilled down by status/template/campaign — the cards are
-  // the overview, the table is the drill-down.
+  // Stats follow the same scope as the table: window + audience + recipient
+  // search when no campaign is picked, campaign-only when one is — the
+  // cards always agree with the table total.
   const statsParams = useMemo(() => {
     const params = new URLSearchParams()
-    params.set('days', days)
+    if (campaign === 'all') params.set('days', days)
     if (audience === 'drivers') params.set('audience', 'drivers')
     if (debouncedSearch.trim()) params.set('q', debouncedSearch.trim())
+    if (campaign !== 'all') params.set('campaign', campaign)
     return params.toString()
-  }, [days, audience, debouncedSearch])
+  }, [days, audience, debouncedSearch, campaign])
 
   const { data: statsData, isLoading: statsLoading } = useQuery({
     queryKey: ['adminEmailsStats', statsParams],
@@ -434,6 +455,7 @@ export default function AdminEmailsPage() {
         `${import.meta.env.VITE_API_URL}/api/adminEmails/stats?${statsParams}`
       ),
     staleTime: 30000,
+    placeholderData: keepPreviousData,
   })
 
   const {
@@ -449,6 +471,9 @@ export default function AdminEmailsPage() {
         `${import.meta.env.VITE_API_URL}/api/adminEmails?${queryParams}`
       ),
     staleTime: 30000,
+    // Keep the previous page's rows while the next page loads — pagination
+    // must never blank out or drop the filter bar.
+    placeholderData: keepPreviousData,
   })
 
   const items = data?.items ?? []
@@ -458,6 +483,20 @@ export default function AdminEmailsPage() {
   const failedCount = useMemo(
     () => items.filter((row) => row.status === 'FAILED').length,
     [items]
+  )
+
+  // Template dropdown options: the codes actually active in the current
+  // scope (window or selected campaign), busiest first. "(no template)" is
+  // a stats-side label for null codes and can't be filtered on.
+  const codeOptions = useMemo(
+    () =>
+      (statsData?.byTemplate ?? [])
+        .filter((t) => t.templateCode !== '(no template)')
+        .map((t) => ({
+          code: t.templateCode,
+          label: `${TEMPLATE_LABELS[t.templateCode] ?? t.templateCode} · ${t.total}`,
+        })),
+    [statsData]
   )
 
   const resetFilters = () => {
@@ -478,30 +517,6 @@ export default function AdminEmailsPage() {
     template.trim() !== '',
     campaign !== 'all',
   ].filter(Boolean).length
-
-  if (isError) {
-    return (
-      <div className="min-h-screen bg-background-light dark:bg-background-dark">
-        <main className="max-w-[1440px] mx-auto px-6 lg:px-8 py-10 lg:py-14">
-          <Card>
-            <CardContent className="py-12 text-center">
-              <AlertTriangle className="w-10 h-10 mx-auto text-red-500" />
-              <p className="mt-4 text-slate-600 dark:text-slate-400">
-                Failed to load sent emails.
-              </p>
-              <Button
-                onClick={() => refetch()}
-                className="mt-4 bg-lime-500 text-slate-950 hover:bg-lime-600"
-              >
-                <RefreshCw className="w-4 h-4 mr-1.5" />
-                Retry
-              </Button>
-            </CardContent>
-          </Card>
-        </main>
-      </div>
-    )
-  }
 
   return (
     <div className="min-h-screen bg-background-light dark:bg-background-dark">
@@ -700,15 +715,25 @@ export default function AdminEmailsPage() {
               </Select>
             </div>
             <div>
-              <Label className="text-xs text-slate-500">Window</Label>
+              <Label className="text-xs text-slate-500">
+                Window{campaign !== 'all' && ' (campaign overrides)'}
+              </Label>
               <Select
                 value={days}
+                disabled={campaign !== 'all'}
                 onValueChange={(v) => {
                   setDays(v)
                   setPage(1)
                 }}
               >
-                <SelectTrigger className="mt-1">
+                <SelectTrigger
+                  className="mt-1"
+                  title={
+                    campaign !== 'all'
+                      ? 'A campaign is its own time window — clear the campaign filter to use the window'
+                      : undefined
+                  }
+                >
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -732,16 +757,32 @@ export default function AdminEmailsPage() {
               />
             </div>
             <div>
-              <Label className="text-xs text-slate-500">Template contains</Label>
-              <Input
-                value={template}
-                onChange={(e) => {
-                  setTemplate(e.target.value)
+              <Label className="text-xs text-slate-500">Template</Label>
+              <Select
+                value={template === '' ? '__all__' : template}
+                onValueChange={(v) => {
+                  setTemplate(v === '__all__' ? '' : v)
                   setPage(1)
                 }}
-                placeholder="driver-invited"
-                className="mt-1"
-              />
+              >
+                <SelectTrigger className="mt-1">
+                  <SelectValue placeholder="All templates" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__all__">All templates</SelectItem>
+                  {template !== '' &&
+                    !codeOptions.some((o) => o.code === template) && (
+                      <SelectItem value={template}>
+                        {`Filter: ${template}`}
+                      </SelectItem>
+                    )}
+                  {codeOptions.map((o) => (
+                    <SelectItem key={o.code} value={o.code} title={o.code}>
+                      {o.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div>
               <Label className="text-xs text-slate-500">Campaign</Label>
@@ -767,6 +808,21 @@ export default function AdminEmailsPage() {
             </div>
           </CardContent>
         </Card>
+
+        {isError && (
+          <div className="mb-6 flex items-center justify-between rounded-xl border border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-950/30 px-4 py-3">
+            <p className="text-sm text-red-800 dark:text-red-300 flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4 shrink-0" />
+              Failed to load emails
+              {campaign !== 'all' ? ' for this campaign' : ''}. Filters are
+              kept — try again.
+            </p>
+            <Button onClick={() => refetch()} variant="outline" size="sm">
+              <RefreshCw className="w-4 h-4 mr-1.5" />
+              Retry
+            </Button>
+          </div>
+        )}
 
         <Card>
           <CardContent className="p-0">

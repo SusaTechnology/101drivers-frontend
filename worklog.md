@@ -3248,6 +3248,22 @@ Work Log:
 
 Stage Summary:
 - Deploy FE → stat cards now match admin-users: small ERP cards with animated totals and Sent/Failed/Queued chips; they stay on screen with dots while loading/refetching; campaign dropdown reads "Nov 8, 2026 · N sent".
+---
+Task ID: 64
+Agent: Main Agent
+Task: Campaign filter drives stats + window; pagination keeps campaign; Template dropdown
+
+Work Log:
+- User reports: (1) with a campaign picked, stat cards still show whole-window numbers (272 vs the table's 173); (2) the 7-day window fights the campaign ("campaign is one day only") and older campaigns can't be picked at all; (3) clicking Next loses the campaign filter; (4) Template should be a dropdown, not free text.
+- Scope rule change (the core fix): a campaign is now its OWN time scope. Backend list() and stats() both drop the createdAt window when campaign is present (payload path filter replaces it) — last month's campaign is browsable without touching the window. The campaigns SQL in stats() is windowless entirely (LIMIT 20 newest), so every recent campaign is selectable regardless of the visible window. stats() groupBy WHERE gains the campaign payload filter, so per-template counts and totals now reflect the selected campaign → "All emails" card == table total (user's 173 case).
+- FE: statsParams gains campaign (and drops days when campaign selected); queryParams drops days as well; the Window select is disabled with "(campaign overrides)" hint + tooltip while a campaign is active. Both useQuery calls get placeholderData: keepPreviousData — pagination no longer blanks the table/pagination mid-fetch.
+- Next-click filter loss root cause: the list useQuery had no keepPreviousData, and any list error triggered a WHOLE-PAGE isError early-return that replaced the entire UI (filters included) with an error card — exactly "the campaign filter becomes gone". Removed the early return; errors now render an inline red banner above the table (Retry button), filters/dropdown/pagination stay mounted.
+- Template field: Input → Select fed by statsData.byTemplate (codes active in the current scope — window OR selected campaign — busiest first), labels from a re-added TEMPLATE_LABELS map ("Driver approval · 12"); "All templates" sentinel '__all__' (Radix forbids empty values); a synthetic "Filter: <needle>" item appears when a stat card set a contains-needle (e.g. 'approved') that isn't an exact code, so the dropdown never shows a wrong selection. Backend still does contains-matching, unchanged.
+- Verification: FE vite build clean; backend nest build 0 errors. Stat/table parity follows from shared campaign scope + groupStat contains-match semantics (needle group totals == what the filter returns).
+
+Stage Summary:
+- Deploy both → picking a campaign now rescores EVERYTHING to that campaign (cards == table), ignores the day window, works for campaigns older than 7 days (dropdown lists the 20 newest campaigns all-time), and survives pagination. Template is a dropdown of the codes actually in scope. Errors keep the page intact.
+
 
 
 

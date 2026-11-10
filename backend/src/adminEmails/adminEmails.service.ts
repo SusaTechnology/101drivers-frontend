@@ -62,9 +62,21 @@ export class AdminEmailsService {
       Math.max(1, Math.floor(Number(query.pageSize) || DEFAULT_PAGE_SIZE))
     );
 
+    // A campaign is its own time scope (it ran on one day) — when filtering
+    // to one campaign, the days/since/until window is ignored entirely, so
+    // last month's campaign is browsable without touching the window filter.
+    const campaign = query.campaign?.trim() ?? "";
+    const hasCampaign = campaign !== "";
+
     const where = {
       channel: EnumNotificationEventChannel.EMAIL,
-      createdAt: { gte: since, lte: until },
+      ...(hasCampaign
+        ? {
+            // Bulk-campaign emails carry their campaignId in the payload JSON
+            // (stamped by send-invite-approval-emails.ts / queueAndSend).
+            payload: { path: ["campaignId"], equals: campaign },
+          }
+        : { createdAt: { gte: since, lte: until } }),
       ...(query.status &&
       Object.values(EnumNotificationEventStatus).includes(query.status)
         ? { status: query.status }
@@ -77,11 +89,6 @@ export class AdminEmailsService {
         : {}),
       ...(query.audience === EnumAdminEmailsAudience.DRIVERS
         ? { driverId: { not: null } }
-        : {}),
-      // Bulk-campaign emails carry their campaignId in the payload JSON
-      // (stamped by send-invite-approval-emails.ts / queueAndSend).
-      ...(query.campaign?.trim()
-        ? { payload: { path: ["campaignId"], equals: query.campaign.trim() } }
         : {}),
     };
 
@@ -121,9 +128,16 @@ export class AdminEmailsService {
   async stats(query: AdminEmailsListQueryDto): Promise<AdminEmailsStatsResponseDto> {
     const { since, until } = this.resolveWindow(query);
 
+    // Same rule as the list: one campaign selected → the campaign IS the
+    // scope (stats reflect that campaign only, no time window).
+    const campaign = query.campaign?.trim() ?? "";
+    const hasCampaign = campaign !== "";
+
     const where = {
       channel: EnumNotificationEventChannel.EMAIL,
-      createdAt: { gte: since, lte: until },
+      ...(hasCampaign
+        ? { payload: { path: ["campaignId"], equals: campaign } }
+        : { createdAt: { gte: since, lte: until } }),
       ...(query.q?.trim()
         ? { toEmail: { contains: query.q.trim(), mode: "insensitive" as const } }
         : {}),
@@ -157,6 +171,9 @@ export class AdminEmailsService {
       templateMap.set(code, entry);
     }
 
+    // The dropdown source is windowless on purpose — a campaign is its own
+    // time scope, and the 20 most recent campaigns must be selectable no
+    // matter which window the table is showing.
     const campaigns = await this.prisma.$queryRaw<AdminEmailsCampaignStatDto[]>`
       SELECT
         payload->>'campaignId'         AS campaign,
@@ -166,8 +183,6 @@ export class AdminEmailsService {
       FROM "NotificationEvent"
       WHERE "channel" = 'EMAIL'
         AND payload->>'campaignId' IS NOT NULL
-        AND "createdAt" >= ${since}
-        AND "createdAt" <= ${until}
       GROUP BY payload->>'campaignId'
       ORDER BY MAX("createdAt") DESC
       LIMIT ${CAMPAIGN_LIST_LIMIT}
