@@ -14,6 +14,20 @@ import { MailService } from "../../common/mail/mail.service";
 import { ReferralTriggerService } from "../../referral/referral-trigger.service";
 import { randomBytes } from "crypto";
 
+/**
+ * Base host for driver-facing links in invite/approval emails
+ * (onboarding-complete, driver-signin). 101_DOMAIN is the canonical
+ * setting (.env.example + MailService already use it); APP_DOMAIN is the
+ * legacy name — dotenv never overrides a pre-existing shell value, so a
+ * stale exported APP_DOMAIN must not be able to win over 101_DOMAIN.
+ * Bare-host fallback last, trailing slashes stripped for safety.
+ */
+export function driverLinkHost(): string {
+  const raw =
+    process.env["101_DOMAIN"] || process.env.APP_DOMAIN || "101drivers.com";
+  return raw.replace(/^https?:\/\//, "").replace(/\/+$/, "");
+}
+
 @Injectable()
 export class DriverApprovalEngine {
   constructor(
@@ -119,7 +133,7 @@ export class DriverApprovalEngine {
         //   "Good news! You\u2019ve been selected to move forward with your driver application.",
         //   "Please complete your application by visiting the link below:",
         //   "",
-        //   `https://${(process.env.APP_DOMAIN || "101drivers.com").replace(/^https?:\/\//, "")}/driver-onboarding-complete?token=${onboardingToken}`,
+        //   `https://${driverLinkHost()}/driver-onboarding-complete?token=${onboardingToken}`,
         //   "",
         //   "You will need to provide the following:",
         //   "",
@@ -140,7 +154,7 @@ export class DriverApprovalEngine {
           "",
           "Click the button below, or copy this link, to complete your application:",
           "",
-          `https://${(process.env.APP_DOMAIN || "101drivers.com").replace(/^https?:\/\//, "")}/driver-onboarding-complete?token=${onboardingToken}`,
+          `https://${driverLinkHost()}/driver-onboarding-complete?token=${onboardingToken}`,
           "",
           "You\u2019ll need your driver\u2019s license (front and back photos), Social Security number, current residential address, and a selfie for ID verification.",
           "",
@@ -156,7 +170,7 @@ export class DriverApprovalEngine {
           driverId: input.driverId,
           invitedAt: afterDriver ? new Date().toISOString() : null,
           note: input.note ?? null,
-          actionUrl: `https://${(process.env.APP_DOMAIN || "101drivers.com").replace(/^https?:\/\//, "")}/driver-onboarding-complete?token=${onboardingToken}`,
+          actionUrl: `https://${driverLinkHost()}/driver-onboarding-complete?token=${onboardingToken}`,
           actionLabel: "Complete Your Application",
         },
       });
@@ -258,7 +272,7 @@ export class DriverApprovalEngine {
           "You now have access to the 101 Drivers platform.",
           "Log in to your account to start viewing available deliveries:",
           "",
-          `https://${(process.env.APP_DOMAIN || "101drivers.com").replace(/^https?:\/\//, "")}/driver-signin`,
+          `https://${driverLinkHost()}/driver-signin`,
           "",
           input.note ? `Note from our team: ${input.note}` : "",
         ]
@@ -269,7 +283,7 @@ export class DriverApprovalEngine {
           driverId: input.driverId,
           approvedAt: afterDriver?.approvedAt ?? null,
           note: input.note ?? null,
-          actionUrl: `https://${(process.env.APP_DOMAIN || "101drivers.com").replace(/^https?:\/\//, "")}/driver-signin`,
+          actionUrl: `https://${driverLinkHost()}/driver-signin`,
           actionLabel: "Log In to Your Account",
         },
       });
@@ -927,7 +941,7 @@ export class DriverApprovalEngine {
           "This is a reminder to complete your driver application with 101 Drivers.",
           "Click the button below, or copy this link, to finish your onboarding:",
           "",
-          `https://${(process.env.APP_DOMAIN || "101drivers.com").replace(/^https?:\/\//, "")}/driver-onboarding-complete?token=${onboardingToken}`,
+          `https://${driverLinkHost()}/driver-onboarding-complete?token=${onboardingToken}`,
           "",
           "You will need to provide the following:",
           "",
@@ -946,7 +960,7 @@ export class DriverApprovalEngine {
           driverId: input.driverId,
           invitedAt: afterDriver ? new Date().toISOString() : null,
           note: input.note ?? null,
-          actionUrl: `https://${(process.env.APP_DOMAIN || "101drivers.com").replace(/^https?:\/\//, "")}/driver-onboarding-complete?token=${onboardingToken}`,
+          actionUrl: `https://${driverLinkHost()}/driver-onboarding-complete?token=${onboardingToken}`,
           actionLabel: "Complete Your Application",
         },
       });

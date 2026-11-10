@@ -3136,6 +3136,24 @@ Work Log:
 Stage Summary:
 - Pull and retest: open any license/selfie image on the admin user-detail page → Rotate button under the photo; each click turns it 90° clockwise, image stays inside the dialog when rotated upright; closing and reopening (or switching front/back) resets the angle. Same button now appears on every evidence-photo dialog across the app.
 - If ops later wants rotation PERSISTED on the stored file, that is a deliberate v2: canvas re-encode → the same upload endpoint the admin Update Photo path uses → new URL on the driver record + AdminAuditLog row — it rewrites evidence, so it needs the audit trail by design.
+---
+Task ID: 57
+Agent: Main Agent
+Task: Investigate 101drivers.techbee.et links in invite/approval emails + harden the link-host resolution (emails only, per user scope)
+
+Work Log:
+- User: invited drivers receive emails linking to https://101drivers.techbee.et/driver-onboarding-complete?token=… but the domain should be 101drivers.com; user states no env var mentions techbee.et. Scope fixed by user afterwards: ONLY invite/approve emails that include links; do NOT touch Stripe (user: "no stripe url is changed"), cookies/auth.
+- IMPORTANT CORRECTION mid-task: the first diagnosis ("two hardcoded techbee.et fallbacks at engine:922 / campaign script:207, APP_DOMAIN unset") was made against STALE file content served by the sandbox's flaky file-sync — the .git dir and tree reverted to pre-Oct-31 states mid-session (recovered twice via git fetch + reset --hard origin/master). After a verified reset to true origin/master (ce6b1eed) the REAL state is: commit be9572a9 (2026-11-03, "101drivers.com everywhere") already removed every techbee.et fallback from the email paths. All 7 active link sites in driverApproval.engine.ts (143/159 onboarding invite, 261/272 signin approval, 930/949 reminder/resend, incl. actionUrl variants) + the campaign script const already fall back to 101drivers.com.
+- TRUE root cause therefore: any server build deployed before 2026-11-03 still emits techbee.et links (the fallback strings existed 2026-05-13 → 11-03; the campaign script itself was born 10-19 with a techbee fallback and its header docs say it exists partly to re-send correct links). With the user's env (101_DOMAIN/APP_DOMAIN/ROOT_DOMAIN all = https://101drivers.com), a CURRENT build always emits .com. Action for user: deploy/restart the backend on current master, then re-send invites to affected drivers (tokens stay valid; new .com links work).
+- Hardening applied anyway (defense against a missing/stale APP_DOMAIN in any context, e.g. a shell export that dotenv won't override): backend/src/domain/driver/driverApproval.engine.ts gains exported driverLinkHost() — precedence 101_DOMAIN (canonical, matches .env.example + MailService) → APP_DOMAIN (legacy) → bare 101drivers.com — strips scheme + trailing slashes; replaces the inline expression at all 7 sites (incl. the commented historical copy). backend/scripts/send-invite-approval-emails.ts: same precedence for its appDomain const + a startup console.log of the resolved base so a wrong-domain campaign is visible before sending.
+- Side observation (NOT changed, cookie/auth out of scope): user's ROOT_DOMAIN=https://101drivers.com includes the scheme; auth.service.ts:456 uses it raw as a cookie Domain candidate (.${root}) — recommend setting ROOT_DOMAIN=101drivers.com (no scheme) on the server.
+- Sandbox note: sync reverted .git + backend/src/upload/* + worklog + node_modules AGAIN during this task; all recovered (patch of email edits saved to /home/z/my-project/scripts/email-domain-fix.patch before reset — did not apply cleanly against newer files, so edits were re-applied manually on the true HEAD).
+- Verification: npm run build (prisma generate + nest build) clean at final state; driverLinkHost() present ×8 (signature + 6 active + 1 commented); zero techbee.et in code strings (remaining mentions are the script's doc comments describing its purpose).
+
+Stage Summary:
+- Pull and deploy the backend on current master, then re-send invites/approvals to any driver who received a techbee.et link — current code + the user's env can only emit 101drivers.com. The bulk campaign (`npm run email:campaign:dry` first) now logs its resolved link base at startup: "[email-campaign] invite/approval links will use: https://…".
+- Recommend: set ROOT_DOMAIN=101drivers.com (no scheme) in the server env — the cookie code uses the value raw.
+
 
 
 

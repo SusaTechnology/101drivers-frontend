@@ -235,9 +235,19 @@ function loadPreviouslySent(reportPath: string): Set<string> {
 }
 
 // ── Templates: verbatim copies of the system's own emails ─────────────────
-const appDomain = (process.env.APP_DOMAIN || "101drivers.com").replace(
-  /^https?:\/\//,
-  ""
+// Same precedence as driverApproval.engine.driverLinkHost(): 101_DOMAIN is
+// canonical, APP_DOMAIN is the legacy name (dotenv never overrides a stale
+// shell export of it), bare 101drivers.com as last resort. Logged at start
+// so a wrong-domain campaign is visible before any email goes out.
+const appDomain = (
+  process.env["101_DOMAIN"] ||
+  process.env.APP_DOMAIN ||
+  "101drivers.com"
+)
+  .replace(/^https?:\/\//, "")
+  .replace(/\/+$/, "");
+console.log(
+  `[email-campaign] invite/approval links will use: https://${appDomain}`
 );
 
 /** DriverApprovalEngine.inviteDriver — templateCode "driver-invited" */
