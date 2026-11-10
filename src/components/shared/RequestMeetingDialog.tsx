@@ -2,7 +2,7 @@ import * as React from 'react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
-import { getUser } from '@/lib/tanstack/dataQuery';
+import { getUser, setUser, authFetch } from '@/lib/tanstack/dataQuery';
 import {
   Select,
   SelectContent,
@@ -29,6 +29,11 @@ import {
  * if the email fails, the status change rolls back and the error surfaces
  * here — so the dialog copy can promise "email + status move together".
  *
+ * The SAME backend endpoint also serves RESENDS for drivers already in
+ * MEETING_REQUESTED (mode="resend"): the mail goes out again and the
+ * status stays MEETING_REQUESTED. Every send — first or resend — lands as
+ * its own row in the Email & Support Log with who triggered it.
+ *
  * Used by BOTH entry points:
  *   - admin-users.tsx (row action in the Users table)
  *   - admin-user-detail.tsx (action row on the Driver Profile page)
@@ -37,6 +42,7 @@ import {
  *   <RequestMeetingDialog
  *     open={open} onOpenChange={setOpen}
  *     driverName={user.fullName}
+ *     mode="resend"
  *     pending={mutation.isPending}
  *     onConfirm={(message, fromMode, fromEmail) =>
  *       mutation.mutate({ pathParams: { id }, message, fromMode, fromEmail })}
@@ -51,6 +57,9 @@ export interface RequestMeetingDialogProps {
   onOpenChange: (open: boolean) => void;
   /** Driver display name, shown in the description ("Send {name}..."). */
   driverName?: string | null;
+  /** "request" (default) = first send to a Pending-Approval driver;
+   *  "resend" = send again to a Meeting-Requested driver. */
+  mode?: 'request' | 'resend';
   /** Mutation pending state — disables the send button. */
   pending?: boolean;
   /** Called with the composed message + From scope when Send is clicked. */
@@ -66,6 +75,7 @@ export function RequestMeetingDialog({
   open,
   onOpenChange,
   driverName,
+  mode = 'request',
   pending = false,
   onConfirm,
   initialMessage,
@@ -81,15 +91,42 @@ export function RequestMeetingDialog({
   const emailOk = fromMode === 'platform' || EMAIL_SHAPE.test(fromEmail.trim());
   // Valid = message present + a usable From address when "mine" is picked.
   const valid = trimmed.length > 0 && trimmed.length <= MAX_MESSAGE_LENGTH && emailOk;
+  const resend = mode === 'resend';
 
   // Reset the composed text and the From scope each time the dialog opens
   // so a retry starts from the defaults instead of the last attempt.
+  //
+  // PRE-FILL: the logged-in admin's email is the default. Sessions logged
+  // in before the email was persisted client-side (and never re-logged-in
+  // since) have nothing in localStorage — ask GET /api/auth/me once (the
+  // JWT strategy returns the account email) and heal the stored user so
+  // the field is pre-filled AND future opens skip the round-trip.
   React.useEffect(() => {
-    if (open) {
-      setMessage(initialMessage ?? DEFAULT_MEETING_MESSAGE);
-      setFromMode('mine');
-      setFromEmail(getUser()?.email ?? '');
+    if (!open) return;
+    setMessage(initialMessage ?? DEFAULT_MEETING_MESSAGE);
+    setFromMode('mine');
+    const stored = getUser()?.email?.trim();
+    if (stored) {
+      setFromEmail(stored);
+      return;
     }
+    let cancelled = false;
+    authFetch<{ email?: string | null }>(
+      `${import.meta.env.VITE_API_URL}/api/auth/me`
+    )
+      .then((me) => {
+        const email = me?.email?.trim() ?? '';
+        if (!cancelled && email) {
+          setFromEmail(email);
+          setUser({ ...getUser(), email });
+        }
+      })
+      .catch(() => {
+        // Leave the field empty — the admin can type their address.
+      });
+    return () => {
+      cancelled = true;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
@@ -97,20 +134,34 @@ export function RequestMeetingDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="rounded-2xl max-w-lg">
         <DialogHeader>
-          <DialogTitle className="text-xl font-bold">Request Meeting</DialogTitle>
+          <DialogTitle className="text-xl font-bold">
+            {resend ? 'Resend Meeting Request' : 'Request Meeting'}
+          </DialogTitle>
           <DialogDescription>
-            {driverName
-              ? `Send ${driverName} an email to schedule their onboarding meeting. Their status will move to Meeting Requested.`
-              : `Send an email to schedule the onboarding meeting. The driver's status will move to Meeting Requested.`}
+            {resend
+              ? driverName
+                ? `Send ${driverName} the meeting request email again — for example when the first one went unanswered or landed in spam. The driver stays in Meeting Requested.`
+                : `Send the meeting request email again — for example when the first one went unanswered or landed in spam. The driver stays in Meeting Requested.`
+              : driverName
+                ? `Send ${driverName} an email to schedule their onboarding meeting. Their status will move to Meeting Requested.`
+                : `Send an email to schedule the onboarding meeting. The driver's status will move to Meeting Requested.`}
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">
           <div className="p-3 rounded-xl text-sm space-y-1.5 bg-sky-50 dark:bg-sky-900/20 text-sky-700 dark:text-sky-300">
-            <p>
-              The email and the status change happen together: if the email
-              fails to send, nothing changes and you can retry.
-            </p>
+            {resend ? (
+              <p>
+                This sends a brand-new email to the driver; their status stays
+                Meeting Requested. Every send is logged in the Email &amp;
+                Support Log.
+              </p>
+            ) : (
+              <p>
+                The email and the status change happen together: if the email
+                fails to send, nothing changes and you can retry.
+              </p>
+            )}
           </div>
 
           {/* FROM SCOPE — who the email should represent. Everything leaves
@@ -208,7 +259,7 @@ export function RequestMeetingDialog({
               className="rounded-xl bg-sky-600 hover:bg-sky-700 text-white"
               disabled={pending || !valid}
             >
-              {pending ? 'Sending...' : 'Send Email'}
+              {pending ? (resend ? 'Resending...' : 'Sending...') : resend ? 'Resend Email' : 'Send Email'}
             </Button>
           </DialogFooter>
         </div>

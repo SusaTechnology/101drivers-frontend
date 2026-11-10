@@ -1793,6 +1793,10 @@ enum EnumAdminAuditLogAction {
   DeliveryReassign
   DisputeUpdate
   DriverApprove
+  DriverHold
+  DriverMeetingRequest
+  DriverRelease
+  DriverServiceAreaChange
   DriverSuspend
   DriverUnsuspend
   Other
@@ -1800,6 +1804,7 @@ enum EnumAdminAuditLogAction {
   PayoutOverride
   PolicyUpdate
   PricingUpdate
+  ServiceAreaUpdate
   UserDisable
   UserEnable
 }
@@ -1933,6 +1938,8 @@ enum EnumDriverPayoutStatus {
 enum EnumDriverStatus {
   Approved
   Invited
+  MeetingRequested
+  OnHold
   PendingApproval
   Rejected
   Suspended
@@ -1952,6 +1959,10 @@ enum EnumNotificationEventStatus {
 
 enum EnumNotificationEventType {
   AdminCommissionReceived
+  AdminPayoutRunFailed
+  AdminPlatformPayout
+  CustomerReferralCreditApplied
+  CustomerReferralCreditEarned
   DealerApproved
   DealerSignup
   DeliveryAssigned
@@ -1965,10 +1976,12 @@ enum EnumNotificationEventType {
   DriverPayoutFailed
   DriverPayoutInitiated
   DriverPayoutPaid
+  DriverReferralBonusEarned
   DriverSignup
   PaymentAuthorized
   PaymentCaptured
   PaymentFailed
+  PaymentRefunded
   Reminder
   ScheduleChangeDecided
   ScheduleChangeRequested
@@ -1988,6 +2001,7 @@ enum EnumPaymentEventStatus {
   Failed
   Invoiced
   Paid
+  Processing
   Refunded
   Voided
 }
@@ -4328,6 +4342,7 @@ type UserInfo {
   email: String
   fullName: String
   id: String!
+  isSuperAdmin: Boolean
   onboardingCompleted: Boolean
   onboardingToken: String
   profileId: String

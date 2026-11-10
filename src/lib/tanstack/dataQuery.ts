@@ -471,6 +471,10 @@ async function refreshAccessToken(): Promise<string> {
         ...prev,
         id: data.id,
         username: data.username,
+        // The refresh response is a full UserInfo (email included). Merge it
+        // so sessions stored before email was persisted client-side heal
+        // here — the "send from my email" pre-fill depends on it.
+        email: data.email ?? prev?.email ?? null,
         fullName: data.fullName ?? prev?.fullName ?? null,
         profileId: data.profileId ?? prev?.profileId ?? null,
         roles: data.roles,

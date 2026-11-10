@@ -1616,6 +1616,16 @@ export default function AdminUserDetailPage({ userId }: AdminUserDetailPageProps
                       <CheckCircle className="w-4 h-4" />
                       Approve Driver
                     </Button>
+                    {/* Resend — same dialog + same backend endpoint as the
+                        first request; the mail goes out again and the
+                        status stays MEETING_REQUESTED. */}
+                    <Button
+                      onClick={() => setRequestMeetingOpen(true)}
+                      className="inline-flex items-center gap-2 px-6 py-3 rounded-2xl bg-violet-600 text-white hover:opacity-90 transition"
+                    >
+                      <CalendarClock className="w-4 h-4" />
+                      Resend Meeting Request
+                    </Button>
                     <Button
                       onClick={() => openDialog('reject-driver')}
                       variant="destructive"
@@ -3373,11 +3383,14 @@ export default function AdminUserDetailPage({ userId }: AdminUserDetailPageProps
 
       {/* Request Meeting — reusable dialog (shared with the Users table).
           Sends the composed email + MEETING_REQUESTED flip in one backend
-          transaction; a failed email changes nothing. */}
+          transaction; a failed email changes nothing. When the driver is
+          already Meeting Requested the dialog switches to its "Resend"
+          copy and the same endpoint sends the mail again. */}
       <RequestMeetingDialog
         open={requestMeetingOpen}
         onOpenChange={setRequestMeetingOpen}
         driverName={user?.fullName}
+        mode={user?.driver?.status === 'MEETING_REQUESTED' ? 'resend' : 'request'}
         pending={requestMeetingMutation.isPending}
         onConfirm={handleRequestMeeting}
       />

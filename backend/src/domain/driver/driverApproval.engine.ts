@@ -421,9 +421,15 @@ export class DriverApprovalEngine {
       throw new NotFoundException("Driver not found");
     }
 
-    if (driver.status !== EnumDriverStatus.PENDING_APPROVAL) {
+    // RESEND: a driver already in MEETING_REQUESTED goes through the exact
+    // same flow — same transaction, same audit, one more email row (the
+    // first mail may have gone unanswered, bounced, or landed in spam).
+    // Only the `resend` provenance flag differs. Anything else (approved,
+    // rejected, on hold, suspended) is still rejected.
+    const resend = driver.status === EnumDriverStatus.MEETING_REQUESTED;
+    if (driver.status !== EnumDriverStatus.PENDING_APPROVAL && !resend) {
       throw new BadRequestException(
-        "Only drivers with pending approval can be requested for a meeting"
+        "Only drivers with pending approval or an outstanding meeting request can be sent a meeting request email"
       );
     }
 
@@ -465,21 +471,27 @@ export class DriverApprovalEngine {
     // and roll back while the email was still in flight.
     await this.prisma.$transaction(
       async (tx) => {
-        // 1. ATOMIC status guard: only flips when the row is still
-        //    PENDING_APPROVAL at commit time. count=0 → someone approved /
-        //    rejected / already requested concurrently → abort with zero
-        //    side effects (no duplicate email).
+        // 1. ATOMIC status guard: a first request (PENDING_APPROVAL) or a
+        //    resend (MEETING_REQUESTED — the status is set idempotently)
+        //    passes at commit time. count=0 → someone approved / rejected /
+        //    held concurrently → abort with zero side effects (no duplicate
+        //    email).
         const updated = await tx.driver.updateMany({
           where: {
             id: input.driverId,
-            status: EnumDriverStatus.PENDING_APPROVAL,
+            status: {
+              in: [
+                EnumDriverStatus.PENDING_APPROVAL,
+                EnumDriverStatus.MEETING_REQUESTED,
+              ],
+            },
           },
           data: { status: EnumDriverStatus.MEETING_REQUESTED },
         });
 
         if (updated.count === 0) {
           throw new BadRequestException(
-            "Driver is no longer pending approval — refresh and try again"
+            "Driver is no longer pending approval or awaiting a meeting — refresh and try again"
           );
         }
 
@@ -499,6 +511,7 @@ export class DriverApprovalEngine {
               status: EnumDriverStatus.MEETING_REQUESTED,
               email: {
                 fromMode,
+                ...(resend ? { resend: true } : {}),
                 ...(replyTo ? { replyTo } : {}),
                 ...(bcc ? { bcc } : {}),
                 ...(actorEmail ? { triggeredBy: actorEmail } : {}),
@@ -530,6 +543,7 @@ export class DriverApprovalEngine {
               driverId: input.driverId,
               message,
               fromMode,
+              ...(resend ? { resend: true } : {}),
               ...(replyTo ? { replyTo } : {}),
               ...(bcc ? { bcc } : {}),
               ...(actorEmail ? { triggeredBy: actorEmail } : {}),

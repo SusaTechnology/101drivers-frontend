@@ -2289,6 +2289,13 @@ export default function AdminUsersPage() {
                                 <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg" onClick={() => openDialog('approve-driver', user)}>
                                   <CheckCircle className="w-3.5 h-3.5 mr-1" /> Approve
                                 </Button>
+                                {/* Resend — same dialog + same backend
+                                    endpoint as the first request; the mail
+                                    goes out again and the status stays
+                                    MEETING_REQUESTED. */}
+                                <Button size="sm" className="bg-violet-600 hover:bg-violet-700 text-white rounded-lg" onClick={() => { setRequestMeetingUser(user); setRequestMeetingOpen(true); }}>
+                                  <CalendarClock className="w-3.5 h-3.5 mr-1" /> Resend Meeting
+                                </Button>
                                 <Button size="sm" variant="destructive" className="rounded-lg" onClick={() => openDialog('reject-driver', user)}>
                                   <XCircle className="w-3.5 h-3.5 mr-1" /> Reject
                                 </Button>
@@ -2953,11 +2960,14 @@ export default function AdminUsersPage() {
 
       {/* Request Meeting — reusable dialog (shared with the driver profile
           page). Sends the composed email + MEETING_REQUESTED flip in one
-          backend transaction; a failed email changes nothing. */}
+          backend transaction; a failed email changes nothing. When the
+          picked driver is already Meeting Requested the dialog switches to
+          its "Resend" copy and the same endpoint sends the mail again. */}
       <RequestMeetingDialog
         open={requestMeetingOpen}
         onOpenChange={setRequestMeetingOpen}
         driverName={requestMeetingUser?.fullName}
+        mode={requestMeetingUser?.driver?.status === 'MEETING_REQUESTED' ? 'resend' : 'request'}
         pending={requestMeetingMutation.isPending}
         onConfirm={handleRequestMeeting}
       />
