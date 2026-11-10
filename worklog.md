@@ -3233,6 +3233,22 @@ Work Log:
 Stage Summary:
 - Deploy both apps → sidebar shows "Email & Support Log"; cdn.101drivers.com links count as compliant everywhere (page + email:audit + email:proof); failed sends glow red instead of wrong-domain rows; the View dialog shows image attachments inline.
 - Note for the audit scripts: re-running them on the server now yields fewer flagged rows — cdn hosts are expected, techbee.et still flags.
+---
+Task ID: 63
+Agent: Main Agent
+Task: Emails page stat cards rebuilt in admin-users style; loading dots instead of disappearing; campaign labels as readable dates
+
+Work Log:
+- User: stat cards should look like admin-users ("small and UI"); when stats change they must show loading dots on the card instead of completely disappearing; campaign filter label shows "21-11-03:21 UTC" garbage — wants "Oct 20, 2026" style.
+- Inspected admin-users RoleStatCard anatomy and mirrored it exactly: Card rounded-2xl p-2; header button = h-6 w-6 icon chip + text-[10px] font-bold uppercase tracking-widest title + text-xl font-black total + active dot; border-t breakdown row of inline chips (text-xs count + text-[9px] uppercase label, active chip gets its color bg + ring). Wrote local MiniStatCard + AnimatedNumber (count-up, ease-out 600ms, prefers-reduced-motion aware) in admin-emails.tsx — same behavior, no cross-page import.
+- Five cards, one row (grid-cols-1 sm:grid-cols-2 xl:grid-cols-5): All emails (Mail, lime) / Invites (UserPlus, sky) / Approvals (BadgeCheck, emerald) / Meeting requests (CalendarClock, violet) / Support (LifeBuoy, amber). Chips on every card = Sent (emerald) / Failed (rose) / Queued (amber). Card total filters to the group; chip stacks a status filter; clicking an active card/chip clears. Group totals computed with groupStat(): sum byTemplate entries whose templateCode CONTAINS the group needle ('' for all, 'driver-invited', 'approved' → driver+dealer+compliance-approved, 'driver-meeting-request', 'support' → all support-*) — identical match to the backend templateCode contains-filter, so a card's number always equals what clicking it shows.
+- Disappearing cards fixed structurally: the section is ALWAYS mounted; loading renders '…' in totals and '–' in chips (exact admin-users behavior). TEMPLATE_LABELS removed (no longer rendered per-template).
+- Campaign dropdown: campaignLabel(id, lastAt) → toLocaleDateString {month:'short', day:'numeric', year:'numeric'} → "Nov 8, 2026 · 47 sent"; falls back to parsing the campaign-YYYY-MM-DD id, then the raw id. Full id still on title hover.
+- Verification: vite build clean; section unmount bug impossible by construction (no conditional wrapper); card totals cross-checked against groupStat semantics ('' includes-matches all codes).
+
+Stage Summary:
+- Deploy FE → stat cards now match admin-users: small ERP cards with animated totals and Sent/Failed/Queued chips; they stay on screen with dots while loading/refetching; campaign dropdown reads "Nov 8, 2026 · N sent".
+
 
 
 

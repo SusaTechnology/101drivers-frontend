@@ -1,7 +1,8 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect, useRef, type ReactNode } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { authFetch } from '@/lib/tanstack/dataQuery'
 import { useDebouncedValue } from '@/hooks/useDebounce'
+import { cn } from '@/lib/utils'
 import {
   Card,
   CardContent,
@@ -37,6 +38,10 @@ import {
   ChevronRight,
   Eye,
   ExternalLink,
+  UserPlus,
+  BadgeCheck,
+  CalendarClock,
+  LifeBuoy,
 } from 'lucide-react'
 
 // Mirrors backend/src/adminEmails — the NotificationEvent ledger is the
@@ -83,22 +88,6 @@ interface EmailsStatsResponse {
   totals: { sent: number; failed: number; queued: number; all: number }
   byTemplate: TemplateStat[]
   campaigns: CampaignStat[]
-}
-
-// Friendly names for the codes admins actually ask about ("how many invite
-// emails went out"); unknown codes fall back to the raw template code.
-const TEMPLATE_LABELS: Record<string, string> = {
-  'driver-invited': 'Invites',
-  'driver-approved': 'Driver approvals',
-  'dealer-approved': 'Dealer approvals',
-  'driver-meeting-request': 'Meeting requests',
-  'payment-receipt': 'Payment receipts',
-  'payment-failed': 'Payment failures',
-  'support-created': 'Support tickets',
-  'support-replied': 'Support replies',
-  'support-assigned': 'Support assignments',
-  'support-status': 'Support status updates',
-  'email-verification': 'Email verifications',
 }
 
 // Same allow-list as backend/scripts/audit-email-urls.ts — anything else in
@@ -167,12 +156,27 @@ function fmtDate(iso: string | null): string {
 }
 
 // Campaign ids are stamped by the bulk script as
-// "campaign-2026-11-08T14-30-…Z" — show that as a readable date; fall back
-// to a short id tail for anything else.
-function campaignLabel(id: string): string {
-  const m = id.match(/^campaign-(\d{4}-\d{2}-\d{2})T(\d{2})-(\d{2})/)
-  if (m) return `${m[1]} ${m[2]}:${m[3]} UTC`
-  return id.length > 14 ? `…${id.slice(-12)}` : id
+// "campaign-2026-11-08T14-30-…Z" — show a readable date ("Nov 8, 2026"),
+// preferring the campaign's last event time from the stats endpoint.
+function campaignLabel(id: string, lastAt?: string): string {
+  const fmt = (d: Date) =>
+    isNaN(d.getTime())
+      ? null
+      : d.toLocaleDateString(undefined, {
+          month: 'short',
+          day: 'numeric',
+          year: 'numeric',
+        })
+  if (lastAt) {
+    const s = fmt(new Date(lastAt))
+    if (s) return s
+  }
+  const m = id.match(/^campaign-(\d{4})-(\d{2})-(\d{2})/)
+  if (m) {
+    const s = fmt(new Date(`${m[1]}-${m[2]}-${m[3]}T00:00:00Z`))
+    if (s) return s
+  }
+  return id
 }
 
 function StatusBadge({ status }: { status: EmailRow['status'] }) {
@@ -202,6 +206,187 @@ function StatusBadge({ status }: { status: EmailRow['status'] }) {
       {s.label}
     </span>
   )
+}
+
+// ==================== STAT CARDS (admin-users ERP style) ====================
+// Same compact card anatomy as the admin-users page: icon chip + uppercase
+// title + big animated total on ONE row, per-status chips underneath. The
+// section is ALWAYS mounted — while stats load or refetch the numbers show
+// "…"/"–" dots instead of the cards disappearing.
+
+// requestAnimationFrame count-up, ease-out cubic, reduced-motion aware
+// (same behavior as the admin-users AnimatedNumber).
+function AnimatedNumber({ value, className }: { value: number; className?: string }) {
+  const [display, setDisplay] = useState(value)
+  const prevRef = useRef(value)
+  const rafRef = useRef<number | null>(null)
+
+  useEffect(() => {
+    const from = prevRef.current
+    const to = value
+    prevRef.current = value
+    if (from === to) return
+    if (
+      typeof window !== 'undefined' &&
+      window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+    ) {
+      setDisplay(to)
+      return
+    }
+    const duration = 600
+    const start = performance.now()
+    const tick = (now: number) => {
+      const t = Math.min(1, (now - start) / duration)
+      const eased = 1 - Math.pow(1 - t, 3)
+      setDisplay(Math.round(from + (to - from) * eased))
+      if (t < 1) rafRef.current = requestAnimationFrame(tick)
+    }
+    rafRef.current = requestAnimationFrame(tick)
+    return () => {
+      if (rafRef.current !== null) cancelAnimationFrame(rafRef.current)
+    }
+  }, [value])
+
+  return <span className={cn('tabular-nums', className)}>{display}</span>
+}
+
+// Chip palette mirrors the status badges (sent=emerald, failed=rose,
+// queued=amber) using the admin-users chip colors.
+const STATUS_CHIP_STYLES = {
+  SENT: {
+    color: 'text-emerald-600 dark:text-emerald-400',
+    bgColor: 'bg-emerald-50 dark:bg-emerald-900/20',
+    borderColor: 'border-emerald-200 dark:border-emerald-800',
+  },
+  FAILED: {
+    color: 'text-rose-600 dark:text-rose-400',
+    bgColor: 'bg-rose-50 dark:bg-rose-900/20',
+    borderColor: 'border-rose-200 dark:border-rose-800',
+  },
+  QUEUED: {
+    color: 'text-amber-600 dark:text-amber-400',
+    bgColor: 'bg-amber-50 dark:bg-amber-900/20',
+    borderColor: 'border-amber-200 dark:border-amber-800',
+  },
+} as const
+
+type MiniStatChip = {
+  key: string
+  label: string
+  count: number
+  active: boolean
+  onClick: () => void
+  color: string
+  bgColor: string
+  borderColor: string
+}
+
+function MiniStatCard({
+  icon,
+  accent,
+  title,
+  total,
+  loading,
+  active,
+  onHeaderClick,
+  chips,
+}: {
+  icon: ReactNode
+  accent: string
+  title: string
+  total: number
+  loading: boolean
+  active: boolean
+  onHeaderClick: () => void
+  chips: MiniStatChip[]
+}) {
+  return (
+    <Card
+      className={cn(
+        'flex flex-col rounded-2xl p-2 transition-all duration-200',
+        active
+          ? 'border-primary/40 shadow-md ring-2 ring-primary/30'
+          : 'border-slate-200 hover:shadow-sm dark:border-slate-800'
+      )}
+    >
+      <button
+        type="button"
+        onClick={onHeaderClick}
+        title={active ? 'Click to clear this filter' : `Filter table to ${title.toLowerCase()}`}
+        aria-pressed={active}
+        className={cn(
+          'flex w-full cursor-pointer select-none items-center gap-2 rounded-lg px-1.5 py-1 text-left transition-colors duration-200',
+          active
+            ? 'bg-slate-100 dark:bg-slate-800/60'
+            : 'hover:bg-slate-50 dark:hover:bg-slate-900'
+        )}
+      >
+        <div
+          className={cn(
+            'flex h-6 w-6 shrink-0 items-center justify-center rounded-md border',
+            accent
+          )}
+        >
+          {icon}
+        </div>
+        <span className="min-w-0 flex-1 truncate text-[10px] font-bold uppercase leading-tight tracking-widest text-slate-400">
+          {title}
+        </span>
+        <span className="text-xl font-black leading-none text-slate-900 dark:text-white">
+          {loading ? '…' : <AnimatedNumber value={total} />}
+        </span>
+        <span
+          aria-hidden
+          className={cn(
+            'h-1.5 w-1.5 shrink-0 rounded-full transition-opacity duration-200',
+            active ? 'bg-primary opacity-100' : 'opacity-0'
+          )}
+        />
+      </button>
+      <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 border-t border-slate-100 px-1 pt-1 dark:border-slate-800">
+        {chips.map((chip) => (
+          <button
+            key={chip.key}
+            type="button"
+            onClick={chip.onClick}
+            title={chip.active ? 'Click to clear filter' : `Filter to ${chip.label.toLowerCase()}`}
+            aria-pressed={chip.active}
+            className={cn(
+              'inline-flex cursor-pointer select-none items-baseline gap-1 rounded px-1 py-0.5 transition-colors duration-200',
+              chip.active
+                ? `${chip.bgColor} ${chip.borderColor} border ring-1 ring-primary/40`
+                : 'hover:bg-slate-50 dark:hover:bg-slate-900'
+            )}
+          >
+            <span className={cn('text-xs font-bold leading-none', chip.color)}>
+              {loading ? '–' : <AnimatedNumber value={chip.count} />}
+            </span>
+            <span className="whitespace-nowrap text-[9px] font-bold uppercase leading-none tracking-wider text-slate-400">
+              {chip.label}
+            </span>
+          </button>
+        ))}
+      </div>
+    </Card>
+  )
+}
+
+// Sum the byTemplate entries whose templateCode CONTAINS the group needle —
+// the same match the backend's templateCode contains-filter applies, so a
+// card's total always equals what clicking it shows in the table.
+function groupStat(
+  byTemplate: TemplateStat[] | undefined,
+  needle: string
+): { total: number; sent: number; failed: number; queued: number } {
+  const acc = { total: 0, sent: 0, failed: 0, queued: 0 }
+  for (const t of byTemplate ?? []) {
+    if (!t.templateCode.includes(needle)) continue
+    acc.total += t.total
+    acc.sent += t.sent
+    acc.failed += t.failed
+    acc.queued += t.queued
+  }
+  return acc
 }
 
 export default function AdminEmailsPage() {
@@ -242,7 +427,7 @@ export default function AdminEmailsPage() {
     return params.toString()
   }, [days, audience, debouncedSearch])
 
-  const { data: statsData } = useQuery({
+  const { data: statsData, isLoading: statsLoading } = useQuery({
     queryKey: ['adminEmailsStats', statsParams],
     queryFn: () =>
       authFetch<EmailsStatsResponse>(
@@ -355,72 +540,109 @@ export default function AdminEmailsPage() {
           </div>
         </div>
 
-        {statsData && (
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
-            <button
-              type="button"
-              onClick={() => {
-                setTemplate('')
-                setPage(1)
-              }}
-              className={`text-left rounded-xl border p-4 transition-colors ${
-                template === ''
-                  ? 'border-lime-500 bg-lime-50 dark:bg-lime-950/30'
-                  : 'border-slate-200 dark:border-slate-700 hover:border-lime-400'
-              }`}
-            >
-              <p className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">
-                All emails
-              </p>
-              <p className="mt-1 text-2xl font-bold text-slate-900 dark:text-white">
-                {statsData.totals.sent}
-              </p>
-              <p className="text-xs text-slate-500 dark:text-slate-400">
-                {statsData.totals.failed > 0 && (
-                  <span className="text-red-600 dark:text-red-400">
-                    {statsData.totals.failed} failed
-                  </span>
-                )}
-                {statsData.totals.queued > 0 &&
-                  `${statsData.totals.failed > 0 ? ' · ' : ''}${statsData.totals.queued} queued`}
-                {statsData.totals.failed === 0 && statsData.totals.queued === 0 && 'all sent ✓'}
-              </p>
-            </button>
-            {statsData.byTemplate
-              .filter((t) => t.total > 0)
-              .slice(0, 7)
-              .map((t) => (
-                <button
-                  key={t.templateCode}
-                  type="button"
-                  onClick={() => {
-                    setTemplate(t.templateCode)
+        {/* Stat cards — admin-users ERP style, one row of five. ALWAYS
+            mounted: while stats load or refetch the totals show "…" and the
+            chips show "–" instead of the cards disappearing. The big total
+            filters the table to the card's template group (same contains-
+            match the backend applies); the Sent/Failed/Queued chips stack a
+            status filter on top; clicking an active card or chip clears. */}
+        <section className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5">
+          {(
+            [
+              {
+                key: 'all',
+                title: 'All emails',
+                icon: <Mail className="h-3.5 w-3.5" />,
+                accent:
+                  'bg-lime-50 dark:bg-lime-900/20 border-lime-200 dark:border-lime-800 text-lime-600 dark:text-lime-400',
+                needle: '',
+              },
+              {
+                key: 'invites',
+                title: 'Invites',
+                icon: <UserPlus className="h-3.5 w-3.5" />,
+                accent:
+                  'bg-sky-50 dark:bg-sky-900/20 border-sky-200 dark:border-sky-800 text-sky-600 dark:text-sky-400',
+                needle: 'driver-invited',
+              },
+              {
+                key: 'approvals',
+                title: 'Approvals',
+                icon: <BadgeCheck className="h-3.5 w-3.5" />,
+                accent:
+                  'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800 text-emerald-600 dark:text-emerald-400',
+                needle: 'approved',
+              },
+              {
+                key: 'meetings',
+                title: 'Meeting requests',
+                icon: <CalendarClock className="h-3.5 w-3.5" />,
+                accent:
+                  'bg-violet-50 dark:bg-violet-900/20 border-violet-200 dark:border-violet-800 text-violet-600 dark:text-violet-400',
+                needle: 'driver-meeting-request',
+              },
+              {
+                key: 'support',
+                title: 'Support',
+                icon: <LifeBuoy className="h-3.5 w-3.5" />,
+                accent:
+                  'bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800 text-amber-600 dark:text-amber-400',
+                needle: 'support',
+              },
+            ] as const
+          ).map((group) => {
+            const stat =
+              group.needle === ''
+                ? {
+                    total: statsData?.totals.all ?? 0,
+                    sent: statsData?.totals.sent ?? 0,
+                    failed: statsData?.totals.failed ?? 0,
+                    queued: statsData?.totals.queued ?? 0,
+                  }
+                : groupStat(statsData?.byTemplate, group.needle)
+            const templateActive = template === group.needle
+            return (
+              <MiniStatCard
+                key={group.key}
+                icon={group.icon}
+                accent={group.accent}
+                title={group.title}
+                total={stat.total}
+                loading={statsLoading}
+                active={templateActive && status === 'ALL'}
+                onHeaderClick={() => {
+                  if (templateActive && status === 'ALL') {
+                    setTemplate('')
+                    setStatus('ALL')
+                  } else {
+                    setTemplate(group.needle)
+                    setStatus('ALL')
+                  }
+                  setPage(1)
+                }}
+                chips={(['SENT', 'FAILED', 'QUEUED'] as const).map((s) => ({
+                  key: s,
+                  label: s === 'SENT' ? 'Sent' : s === 'FAILED' ? 'Failed' : 'Queued',
+                  count: stat[s.toLowerCase() as 'sent' | 'failed' | 'queued'],
+                  active: templateActive && status === s,
+                  onClick: () => {
+                    if (templateActive && status === s) {
+                      setTemplate('')
+                      setStatus('ALL')
+                    } else {
+                      setTemplate(group.needle)
+                      setStatus(s)
+                    }
                     setPage(1)
-                  }}
-                  title={`${t.templateCode} — ${t.sent} sent, ${t.failed} failed, ${t.queued} queued`}
-                  className={`text-left rounded-xl border p-4 transition-colors ${
-                    template === t.templateCode
-                      ? 'border-lime-500 bg-lime-50 dark:bg-lime-950/30'
-                      : 'border-slate-200 dark:border-slate-700 hover:border-lime-400'
-                  }`}
-                >
-                  <p className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400 truncate">
-                    {TEMPLATE_LABELS[t.templateCode] ?? t.templateCode}
-                  </p>
-                  <p className="mt-1 text-2xl font-bold text-slate-900 dark:text-white">
-                    {t.sent}
-                  </p>
-                  <p className="text-xs text-slate-500 dark:text-slate-400">
-                    {t.failed > 0 && (
-                      <span className="text-red-600 dark:text-red-400">{t.failed} failed</span>
-                    )}
-                    {t.queued > 0 && `${t.failed > 0 ? ' · ' : ''}${t.queued} queued`}
-                    {t.failed === 0 && t.queued === 0 && 'sent ✓'}
-                  </p>
-                </button>
-              ))}
-          </div>
-        )}
+                  },
+                  color: STATUS_CHIP_STYLES[s].color,
+                  bgColor: STATUS_CHIP_STYLES[s].bgColor,
+                  borderColor: STATUS_CHIP_STYLES[s].borderColor,
+                }))}
+              />
+            )
+          })}
+        </section>
 
         <Card className="mb-6">
           <CardHeader className="pb-4">
@@ -537,7 +759,7 @@ export default function AdminEmailsPage() {
                   <SelectItem value="all">All campaigns</SelectItem>
                   {(statsData?.campaigns ?? []).map((c) => (
                     <SelectItem key={c.campaign} value={c.campaign} title={c.campaign}>
-                      {`${campaignLabel(c.campaign)} · ${c.sent} sent`}
+                      {`${campaignLabel(c.campaign, c.lastAt)} · ${c.sent} sent`}
                     </SelectItem>
                   ))}
                 </SelectContent>
