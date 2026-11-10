@@ -1,4 +1,5 @@
 import * as common from "@nestjs/common";
+import { StreamableFile } from "@nestjs/common";
 import * as swagger from "@nestjs/swagger";
 import { plainToInstance } from "class-transformer";
 import { Request } from "express";
@@ -37,6 +38,36 @@ export class AdminEmailsController {
       enableImplicitConversion: true,
     });
     return this.service.stats(query);
+  }
+
+  /**
+   * Full export of EVERY email matching the filters (no pagination) as CSV
+   * or Excel (.xlsx). Same scope as the table: campaign beats the window;
+   * status/template/recipient/audience filters apply; newest first; capped
+   * at 20000 rows. format=csv|xlsx (default csv).
+   */
+  @common.Get("export")
+  @swagger.ApiProduces("text/csv")
+  @swagger.ApiProduces(
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+  )
+  @swagger.ApiOkResponse({ schema: { type: "string", format: "binary" } })
+  async export(
+    @common.Req() request: Request
+  ): Promise<StreamableFile> {
+    const query = plainToInstance(AdminEmailsListQueryDto, request.query, {
+      enableImplicitConversion: true,
+    });
+    const format = request.query.format === "xlsx" ? "xlsx" : "csv";
+    const { buffer, contentType, filename } = await this.service.exportEmails(
+      query,
+      format
+    );
+    return new StreamableFile(buffer, {
+      type: contentType,
+      disposition: `attachment; filename="${filename}"`,
+      length: buffer.length,
+    });
   }
 
   @common.Get()

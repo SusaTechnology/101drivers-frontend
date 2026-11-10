@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useRef, type ReactNode } from 'react'
 import { useQuery, keepPreviousData } from '@tanstack/react-query'
-import { authFetch } from '@/lib/tanstack/dataQuery'
+import { authFetch, authFetchRaw } from '@/lib/tanstack/dataQuery'
 import { useDebouncedValue } from '@/hooks/useDebounce'
 import { cn } from '@/lib/utils'
 import {
@@ -42,6 +42,7 @@ import {
   BadgeCheck,
   CalendarClock,
   LifeBuoy,
+  Download,
 } from 'lucide-react'
 
 // Mirrors backend/src/adminEmails — the NotificationEvent ledger is the
@@ -222,6 +223,18 @@ function StatusBadge({ status }: { status: EmailRow['status'] }) {
       {s.icon}
       {s.label}
     </span>
+  )
+}
+
+// Tiny inline spinner shown next to the Prev/Next buttons while the table
+// (or stats) request is in flight — the rows stay on screen during
+// refetch, this is the "it is loading" cue.
+function FetchSpinner() {
+  return (
+    <span
+      aria-hidden
+      className="h-4 w-4 animate-spin rounded-full border-2 border-slate-300 border-t-lime-500"
+    />
   )
 }
 
@@ -416,6 +429,8 @@ export default function AdminEmailsPage() {
   const [page, setPage] = useState(1)
   const pageSize = 25
   const [selected, setSelected] = useState<EmailRow | null>(null)
+  const [exporting, setExporting] = useState<'csv' | 'xlsx' | null>(null)
+  const [exportError, setExportError] = useState('')
 
   const debouncedSearch = useDebouncedValue(search, 400)
 
@@ -499,6 +514,45 @@ export default function AdminEmailsPage() {
     [statsData]
   )
 
+  // Export uses the EXACT filter set the table is showing (same scope rules,
+  // campaign beats window) minus pagination — the backend exports every
+  // matching row, not just the current page.
+  const exportParams = useMemo(() => {
+    const params = new URLSearchParams(queryParams)
+    params.delete('page')
+    params.delete('pageSize')
+    return params.toString()
+  }, [queryParams])
+
+  const handleExport = async (format: 'csv' | 'xlsx') => {
+    setExporting(format)
+    setExportError('')
+    try {
+      const res = await authFetchRaw(
+        `${import.meta.env.VITE_API_URL}/api/adminEmails/export?format=${format}&${exportParams}`
+      )
+      if (!res.ok) throw new Error(`Export failed (${res.status})`)
+      const blob = await res.blob()
+      const dispo = res.headers.get('Content-Disposition') ?? ''
+      const match = dispo.match(/filename="?([^";]+)"?/)
+      const filename = match
+        ? match[1]
+        : `email-log.${format === 'xlsx' ? 'xlsx' : 'csv'}`
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = filename
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      URL.revokeObjectURL(url)
+    } catch (e) {
+      setExportError(e instanceof Error ? e.message : 'Export failed')
+    } finally {
+      setExporting(null)
+    }
+  }
+
   const resetFilters = () => {
     setStatus('ALL')
     setAudience('all')
@@ -541,6 +595,41 @@ export default function AdminEmailsPage() {
                 {failedCount} failed on this page
               </Badge>
             )}
+            {exportError && (
+              <span className="text-xs text-red-600 dark:text-red-400 max-w-[220px] truncate" title={exportError}>
+                {exportError}
+              </span>
+            )}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => handleExport('csv')}
+              disabled={exporting !== null}
+              className="rounded-xl"
+              title="Download EVERY email matching the current filters (not just this page) as CSV"
+            >
+              {exporting === 'csv' ? (
+                <FetchSpinner />
+              ) : (
+                <Download className="w-4 h-4 mr-1.5" />
+              )}
+              CSV
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => handleExport('xlsx')}
+              disabled={exporting !== null}
+              className="rounded-xl"
+              title="Download EVERY email matching the current filters (not just this page) as Excel"
+            >
+              {exporting === 'xlsx' ? (
+                <FetchSpinner />
+              ) : (
+                <Download className="w-4 h-4 mr-1.5" />
+              )}
+              Excel
+            </Button>
             <Button
               variant="outline"
               onClick={() => refetch()}
@@ -826,6 +915,38 @@ export default function AdminEmailsPage() {
 
         <Card>
           <CardContent className="p-0">
+            {/* Top toolbar — pagination + the loading cue the user asked
+                for: a spinner right where the Prev/Next buttons are, shown
+                on BOTH bars while a table/stats request is in flight. */}
+            <div className="flex items-center justify-between px-4 py-2.5 border-b border-slate-200 dark:border-slate-700">
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                {total > 0
+                  ? `Page ${page} of ${totalPages} · ${total} email${total === 1 ? '' : 's'}${campaign !== 'all' ? ' in campaign' : ''}`
+                  : 'No emails in the current scope'}
+                {isFetching && ' · updating…'}
+              </p>
+              <div className="flex items-center gap-2">
+                {isFetching && <FetchSpinner />}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={page <= 1}
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                  Prev
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={page >= totalPages}
+                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                >
+                  Next
+                  <ChevronRight className="w-4 h-4" />
+                </Button>
+              </div>
+            </div>
             {isLoading ? (
               <div className="py-16 text-center">
                 <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-lime-500 mx-auto" />
@@ -932,7 +1053,8 @@ export default function AdminEmailsPage() {
                   Page {page} of {totalPages} · {total} email
                   {total === 1 ? '' : 's'}
                 </p>
-                <div className="flex gap-2">
+                <div className="flex items-center gap-2">
+                  {isFetching && <FetchSpinner />}
                   <Button
                     variant="outline"
                     size="sm"

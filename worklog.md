@@ -3263,6 +3263,22 @@ Work Log:
 
 Stage Summary:
 - Deploy both → picking a campaign now rescores EVERYTHING to that campaign (cards == table), ignores the day window, works for campaigns older than 7 days (dropdown lists the 20 newest campaigns all-time), and survives pagination. Template is a dropdown of the codes actually in scope. Errors keep the page intact.
+---
+Task ID: 65
+Agent: Main Agent
+Task: Backend CSV/Excel export of the full filtered email log; pagination loading spinners top+bottom
+
+Work Log:
+- User: (1) All-emails card must show the campaign total, not the week total; (2) export as CSV AND Excel, from the backend, covering ALL matching emails — not just the current page; (3) loading indicator near the Prev/Next buttons at the top AND bottom of the table.
+- (1) Verified in code: Task 64 already scopes stats() to the campaign (payload path filter replaces the window) and the FE sends campaign + omits days on the stats call — the All-emails card total comes from those scoped totals, so it equals the table total. The user's remaining symptom is a deployment issue: the fix spans backend + frontend and BOTH must be redeployed. No code change needed.
+- Export endpoint: GET /api/adminEmails/export?format=csv|xlsx (admin-guarded like the rest). Extracted buildListWhere() shared by list() and exportEmails() so the export ALWAYS matches the table's scope: campaign-or-window, status, templateCode contains, recipient q, audience. NO pagination — findMany takes up to MAX_EXPORT_ROWS=20000 newest-first. CSV: UTF-8 BOM + CRLF + RFC-4180 quoting; Excel: real .xlsx via ExcelJS (already a dependency) — bold frozen header row, autoFilter, date cells numFmt yyyy-mm-dd hh:mm:ss, campaignId pulled from payload JSON, body truncated at 32000 chars (Excel cell cap), filename email-log-<stamp>.{csv,xlsx} via StreamableFile Content-Disposition.
+- FE export: CSV + Excel buttons next to Refresh, disabled while an export runs (spinner in the button), authFetchRaw → blob → anchor download (same auth/refresh path as the rest of the page), filename honored from the Content-Disposition header, failures surface as small red error text next to the buttons. exportParams derives from queryParams by stripping page/pageSize — one source of truth, export always equals the visible filters.
+- Loading cues: new top toolbar inside the table card (Page X of Y · N emails · "updating…" + spinner + Prev/Next) and the bottom pagination bar now shows the same spinner next to Prev/Next while isFetching. With keepPreviousData rows stay visible during refetch — the spinners are the "it is loading" signal on filter changes and page flips.
+- Verification: backend build clean; exceljs runtime smoke test (writeBuffer → valid PK zip); vite build clean. Export row cap and scope parity follow from the shared buildListWhere (single code path for list + export).
+
+Stage Summary:
+- Deploy BOTH apps → campaign-selected stats show the campaign total; CSV and Excel buttons export the full filtered set from the backend; spinners appear next to Prev/Next at the top and bottom of the table while data loads.
+
 
 
 
