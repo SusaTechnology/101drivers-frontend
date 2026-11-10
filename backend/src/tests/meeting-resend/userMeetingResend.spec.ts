@@ -140,6 +140,8 @@ const prismaMock = new Proxy(
 
 const mailMock = {
   isConfigured: true,
+  // Mirrors MailService.platformFromAddress — the shared-record BCC target.
+  platformFromAddress: "info@101drivers.com",
   sendMail: async (params: any) => {
     if (writes.failSend) {
       throw new Error("SMTP connection refused (test)");
@@ -231,11 +233,15 @@ describe("Meeting request resend (real service chain)", () => {
       status: "MEETING_REQUESTED",
     });
 
-    // Exactly ONE email left, to the driver, Reply-To + BCC = the admin.
+    // Exactly ONE email left, to the driver, Reply-To = the admin, BCC =
+    // the admin's tracking copy + the shared platform record address.
     expect(writes.emails).toHaveLength(1);
     expect(writes.emails[0].to).toBe(DRIVER_EMAIL);
     expect(writes.emails[0].replyTo).toBe(ADMIN_EMAIL);
-    expect(writes.emails[0].bcc).toBe(ADMIN_EMAIL);
+    expect(writes.emails[0].bcc).toEqual([
+      ADMIN_EMAIL,
+      "info@101drivers.com",
+    ]);
 
     // Provenance: this send is marked as a resend in BOTH records.
     expect(writes.notifications).toHaveLength(1);
@@ -287,7 +293,7 @@ describe("Meeting request resend (real service chain)", () => {
     expect(writes.emails).toHaveLength(0);
   });
 
-  it("PLATFORM MODE: fromEmail is ignored; the BCC copy goes to the admin's account", async () => {
+  it("PLATFORM MODE: fromEmail is ignored; BCC goes to the admin's account + the shared record", async () => {
     rows.driverStatus = "MEETING_REQUESTED";
 
     const res = await postMeetingRequest(DRIVER_USER_ID, {
@@ -297,7 +303,10 @@ describe("Meeting request resend (real service chain)", () => {
     expect([200, 201]).toContain(res.status);
     expect(writes.emails).toHaveLength(1);
     expect(writes.emails[0].replyTo).toBeNull();
-    expect(writes.emails[0].bcc).toBe(ADMIN_EMAIL);
+    expect(writes.emails[0].bcc).toEqual([
+      ADMIN_EMAIL,
+      "info@101drivers.com",
+    ]);
     expect(writes.notifications[0].data.payload.resend).toBe(true);
   });
 });

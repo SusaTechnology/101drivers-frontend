@@ -3324,3 +3324,20 @@ Work Log:
 
 Stage Summary:
 - Deploy BOTH apps → meeting-requested drivers show "Resend Meeting" (users table) / "Resend Meeting Request" (driver profile); the dialog opens with the admin's REAL address pre-filled and editable (heals old sessions via refresh merge + /me fallback), and every resend is a fully audited second email with resend provenance in the log.
+
+---
+Task ID: 68
+Agent: Main Agent
+Task: Shared-record BCC (info@101drivers.com) on every admin meeting-request send
+
+Work Log:
+- User's real requirement clarified: they only have their own mailbox, so the point is (1) driver replies land in THEIR mailbox and (2) info@101drivers.com keeps a shared record of every send. They believed the From header must be their address for replies to come to them — wrong: Reply-To decides that. Reply-To (mine mode) already routes driver replies to the admin's mailbox; the From header never did.
+- Transport facts (unchanged): sends leave via ONE shared SMTP account (SMTP_USER, documented smtp.gmail.com + app password). Gmail only files a send in the AUTHENTICATED account's Sent folder and silently rewrites a From that is neither the authenticated address nor a verified "Send mail as" alias on it — so a literal From=<admin> cannot be done in code and would be rewritten anyway. Sent-tab visibility for each admin would require per-mailbox auth (Workspace OAuth / per-admin app passwords) — declined for now; not needed for the reply requirement.
+- Implemented the BCC half of the request: MailService gains platformFromAddress getter (bare mailbox behind SMTP_FROM / default info@101drivers.com) and sendMail bcc widened to string|string[]|null. DriverApprovalEngine.requestMeetingDriver builds a dedupe'd BCC set: the admin tracking copy (mine: the picked address; platform: the account email) PLUS the platform record address; the recipient's own address is filtered out (filter applied after toEmail is resolved — it lives below the driver pre-read). Audit afterJson.email.bcc and NotificationEvent payload.bcc now carry the array.
+- FE RequestMeetingDialog helper copy updated: states info@101drivers.com gets a hidden record copy of every send; mine-mode line now explicitly says driver replies come straight to the admin's mailbox (the thing the user was unsure about); platform-mode line says replies go to info@.
+- Spec updated: mailMock gains platformFromAddress; both BCC assertions now expect [admin copy, info@101drivers.com].
+
+Verification: backend tsc -p tsconfig.build.json --noEmit clean; userMeetingResend.spec 5/5 PASS (resend, first-request, guard, rollback, platform mode). FE tsc -p tsconfig.fe-check.json: 0 errors in RequestMeetingDialog.tsx (128 pre-existing errors elsewhere, untouched by this change — JSX copy-only edit).
+
+Stage Summary:
+- Deploy backend + FE → every meeting-request email (first send and resend, both From modes) silently BCCs info@101drivers.com as the shared record in addition to the triggering admin's copy; driver replies keep landing in the admin's own mailbox via Reply-To. Optional ops step if the visible From should be a specific admin: add that address as a verified "Send mail as" alias on the SMTP account (Gmail Settings → Accounts → Send mail as) — no code change needed.

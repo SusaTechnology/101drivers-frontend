@@ -82,6 +82,18 @@ export class MailService {
     return this.smtpConfigured;
   }
 
+  /**
+   * The bare mailbox behind the platform From header (info@101drivers.com by
+   * default, or whatever SMTP_FROM holds). Admin-triggered sends add this as
+   * a second BCC so the shared mailbox keeps a record of every email that
+   * left the platform, even though Gmail files the message in the SMTP
+   * account's Sent folder rather than the acting admin's own mailbox.
+   */
+  get platformFromAddress(): string {
+    const match = this.from.match(/<([^>]+)>/);
+    return (match ? match[1] : this.from).trim().toLowerCase();
+  }
+
   async sendMail(params: {
     to: string;
     subject: string;
@@ -90,7 +102,7 @@ export class MailService {
     /** Replies go to this address (admin meeting requests "from my address"). */
     replyTo?: string | null;
     /** Silent copy — used to always BCC the admin who triggered a send. */
-    bcc?: string | null;
+    bcc?: string | string[] | null;
   }): Promise<void> {
     if (!this.smtpConfigured || !this.transporter) {
       this.logger.warn(

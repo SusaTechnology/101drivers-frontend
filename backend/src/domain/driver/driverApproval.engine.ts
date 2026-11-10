@@ -394,9 +394,14 @@ export class DriverApprovalEngine {
     const replyTo = fromMode === "mine" ? requestedFromEmail : null;
     const bccCandidate =
       fromMode === "mine" ? requestedFromEmail : actorEmail;
-    // Never BCC the recipient's own address (harmless paranoia).
-    const bcc =
-      bccCandidate && bccCandidate.length > 0 ? bccCandidate : null;
+    // Two silent copies: the triggering admin (so they can see what went out
+    // from their own inbox) and the platform mailbox (shared record — Gmail
+    // files the send in the SMTP account's Sent folder, not the admin's).
+    // The recipient's own address is filtered out once toEmail is known.
+    const bccSet = new Set<string>();
+    if (bccCandidate && bccCandidate.length > 0) bccSet.add(bccCandidate);
+    const platformRecord = this.mailService.platformFromAddress;
+    if (platformRecord) bccSet.add(platformRecord);
 
     // Pre-read for a friendly 404 + email presence + the before/after
     // audit snapshot. The AUTHORITATIVE status guard is the updateMany
@@ -439,6 +444,10 @@ export class DriverApprovalEngine {
         "This driver has no email address on file — a meeting request email cannot be sent"
       );
     }
+
+    // Never BCC the recipient's own address (harmless paranoia).
+    bccSet.delete(toEmail);
+    const bcc = bccSet.size > 0 ? Array.from(bccSet) : null;
 
     const displayName = driver.user?.fullName || "Driver";
     const subject = "Let's schedule your 101 Drivers onboarding meeting";

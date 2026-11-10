@@ -166,8 +166,9 @@ export function RequestMeetingDialog({
 
           {/* FROM SCOPE — who the email should represent. Everything leaves
               from the shared platform address (only that address is
-              authorized on SMTP); "mine" adds Reply-To + a BCC copy so the
-              driver's replies and a tracking copy land in the admin's
+              authorized on SMTP); every send BCCs info@101drivers.com as the
+              shared record copy, and "mine" adds Reply-To + a BCC copy so
+              the driver's replies and a tracking copy land in the admin's
               inbox, while the recipient still sees the official address. */}
           <div className="space-y-2">
             <label
@@ -202,10 +203,11 @@ export function RequestMeetingDialog({
               />
             )}
             <p className="text-xs text-slate-500 dark:text-slate-400">
-              The email always leaves from the shared platform address.{' '}
+              The email always leaves from the shared platform address, and
+              info@101drivers.com gets a hidden record copy of every send.{' '}
               {fromMode === 'mine'
-                ? 'Your address is set as Reply-To — replies come straight to you — and you get a hidden BCC copy for tracking.'
-                : 'You still get a hidden BCC copy of every request you send.'}
+                ? 'Your address is set as Reply-To — driver replies come straight to your mailbox — and you also get a hidden copy for tracking.'
+                : 'Replies go to info@101drivers.com; you still get a hidden copy of every request you send.'}
             </p>
             {!emailOk && (
               <p className="text-xs font-bold text-rose-600">
