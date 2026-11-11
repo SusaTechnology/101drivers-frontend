@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Camera, X, AlertCircle, RefreshCw } from "lucide-react";
+import { Camera, X, AlertCircle, RefreshCw, Copy, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -50,6 +50,47 @@ type OverlayState = "closed" | "starting" | "live" | "error";
 const MAX_EDGE = 1600;
 const JPEG_QUALITY = 0.85;
 
+// In-app webviews (Facebook, Instagram, WhatsApp, TikTok…) refuse getUserMedia
+// permanently — no site setting can fix them from inside. Detected up front so
+// a doomed prompt is never fired and the driver gets the real-browser escape.
+// Conservative list: real browsers (Safari/Chrome/Firefox on iOS too) must not
+// match.
+const IN_APP_BROWSER_UA =
+  /FBAN|FBAV|FB_IAB|FB4A|Instagram|WhatsApp|LinkedInApp|Snapchat|musical_ly|BytedanceWebApp|TikTok/i;
+const isInAppBrowserUA = () => IN_APP_BROWSER_UA.test(navigator.userAgent);
+
+// Best-effort watch of the browser-level camera permission. Calls onChange
+// with the current state once, then on every change; returns a dispose
+// function, or null where camera can't be watched (older iOS Safari < 16,
+// some webviews) — callers must keep a manual retry path.
+function watchCameraPermission(
+  onChange: (state: "granted" | "denied" | "prompt") => void
+): (() => void) | null {
+  try {
+    if (!navigator.permissions?.query) return null;
+    let disposed = false;
+    let status: PermissionStatus | null = null;
+    navigator.permissions
+      .query({ name: "camera" })
+      .then((s) => {
+        if (disposed) return;
+        status = s;
+        const read = () => onChange(s.state as "granted" | "denied" | "prompt");
+        read();
+        s.onchange = read;
+      })
+      .catch(() => {
+        // Unsupported permission name (older Safari) — manual path stays.
+      });
+    return () => {
+      disposed = true;
+      if (status) status.onchange = null;
+    };
+  } catch {
+    return null;
+  }
+}
+
 export function LivePhotoCapture({
   kind,
   facing,
@@ -69,6 +110,11 @@ export function LivePhotoCapture({
   // …) — shown as a small technical line so support can tell the failure
   // modes apart ("driver allowed it but still blocked" reports).
   const [errName, setErrName] = useState<string | null>(null);
+  // Webview escape: the error is "you're inside another app's browser" —
+  // offer the Copy-link action in the error panel.
+  const [webviewEscape, setWebviewEscape] = useState(false);
+  // Feedback for the Copy-link tap.
+  const [linkCopied, setLinkCopied] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
 
@@ -83,6 +129,8 @@ export function LivePhotoCapture({
   const openCamera = useCallback(async () => {
     if (disabled || uploading) return;
     setErrName(null);
+    setWebviewEscape(false);
+    setLinkCopied(false);
     if (!window.isSecureContext) {
       setErrorMsg(
         "The camera needs a secure connection. Please open this page using https and try again."
@@ -93,6 +141,17 @@ export function LivePhotoCapture({
     if (!navigator.mediaDevices?.getUserMedia) {
       setErrorMsg(
         "This browser cannot open the camera. Please take this photo on your phone."
+      );
+      setOverlay("error");
+      return;
+    }
+    // In-app webviews refuse the camera no matter what the driver allows —
+    // never fire a doomed prompt. Point at the real browser with a one-tap
+    // link copy instead.
+    if (isInAppBrowserUA()) {
+      setWebviewEscape(true);
+      setErrorMsg(
+        "You opened this page inside another app's built-in browser (Facebook, Instagram, WhatsApp…). Those never allow the camera — no setting can change it from in there. Open this page in Safari (iPhone) or Chrome (Android): tap the ⋯ or ••• menu and choose \"Open in Safari / Chrome\", or copy the link below and paste it into the real browser."
       );
       setOverlay("error");
       return;
@@ -137,7 +196,8 @@ export function LivePhotoCapture({
             "block the camera even when allowed; (2) allow camera for this site in the " +
             "browser settings (iPhone: Settings → Safari → Camera → Allow); " +
             "(3) if you added this app to your home screen, delete and re-add it, or " +
-            "open the site in Safari. Then tap Try again."
+            "open the site in Safari. Once the setting says Allow, the camera opens " +
+            "here by itself — no other tap needed."
         );
       } else if (name === "NotReadableError") {
         setErrorMsg(
@@ -194,6 +254,57 @@ export function LivePhotoCapture({
     };
   }, [overlay]);
 
+  // One-tap escape for in-app webviews: hand the driver the URL so they can
+  // finish in the real browser (the OS forbids a page from auto-leaving the
+  // webview, so copy + paste is the shortest honest path).
+  const copyPageLink = useCallback(async () => {
+    const url = window.location.href;
+    try {
+      await navigator.clipboard.writeText(url);
+    } catch {
+      // Clipboard API may be blocked inside webviews — execCommand fallback.
+      const ta = document.createElement("textarea");
+      ta.value = url;
+      ta.style.position = "fixed";
+      ta.style.opacity = "0";
+      document.body.appendChild(ta);
+      ta.select();
+      try {
+        document.execCommand("copy");
+      } catch {
+        // Even copy can be blocked — the menu path in the message remains.
+      }
+      ta.remove();
+    }
+    setLinkCopied(true);
+  }, []);
+
+  // "Once allowed, the system should know": while an error panel is up, watch
+  // the browser's camera permission. The moment the driver flips it to Allow
+  // (browser site settings / the aA menu) and comes back, the camera re-opens
+  // BY ITSELF — no "Try again" tap. Only a state CHANGE to granted triggers
+  // this: an already-granted first read while an error is showing would loop
+  // against a busy camera. Where the Permissions API can't watch camera
+  // (older iOS Safari, some webviews) nothing fires and the manual retry
+  // button remains.
+  useEffect(() => {
+    if (overlay !== "error") return;
+    let prev: "granted" | "denied" | "prompt" | null = null;
+    const stop = watchCameraPermission((state) => {
+      const becameGranted =
+        prev !== null && prev !== "granted" && state === "granted";
+      prev = state;
+      if (becameGranted) {
+        setErrorMsg(null);
+        setErrName(null);
+        setWebviewEscape(false);
+        setLinkCopied(false);
+        openCamera();
+      }
+    });
+    return () => stop?.();
+  }, [overlay, openCamera]);
+
   const closeCamera = useCallback(() => {
     stopStream();
     setOverlay("closed");
@@ -228,6 +339,23 @@ export function LivePhotoCapture({
   }, [kind, onCapture, stopStream]);
 
   const triggerDisabled = disabled || uploading;
+
+  // Shown in the error panel only when the webview escape is relevant.
+  const copyLinkAction = (
+    <Button type="button" variant="outline" onClick={copyPageLink} className="rounded-xl">
+      {linkCopied ? (
+        <>
+          <Check className="w-4 h-4 mr-2" />
+          Link copied — open it in Safari / Chrome
+        </>
+      ) : (
+        <>
+          <Copy className="w-4 h-4 mr-2" />
+          Copy link for Safari / Chrome
+        </>
+      )}
+    </Button>
+  );
 
   // ── Preview state (parent owns the image) ──
   if (previewUrl) {
@@ -307,6 +435,7 @@ export function LivePhotoCapture({
           overlay={overlay}
           errorMsg={errorMsg}
           errName={errName}
+          errorAction={webviewEscape ? copyLinkAction : undefined}
           hint={hint}
           mirrored={facing === "user"}
           videoRef={videoRef}
@@ -335,6 +464,7 @@ export function LivePhotoCapture({
           overlay={overlay}
           errorMsg={errorMsg}
           errName={errName}
+          errorAction={webviewEscape ? copyLinkAction : undefined}
           hint={hint}
           mirrored={facing === "user"}
           videoRef={videoRef}
@@ -365,6 +495,7 @@ export function LivePhotoCapture({
         overlay={overlay}
         errorMsg={errorMsg}
         errName={errName}
+        errorAction={webviewEscape ? copyLinkAction : undefined}
         hint={hint}
         mirrored={facing === "user"}
         videoRef={videoRef}
@@ -383,6 +514,8 @@ interface CameraOverlayProps {
   errorMsg: string | null;
   /** DOMException name behind errorMsg (for the technical detail line). */
   errName?: string | null;
+  /** Extra action under the error buttons (webview Copy-link escape). */
+  errorAction?: React.ReactNode;
   hint: string;
   mirrored: boolean;
   videoRef: React.RefObject<HTMLVideoElement | null>;
@@ -395,6 +528,7 @@ function CameraOverlay({
   overlay,
   errorMsg,
   errName,
+  errorAction,
   hint,
   mirrored,
   videoRef,
@@ -438,6 +572,7 @@ function CameraOverlay({
               Close
             </Button>
           </div>
+          {errorAction}
         </div>
       ) : overlay === "starting" ? (
         <div className="flex-1 flex flex-col items-center justify-center gap-3">

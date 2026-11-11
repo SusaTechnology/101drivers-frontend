@@ -3385,3 +3385,17 @@ Verification: FE tsc — zero errors in LivePhotoCapture.tsx (project total 130,
 
 Stage Summary:
 - Drivers who open onboarding links from in-app browsers now get copy that tells them exactly why the camera won't start and how to fix it; genuinely busy cameras self-heal via one retry; the iPhone preview can no longer strand a driver on a black screen (play ladder + muted property); the X and shutter respect the notch/home-indicator safe areas. Deploy FE; if a driver still reports "blocked", the technical-detail line will name the exact failure mode.
+
+---
+Task ID: 73
+Agent: Main Agent
+Task: "Once allowed, the system should know" — camera permission auto-resume + in-app-webview escape
+
+Work Log:
+- Owner direction: we must not leave drivers to struggle with browser settings — once permission is granted, the app should react on its own. The OS-owned first prompt can never be removed, but everything AFTER it can be ours.
+- Auto-resume watcher (LivePhotoCapture): while the error panel is up, the component now watches the browser's camera permission (Permissions API, best-effort — Safari 16+/Chrome; older iOS keeps the manual Try again). The moment the driver flips the setting to Allow and returns, the capture re-opens BY ITSELF — no "Try again" tap. Only a state CHANGE to granted triggers it; an already-granted first read never fires (it would loop against a busy camera). The blocked-state copy now promises exactly this ("the camera opens here by itself").
+- In-app webview pre-check: Facebook/Instagram/WhatsApp/TikTok (UA markers) refuse getUserMedia permanently — the old flow fired a doomed prompt there. Now detected BEFORE requesting: no prompt is fired; the error explains it and offers a one-tap "Copy link for Safari / Chrome" action (clipboard API with execCommand fallback) so the driver can finish in the real browser. The OS forbids auto-leaving a webview, so copy-link is the shortest honest path.
+- Verification: FE tsc zero errors in the file (baseline untouched); vite build green (19.4s, sw stamped 20261111111358). Note: a first build ran from the recycled sandbox's reset cwd (/home/z/my-project) and failed with UNRESOLVED_ENTRY — re-run from /home/z/my-project/repo, clean.
+
+Stage Summary:
+- The allow-then-stuck gap is closed: allow in settings → camera resumes automatically; webview users are told up front and get a one-tap link copy instead of a dead prompt; busy cameras already self-healed in Task 72. Deploy FE. Remaining user actions are only what the OS physically owns: the first-ever Allow popup, and leaving an in-app browser (copy-link provided).
