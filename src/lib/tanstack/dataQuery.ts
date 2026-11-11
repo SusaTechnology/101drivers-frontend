@@ -42,6 +42,7 @@ let currentUser: {
   fullName?: string | null;
   profileId: string | null;
   roles: string[];
+  email?: string | null;
   // Approval status for customers and drivers
   customerApprovalStatus?: 'PENDING' | 'APPROVED' | 'REJECTED' | 'SUSPENDED';
   driverStatus?: 'WAITLISTED' | 'INVITED' | 'PENDING' | 'PENDING_APPROVAL' | 'MEETING_REQUESTED' | 'APPROVED' | 'SUSPENDED' | 'REJECTED' | 'ON_HOLD';
@@ -54,6 +55,10 @@ let currentUser: {
   // refresh response; gates the super-admin actions on the Users page.
   // The server re-verifies on every request — this only drives the UI.
   isSuperAdmin?: boolean;
+  // Better Auth session marker (drivers signed in via Google/Microsoft/
+  // Apple/Yahoo). Routed to the ba-session bridge instead of the legacy
+  // JWT refresh flow. See src/lib/betterAuth/ba-session.ts.
+  authSystem?: 'better-auth';
 } | null = null;
 
 export function getAccessToken(): string | null {
@@ -124,6 +129,29 @@ export function getLastKnownRoles(): string[] {
 // Check if user is currently authenticated
 export function isAuthenticated(): boolean {
   return !!(getAccessToken() && getUser());
+}
+
+// ==================== BETTER AUTH BRIDGE (drivers) ====================
+// Registered by src/lib/betterAuth/ba-session.ts on module load. Nullable by
+// design: with no bridge (or a non-Better-Auth session) every path below
+// behaves exactly as before — zero behavior change for legacy JWT users.
+//   isSession()    → is the current cache a Better Auth session?
+//   refresh()      → re-sync the Better Auth session into the cache (and
+//                    return the sentinel access token) instead of calling
+//                    the legacy /auth/refresh-token endpoint, which would
+//                    401 and tear the session down.
+//   sessionToken() → the in-memory session token for the Authorization
+//                    header on browsers that block the session cookie.
+interface BetterAuthBridge {
+  isSession: () => boolean;
+  refresh: () => Promise<string>;
+  sessionToken: () => string | null;
+}
+
+let betterAuthBridge: BetterAuthBridge | null = null;
+
+export function registerBetterAuthBridge(bridge: BetterAuthBridge): void {
+  betterAuthBridge = bridge;
 }
 
 // ==================== PROACTIVE TOKEN REFRESH ====================
@@ -299,13 +327,20 @@ async function baseFetch<T>(
   if (requiresAuth) {
     const token = await ensureAuth();
     if (token) {
+      // Better Auth sessions carry the REAL session token in memory (the
+      // ba-session bridge) — prefer it over the sentinel so requests still
+      // authenticate on browsers that block the session cookie.
+      const effectiveToken =
+        betterAuthBridge?.isSession()
+          ? betterAuthBridge.sessionToken() ?? token
+          : token;
       if (Array.isArray(headers)) {
-        headers.push(["Authorization", `Bearer ${token}`]);
+        headers.push(["Authorization", `Bearer ${effectiveToken}`]);
       } else if (headers instanceof Headers) {
-        headers.set("Authorization", `Bearer ${token}`);
+        headers.set("Authorization", `Bearer ${effectiveToken}`);
       } else {
         // @ts-ignore
-        headers.Authorization = `Bearer ${token}`;
+        headers.Authorization = `Bearer ${effectiveToken}`;
       }
     }
   }
@@ -314,8 +349,13 @@ async function baseFetch<T>(
     ...options,
     headers,
     // Include cookies for auth endpoints (login, refresh-token, logout)
-    // These endpoints need to set/read the httpOnly refresh token cookie
-    credentials: url.includes('/auth/') ? "include" : "omit" as RequestCredentials,
+    // These endpoints need to set/read the httpOnly refresh token cookie.
+    // Better Auth sessions include cookies on EVERY call — the hybrid guard
+    // reads the HTTP-only session cookie on all protected endpoints.
+    credentials:
+      url.includes('/auth/') || betterAuthBridge?.isSession()
+        ? "include"
+        : "omit" as RequestCredentials,
   };
 
   try {
@@ -338,9 +378,14 @@ async function baseFetch<T>(
     if (response.status === 401 && !skipTokenRefresh) {
       const newToken = await refreshShared();
 
-      // Retry with new token
+      // Retry with new token — for Better Auth sessions the bridge refresh
+      // re-captures the in-memory session token; use it over the sentinel.
+      const retryToken =
+        betterAuthBridge?.isSession()
+          ? betterAuthBridge.sessionToken() ?? newToken
+          : newToken;
       //@ts-ignore
-      headers.Authorization = `Bearer ${newToken}`;
+      headers.Authorization = `Bearer ${retryToken}`;
       const retryResponse = isFormData
         ? await fetch(url, { ...finalOptions, headers })
         : await fetchWithTimeout(url, { ...finalOptions, headers });
@@ -376,6 +421,12 @@ async function baseFetch<T>(
 // ==================== REFRESH TOKEN ====================
 // Refresh token function – will be implemented when backend provides refresh token
 async function refreshAccessToken(): Promise<string> {
+  // Better Auth sessions (drivers): re-sync via the bridge instead of the
+  // legacy refresh-token endpoint (no legacy refresh cookie exists for
+  // these users — calling it would 401 and tear the session down).
+  if (betterAuthBridge?.isSession()) {
+    return betterAuthBridge.refresh();
+  }
   // Rate-limit refresh NETWORK calls. A refresh attempt ran recently if we're
   // inside the cooldown window — but that is only a reason to fail the caller
   // when the last attempt FAILED (dead refresh credential: don't hammer the

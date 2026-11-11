@@ -35,6 +35,7 @@ import {
 import { setAccessToken, setRefreshToken, setUser, startSessionKeepAlive } from "@/lib/tanstack/dataQuery";
 import { toast } from "sonner";
 import { useDataMutation } from "@/lib/tanstack/dataQuery";
+import { SocialAuthButtons } from "@/components/auth/SocialAuthButtons";
 
 function CustomCard({
   className,
@@ -571,6 +572,12 @@ export function DealerSignIn({
                     </>
                   )}
                 </Button>
+
+                {/* Better Auth social sign-in — drivers only. Only configured
+                    providers render (secret-free list from the backend). */}
+                {isDriver && (
+                  <SocialAuthButtons callbackURL="/auth/social-callback" />
+                )}
 
                 <div className="pt-3 border-t border-slate-100 dark:border-slate-800 space-y-2">
                   <p className="text-sm text-slate-600 dark:text-slate-400">

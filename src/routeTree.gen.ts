@@ -107,6 +107,8 @@ import { Route as DriverWalletRouteImport } from './routes/driver/wallet'
 import { Route as DriverSupportListRouteImport } from './routes/driver/support-list'
 import { Route as DriverSupportDetailRouteImport } from './routes/driver/support-detail'
 import { Route as DriverStartingLocationRouteImport } from './routes/driver/starting-location'
+import { Route as DriverSocialApplicationRouteImport } from './routes/driver/social-application'
+import { Route as DriverSigninMethodsRouteImport } from './routes/driver/signin-methods'
 import { Route as DriverSigninRouteImport } from './routes/driver/signin'
 import { Route as DriverRepositioningRouteImport } from './routes/driver/repositioning'
 import { Route as DriverProofCamRouteImport } from './routes/driver/proof-cam'
@@ -124,6 +126,7 @@ import { Route as DriverCompletedDetailsRouteImport } from './routes/driver/comp
 import { Route as DriverCompletedRouteImport } from './routes/driver/completed'
 import { Route as DriverBookedLaterRouteImport } from './routes/driver/booked-later'
 import { Route as DriverActiveRouteImport } from './routes/driver/active'
+import { Route as AuthSocialCallbackRouteImport } from './routes/auth.social-callback'
 import { Route as AuthResetPasswordRouteImport } from './routes/auth/reset-password'
 import { Route as AuthIndividualSignupRouteImport } from './routes/auth/individual-signup'
 import { Route as AuthDealerSignupRouteImport } from './routes/auth/dealer-signup'
@@ -656,6 +659,16 @@ const DriverStartingLocationRoute = DriverStartingLocationRouteImport.update({
   path: '/starting-location',
   getParentRoute: () => DriverRoute,
 } as any)
+const DriverSocialApplicationRoute = DriverSocialApplicationRouteImport.update({
+  id: '/social-application',
+  path: '/social-application',
+  getParentRoute: () => DriverRoute,
+} as any)
+const DriverSigninMethodsRoute = DriverSigninMethodsRouteImport.update({
+  id: '/signin-methods',
+  path: '/signin-methods',
+  getParentRoute: () => DriverRoute,
+} as any)
 const DriverSigninRoute = DriverSigninRouteImport.update({
   id: '/signin',
   path: '/signin',
@@ -742,6 +755,11 @@ const DriverActiveRoute = DriverActiveRouteImport.update({
   path: '/active',
   getParentRoute: () => DriverRoute,
 } as any)
+const AuthSocialCallbackRoute = AuthSocialCallbackRouteImport.update({
+  id: '/auth/social-callback',
+  path: '/auth/social-callback',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AuthResetPasswordRoute = AuthResetPasswordRouteImport.update({
   id: '/auth/reset-password',
   path: '/auth/reset-password',
@@ -825,6 +843,7 @@ export interface FileRoutesByFullPath {
   '/auth/dealer-signup': typeof AuthDealerSignupRoute
   '/auth/individual-signup': typeof AuthIndividualSignupRoute
   '/auth/reset-password': typeof AuthResetPasswordRoute
+  '/auth/social-callback': typeof AuthSocialCallbackRoute
   '/driver/active': typeof DriverActiveRoute
   '/driver/booked-later': typeof DriverBookedLaterRoute
   '/driver/completed': typeof DriverCompletedRoute
@@ -842,6 +861,8 @@ export interface FileRoutesByFullPath {
   '/driver/proof-cam': typeof DriverProofCamRoute
   '/driver/repositioning': typeof DriverRepositioningRoute
   '/driver/signin': typeof DriverSigninRoute
+  '/driver/signin-methods': typeof DriverSigninMethodsRoute
+  '/driver/social-application': typeof DriverSocialApplicationRoute
   '/driver/starting-location': typeof DriverStartingLocationRoute
   '/driver/support-detail': typeof DriverSupportDetailRoute
   '/driver/support-list': typeof DriverSupportListRoute
@@ -955,6 +976,7 @@ export interface FileRoutesByTo {
   '/auth/dealer-signup': typeof AuthDealerSignupRoute
   '/auth/individual-signup': typeof AuthIndividualSignupRoute
   '/auth/reset-password': typeof AuthResetPasswordRoute
+  '/auth/social-callback': typeof AuthSocialCallbackRoute
   '/driver/active': typeof DriverActiveRoute
   '/driver/booked-later': typeof DriverBookedLaterRoute
   '/driver/completed': typeof DriverCompletedRoute
@@ -972,6 +994,8 @@ export interface FileRoutesByTo {
   '/driver/proof-cam': typeof DriverProofCamRoute
   '/driver/repositioning': typeof DriverRepositioningRoute
   '/driver/signin': typeof DriverSigninRoute
+  '/driver/signin-methods': typeof DriverSigninMethodsRoute
+  '/driver/social-application': typeof DriverSocialApplicationRoute
   '/driver/starting-location': typeof DriverStartingLocationRoute
   '/driver/support-detail': typeof DriverSupportDetailRoute
   '/driver/support-list': typeof DriverSupportListRoute
@@ -1087,6 +1111,7 @@ export interface FileRoutesById {
   '/auth/dealer-signup': typeof AuthDealerSignupRoute
   '/auth/individual-signup': typeof AuthIndividualSignupRoute
   '/auth/reset-password': typeof AuthResetPasswordRoute
+  '/auth/social-callback': typeof AuthSocialCallbackRoute
   '/driver/active': typeof DriverActiveRoute
   '/driver/booked-later': typeof DriverBookedLaterRoute
   '/driver/completed': typeof DriverCompletedRoute
@@ -1104,6 +1129,8 @@ export interface FileRoutesById {
   '/driver/proof-cam': typeof DriverProofCamRoute
   '/driver/repositioning': typeof DriverRepositioningRoute
   '/driver/signin': typeof DriverSigninRoute
+  '/driver/signin-methods': typeof DriverSigninMethodsRoute
+  '/driver/social-application': typeof DriverSocialApplicationRoute
   '/driver/starting-location': typeof DriverStartingLocationRoute
   '/driver/support-detail': typeof DriverSupportDetailRoute
   '/driver/support-list': typeof DriverSupportListRoute
@@ -1220,6 +1247,7 @@ export interface FileRouteTypes {
     | '/auth/dealer-signup'
     | '/auth/individual-signup'
     | '/auth/reset-password'
+    | '/auth/social-callback'
     | '/driver/active'
     | '/driver/booked-later'
     | '/driver/completed'
@@ -1237,6 +1265,8 @@ export interface FileRouteTypes {
     | '/driver/proof-cam'
     | '/driver/repositioning'
     | '/driver/signin'
+    | '/driver/signin-methods'
+    | '/driver/social-application'
     | '/driver/starting-location'
     | '/driver/support-detail'
     | '/driver/support-list'
@@ -1350,6 +1380,7 @@ export interface FileRouteTypes {
     | '/auth/dealer-signup'
     | '/auth/individual-signup'
     | '/auth/reset-password'
+    | '/auth/social-callback'
     | '/driver/active'
     | '/driver/booked-later'
     | '/driver/completed'
@@ -1367,6 +1398,8 @@ export interface FileRouteTypes {
     | '/driver/proof-cam'
     | '/driver/repositioning'
     | '/driver/signin'
+    | '/driver/signin-methods'
+    | '/driver/social-application'
     | '/driver/starting-location'
     | '/driver/support-detail'
     | '/driver/support-list'
@@ -1481,6 +1514,7 @@ export interface FileRouteTypes {
     | '/auth/dealer-signup'
     | '/auth/individual-signup'
     | '/auth/reset-password'
+    | '/auth/social-callback'
     | '/driver/active'
     | '/driver/booked-later'
     | '/driver/completed'
@@ -1498,6 +1532,8 @@ export interface FileRouteTypes {
     | '/driver/proof-cam'
     | '/driver/repositioning'
     | '/driver/signin'
+    | '/driver/signin-methods'
+    | '/driver/social-application'
     | '/driver/starting-location'
     | '/driver/support-detail'
     | '/driver/support-list'
@@ -1613,6 +1649,7 @@ export interface RootRouteChildren {
   AuthDealerSignupRoute: typeof AuthDealerSignupRoute
   AuthIndividualSignupRoute: typeof AuthIndividualSignupRoute
   AuthResetPasswordRoute: typeof AuthResetPasswordRoute
+  AuthSocialCallbackRoute: typeof AuthSocialCallbackRoute
   AboutIndexRoute: typeof AboutIndexRoute
   AdminAuditLogsIndexRoute: typeof AdminAuditLogsIndexRoute
   AdminBillingHealthIndexRoute: typeof AdminBillingHealthIndexRoute
@@ -2401,6 +2438,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DriverStartingLocationRouteImport
       parentRoute: typeof DriverRoute
     }
+    '/driver/social-application': {
+      id: '/driver/social-application'
+      path: '/social-application'
+      fullPath: '/driver/social-application'
+      preLoaderRoute: typeof DriverSocialApplicationRouteImport
+      parentRoute: typeof DriverRoute
+    }
+    '/driver/signin-methods': {
+      id: '/driver/signin-methods'
+      path: '/signin-methods'
+      fullPath: '/driver/signin-methods'
+      preLoaderRoute: typeof DriverSigninMethodsRouteImport
+      parentRoute: typeof DriverRoute
+    }
     '/driver/signin': {
       id: '/driver/signin'
       path: '/signin'
@@ -2519,6 +2570,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/driver/active'
       preLoaderRoute: typeof DriverActiveRouteImport
       parentRoute: typeof DriverRoute
+    }
+    '/auth/social-callback': {
+      id: '/auth/social-callback'
+      path: '/auth/social-callback'
+      fullPath: '/auth/social-callback'
+      preLoaderRoute: typeof AuthSocialCallbackRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/auth/reset-password': {
       id: '/auth/reset-password'
@@ -2639,6 +2697,8 @@ interface DriverRouteChildren {
   DriverProofCamRoute: typeof DriverProofCamRoute
   DriverRepositioningRoute: typeof DriverRepositioningRoute
   DriverSigninRoute: typeof DriverSigninRoute
+  DriverSigninMethodsRoute: typeof DriverSigninMethodsRoute
+  DriverSocialApplicationRoute: typeof DriverSocialApplicationRoute
   DriverStartingLocationRoute: typeof DriverStartingLocationRoute
   DriverSupportDetailRoute: typeof DriverSupportDetailRoute
   DriverSupportListRoute: typeof DriverSupportListRoute
@@ -2664,6 +2724,8 @@ const DriverRouteChildren: DriverRouteChildren = {
   DriverProofCamRoute: DriverProofCamRoute,
   DriverRepositioningRoute: DriverRepositioningRoute,
   DriverSigninRoute: DriverSigninRoute,
+  DriverSigninMethodsRoute: DriverSigninMethodsRoute,
+  DriverSocialApplicationRoute: DriverSocialApplicationRoute,
   DriverStartingLocationRoute: DriverStartingLocationRoute,
   DriverSupportDetailRoute: DriverSupportDetailRoute,
   DriverSupportListRoute: DriverSupportListRoute,
@@ -2684,6 +2746,7 @@ const rootRouteChildren: RootRouteChildren = {
   AuthDealerSignupRoute: AuthDealerSignupRoute,
   AuthIndividualSignupRoute: AuthIndividualSignupRoute,
   AuthResetPasswordRoute: AuthResetPasswordRoute,
+  AuthSocialCallbackRoute: AuthSocialCallbackRoute,
   AboutIndexRoute: AboutIndexRoute,
   AdminAuditLogsIndexRoute: AdminAuditLogsIndexRoute,
   AdminBillingHealthIndexRoute: AdminBillingHealthIndexRoute,

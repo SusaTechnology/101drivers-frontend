@@ -1,4 +1,5 @@
 import { Module } from "@nestjs/common";
+import { BetterAuthModule } from "./better-auth/better-auth.module";
 import { UserModule } from "./user/user.module";
 import { CustomerModule } from "./customer/customer.module";
 import { DriverModule } from "./driver/driver.module";
@@ -80,6 +81,10 @@ import { GeoModule } from "./geo/geo.module";
   controllers: [StripeWebhookController, InsurancePortalController, ContentController, CmsController],
   imports: [
     ACLModule,
+    // Better Auth (drivers identity) — GLOBAL: JwtAuthGuard in every module
+    // injects BetterAuthService for the hybrid session check. See
+    // src/better-auth/ and docs/auth/better-auth-plan.md.
+    BetterAuthModule,
     // Global leaf pub/sub bus (see common/appEvents) — registered once so
     // AuthService/UserService/TrackingGateway can all inject it without
     // any of them importing each other.
