@@ -65,6 +65,10 @@ export function LivePhotoCapture({
 }: LivePhotoCaptureProps) {
   const [overlay, setOverlay] = useState<OverlayState>("closed");
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  // The DOMException name behind the error (NotAllowedError, NotReadableError,
+  // …) — shown as a small technical line so support can tell the failure
+  // modes apart ("driver allowed it but still blocked" reports).
+  const [errName, setErrName] = useState<string | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
 
@@ -78,6 +82,7 @@ export function LivePhotoCapture({
 
   const openCamera = useCallback(async () => {
     if (disabled || uploading) return;
+    setErrName(null);
     if (!window.isSecureContext) {
       setErrorMsg(
         "The camera needs a secure connection. Please open this page using https and try again."
@@ -94,35 +99,51 @@ export function LivePhotoCapture({
     }
     setOverlay("starting");
     setErrorMsg(null);
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
+    // The camera is BUSY for a beat after a previous stream stops (or while
+    // another app holds it) — browsers report NotReadableError. One silent
+    // retry after a short wait clears the common race; only a persistent
+    // busy surfaces as an error.
+    const acquire = async (): Promise<MediaStream> => {
+      const constraints: MediaStreamConstraints = {
         video: {
           facingMode: { ideal: facing },
           width: { ideal: 1920 },
           height: { ideal: 1080 },
         },
         audio: false,
-      });
+      };
+      try {
+        return await navigator.mediaDevices.getUserMedia(constraints);
+      } catch (err) {
+        if ((err as DOMException)?.name !== "NotReadableError") throw err;
+        await new Promise((resolve) => setTimeout(resolve, 900));
+        return await navigator.mediaDevices.getUserMedia(constraints);
+      }
+    };
+    try {
+      const stream = await acquire();
       streamRef.current = stream;
+      // The <video> element attaches and starts in the effect below (runs
+      // after the overlay DOM is committed — see the iOS notes there).
       setOverlay("live");
-      // The <video> element mounts with the overlay — attach on the next frame.
-      requestAnimationFrame(() => {
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream;
-          videoRef.current.play().catch(() => {});
-        }
-      });
     } catch (err) {
-      const name = (err as DOMException)?.name;
+      const name = (err as DOMException)?.name || "UnknownError";
+      setErrName(name);
       if (name === "NotAllowedError" || name === "SecurityError") {
         setErrorMsg(
-          "Camera access was blocked. Allow camera access for this site in your browser settings, then try again."
+          "Your browser did not give this page camera access. Try these, in order: " +
+            "(1) if you opened this link from Instagram, Facebook, WhatsApp or Gmail, " +
+            "open it in Safari (iPhone) or Chrome (Android) instead — in-app browsers " +
+            "block the camera even when allowed; (2) allow camera for this site in the " +
+            "browser settings (iPhone: Settings → Safari → Camera → Allow); " +
+            "(3) if you added this app to your home screen, delete and re-add it, or " +
+            "open the site in Safari. Then tap Try again."
         );
-      } else if (
-        name === "NotFoundError" ||
-        name === "OverconstrainedError" ||
-        name === "NotReadableError"
-      ) {
+      } else if (name === "NotReadableError") {
+        setErrorMsg(
+          "The camera is busy in another app. Close any other app using the camera, then tap Try again."
+        );
+      } else if (name === "NotFoundError" || name === "OverconstrainedError") {
         setErrorMsg(
           "No usable camera was found on this device. Please take this photo on your phone."
         );
@@ -134,6 +155,44 @@ export function LivePhotoCapture({
       setOverlay("error");
     }
   }, [disabled, uploading, facing]);
+
+  // Attach the stream and start playback from an EFFECT, not a rAF callback:
+  // the effect runs after React has committed the overlay's <video>, and the
+  // retry ladder covers iOS Safari's silent black-screen modes — play() fired
+  // before the element has metadata/layout (rejected with nobody noticing,
+  // because the old code swallowed the rejection), and AbortError when
+  // metadata lands mid-play. muted is also set as a PROPERTY here: React's
+  // muted attribute does not reliably reach the DOM property before autoplay
+  // on Safari, which is another way the preview stays black.
+  useEffect(() => {
+    if (overlay !== "live") return;
+    const video = videoRef.current;
+    const stream = streamRef.current;
+    if (!video || !stream) return;
+    video.muted = true;
+    video.srcObject = stream;
+    let cancelled = false;
+    const start = () => {
+      if (cancelled || !video.paused) return;
+      video.play().catch(() => {
+        if (cancelled) return;
+        // First play() raced the decode pipeline — retry once the first
+        // frame is decodable (loadeddata).
+        video.addEventListener(
+          "loadeddata",
+          () => {
+            if (!cancelled) video.play().catch(() => {});
+          },
+          { once: true }
+        );
+      });
+    };
+    if (video.readyState >= 1) start();
+    else video.addEventListener("loadedmetadata", start, { once: true });
+    return () => {
+      cancelled = true;
+    };
+  }, [overlay]);
 
   const closeCamera = useCallback(() => {
     stopStream();
@@ -247,6 +306,7 @@ export function LivePhotoCapture({
         <CameraOverlay
           overlay={overlay}
           errorMsg={errorMsg}
+          errName={errName}
           hint={hint}
           mirrored={facing === "user"}
           videoRef={videoRef}
@@ -274,6 +334,7 @@ export function LivePhotoCapture({
         <CameraOverlay
           overlay={overlay}
           errorMsg={errorMsg}
+          errName={errName}
           hint={hint}
           mirrored={facing === "user"}
           videoRef={videoRef}
@@ -303,6 +364,7 @@ export function LivePhotoCapture({
       <CameraOverlay
         overlay={overlay}
         errorMsg={errorMsg}
+        errName={errName}
         hint={hint}
         mirrored={facing === "user"}
         videoRef={videoRef}
@@ -319,6 +381,8 @@ export function LivePhotoCapture({
 interface CameraOverlayProps {
   overlay: OverlayState;
   errorMsg: string | null;
+  /** DOMException name behind errorMsg (for the technical detail line). */
+  errName?: string | null;
   hint: string;
   mirrored: boolean;
   videoRef: React.RefObject<HTMLVideoElement | null>;
@@ -330,6 +394,7 @@ interface CameraOverlayProps {
 function CameraOverlay({
   overlay,
   errorMsg,
+  errName,
   hint,
   mirrored,
   videoRef,
@@ -340,10 +405,17 @@ function CameraOverlay({
   if (overlay === "closed") return null;
 
   return (
-    <div className="fixed inset-0 z-[100] bg-black/95 flex flex-col">
+    // The page draws UNDER the iPhone status bar (viewport-fit=cover), so the
+    // whole overlay — the X in particular — must start below the safe-area
+    // inset or the built-in header swallows the taps. Same convention as
+    // routes/driver.tsx and the app bars.
+    <div
+      className="fixed inset-0 z-[100] bg-black/95 flex flex-col"
+      style={{ paddingTop: "env(safe-area-inset-top, 0px)" }}
+    >
       <div className="flex items-center justify-between px-4 py-3 text-white">
         <span className="text-sm font-bold">Live camera</span>
-        <button type="button" onClick={onClose} aria-label="Close camera" className="p-2">
+        <button type="button" onClick={onClose} aria-label="Close camera" className="p-2 -mr-2">
           <X className="w-6 h-6" />
         </button>
       </div>
@@ -352,6 +424,11 @@ function CameraOverlay({
         <div className="flex-1 flex flex-col items-center justify-center gap-4 px-8 text-center">
           <AlertCircle className="w-12 h-12 text-amber-400" />
           <p className="text-sm text-slate-200 max-w-sm">{errorMsg}</p>
+          {errName && (
+            <p className="text-[10px] text-slate-500">
+              Technical detail: {errName}
+            </p>
+          )}
           <div className="flex gap-3">
             <Button type="button" variant="outline" onClick={onRetry} className="rounded-xl">
               <RefreshCw className="w-4 h-4 mr-2" />
@@ -382,7 +459,11 @@ function CameraOverlay({
             />
           </div>
           <p className="text-center text-xs text-slate-300 px-6 pb-2">{hint}</p>
-          <div className="flex items-center justify-center pb-10 pt-2">
+          {/* Bottom inset: keep the shutter clear of the home indicator. */}
+          <div
+            className="flex items-center justify-center pt-2"
+            style={{ paddingBottom: "calc(2.5rem + env(safe-area-inset-bottom, 0px))" }}
+          >
             <button
               type="button"
               onClick={onCapture}

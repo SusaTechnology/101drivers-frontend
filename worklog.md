@@ -3369,3 +3369,19 @@ Work Log:
 
 Stage Summary:
 - Code is back to the Task 69 state (dual Reply-To + BCC meeting-request sends, no mark-only feature, no INVITED widening). Nothing else changed.
+
+---
+Task ID: 72
+Agent: Main Agent
+Task: Onboarding live-camera fixes — false "camera blocked" despite Allow, iPhone black screen, X under the iPhone status bar
+
+Work Log:
+- Driver report: (1) tapping the capture box shows "Camera access was blocked..." even after allowing the camera; (2) on iPhone the live preview is a black screen with no way out; (3) the overlay's X (top-right) is not clickable — the phone's built-in header covers it. Both onboarding pages (driverOnboardingEdit/Complete) capture exclusively via shared/LivePhotoCapture, so all three symptoms live there.
+- Why it happened: (a) the "blocked" message fired for NotAllowedError/SecurityError with generic copy — on iPhone several quirks masquerade as denial even when the driver allowed: in-app webviews (links opened from Instagram/Facebook/WhatsApp/Gmail hard-deny the camera), home-screen-PWA permission regressions after iOS updates, and a remembered earlier site denial (no prompt re-appears). NotReadableError (camera busy — e.g. another app or a just-stopped stream) was mislabeled "No usable camera was found". (b) Black screen: video attach happened in a requestAnimationFrame with play() rejections silently swallowed — a live stream could sit on a paused <video> forever (Safari also needs the muted DOM property, which React's muted attribute doesn't reliably set pre-autoplay). (c) X: index.html sets viewport-fit=cover, so the page draws under the iPhone status bar; the overlay was the only screen without env(safe-area-inset-top) padding (routes/driver.tsx and app bars all pad), so the X row rendered under the built-in header — untappable, hence "nothing to exit".
+- Fixes (LivePhotoCapture.tsx only): busy-camera auto-retry (NotReadableError → one silent retry after 900ms) before erroring; scenario-precise error copy (blocked: in-app-browser + iOS Settings + re-add-PWA steps; busy: its own message); a small "Technical detail: <DOMException name>" line in the error panel so future reports are diagnosable; stream attach + playback moved to an effect (runs after the overlay DOM commits) with a loadedmetadata → play() → loadeddata-retry ladder and video.muted set as a property — kills the black-screen state; overlay container pads with env(safe-area-inset-top) (X now clears the status bar in every state) and the shutter row pads calc(2.5rem + env(safe-area-inset-bottom)) for the home indicator.
+- Repo state on arrival: origin/master already at 0ccfe1ff (the approved Task 71 revert) — nothing unapproved on the remote; recycled sandbox re-rescued (parked 09828203, PWA session's uncommitted worklog entry parked to /home/z/my-project/task32-other-session-worklog.patch).
+
+Verification: FE tsc — zero errors in LivePhotoCapture.tsx (project total 130, all pre-existing baseline, down from 139 as other sessions fix theirs); vite build green (18.3s, sw stamped 20261111105427). No behavior change for the happy path; iOS needs a device check after deploy.
+
+Stage Summary:
+- Drivers who open onboarding links from in-app browsers now get copy that tells them exactly why the camera won't start and how to fix it; genuinely busy cameras self-heal via one retry; the iPhone preview can no longer strand a driver on a black screen (play ladder + muted property); the X and shutter respect the notch/home-indicator safe areas. Deploy FE; if a driver still reports "blocked", the technical-detail line will name the exact failure mode.
