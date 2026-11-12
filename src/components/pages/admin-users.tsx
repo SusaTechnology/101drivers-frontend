@@ -1364,24 +1364,31 @@ export default function AdminUsersPage() {
   // Request Meeting — sends the composed email + flips the status in one
   // backend transaction. Error messages surface the SMTP failure so the
   // admin knows nothing changed and can retry.
-  const handleRequestMeeting = useCallback((message: string) => {
-    if (!requestMeetingUser) return;
-    requestMeetingMutation.mutate(
-      { pathParams: { id: requestMeetingUser.id }, message, actorUserId },
-      {
-        onSuccess: () => {
-          toast.success('Meeting request sent', {
-            description: 'The driver was emailed and moved to Meeting Requested.',
-          });
-          setRequestMeetingOpen(false);
+  const handleRequestMeeting = useCallback(
+    (message: string, fromMode: 'platform' | 'mine', fromEmail: string) => {
+      if (!requestMeetingUser) return;
+      requestMeetingMutation.mutate(
+        {
+          pathParams: { id: requestMeetingUser.id },
+          message,
+          actorUserId,
+          fromMode,
+          fromEmail,
         },
-        onError: (error: any) =>
-          toast.error('Failed to send meeting request', {
-            description: error?.message ||
-              'The email could not be sent — the driver stays in Pending Approval. Fix the issue and retry.',
-          }),
-      }
-    );
+        {
+          onSuccess: () => {
+            toast.success('Meeting request sent', {
+              description: 'The driver was emailed and moved to Meeting Requested.',
+            });
+            setRequestMeetingOpen(false);
+          },
+          onError: (error: any) =>
+            toast.error('Failed to send meeting request', {
+              description: error?.message ||
+                'The email could not be sent — the driver stays in Pending Approval. Fix the issue and retry.',
+            }),
+        }
+      );
   }, [requestMeetingUser, actorUserId, requestMeetingMutation]);
 
   const handleRejectDriver = useCallback((data: RejectFormData) => {
@@ -1935,6 +1942,7 @@ export default function AdminUsersPage() {
                       <TableHead className="px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-slate-400">Customer Info</TableHead>
                       <TableHead className="px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-slate-400">Driver Info</TableHead>
                       <TableHead className="px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-slate-400">Created</TableHead>
+                      <TableHead className="px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-slate-400">Last Updated</TableHead>
                       <TableHead className="px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-slate-400 text-right">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -1945,7 +1953,7 @@ export default function AdminUsersPage() {
                         reuse the TableSkeleton defined below the page. */}
                     {usersLoading && (
                       <TableRow className="border-b border-slate-100 dark:border-slate-800">
-                        <TableCell colSpan={7} className="px-0 py-0">
+                        <TableCell colSpan={8} className="px-0 py-0">
                           <TableSkeleton rows={6} />
                         </TableCell>
                       </TableRow>
@@ -2127,6 +2135,21 @@ export default function AdminUsersPage() {
                             </div>
                           )}
                         </TableCell>
+                        {/* Last Updated — when the driver last (re)submitted
+                            onboarding details (initial completion, or the
+                            license edit page). Driver rows only: customers
+                            and admins have no onboarding to update. The
+                            "by whom" detail lives on the user-detail page. */}
+                        <TableCell className="px-4 py-3 text-sm text-slate-600">
+                          {user.driver?.lastOnboardingUpdateAt ? (
+                            <div className="flex items-center gap-1">
+                              <Calendar className="w-3 h-3" />
+                              {formatDate(user.driver.lastOnboardingUpdateAt)}
+                            </div>
+                          ) : (
+                            <span className="text-xs text-slate-400">—</span>
+                          )}
+                        </TableCell>
                         <TableCell className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
                           <div className="flex justify-end gap-1 flex-wrap">
                             <Button
@@ -2266,6 +2289,13 @@ export default function AdminUsersPage() {
                                 <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg" onClick={() => openDialog('approve-driver', user)}>
                                   <CheckCircle className="w-3.5 h-3.5 mr-1" /> Approve
                                 </Button>
+                                {/* Resend — same dialog + same backend
+                                    endpoint as the first request; the mail
+                                    goes out again and the status stays
+                                    MEETING_REQUESTED. */}
+                                <Button size="sm" className="bg-violet-600 hover:bg-violet-700 text-white rounded-lg" onClick={() => { setRequestMeetingUser(user); setRequestMeetingOpen(true); }}>
+                                  <CalendarClock className="w-3.5 h-3.5 mr-1" /> Resend Meeting
+                                </Button>
                                 <Button size="sm" variant="destructive" className="rounded-lg" onClick={() => openDialog('reject-driver', user)}>
                                   <XCircle className="w-3.5 h-3.5 mr-1" /> Reject
                                 </Button>
@@ -2334,7 +2364,7 @@ export default function AdminUsersPage() {
                         so rows are [] mid-fetch too. */}
                     {!usersLoading && users.length === 0 && (
                       <TableRow>
-                        <TableCell colSpan={7} className="px-4 py-14 text-center">
+                        <TableCell colSpan={8} className="px-4 py-14 text-center">
                           <div className="flex flex-col items-center gap-2">
                             <p className="text-sm font-semibold text-slate-600 dark:text-slate-300">
                               No users match the current filters
@@ -2930,11 +2960,14 @@ export default function AdminUsersPage() {
 
       {/* Request Meeting — reusable dialog (shared with the driver profile
           page). Sends the composed email + MEETING_REQUESTED flip in one
-          backend transaction; a failed email changes nothing. */}
+          backend transaction; a failed email changes nothing. When the
+          picked driver is already Meeting Requested the dialog switches to
+          its "Resend" copy and the same endpoint sends the mail again. */}
       <RequestMeetingDialog
         open={requestMeetingOpen}
         onOpenChange={setRequestMeetingOpen}
         driverName={requestMeetingUser?.fullName}
+        mode={requestMeetingUser?.driver?.status === 'MEETING_REQUESTED' ? 'resend' : 'request'}
         pending={requestMeetingMutation.isPending}
         onConfirm={handleRequestMeeting}
       />

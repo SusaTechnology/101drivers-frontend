@@ -1838,6 +1838,1587 @@ Stage Summary:
   phones and the installed app ignores pull-to-refresh/rubber-band.
 
 ---
+
+Task ID: 31
+Agent: main agent (Super Z)
+Task: administrators are registered ONLY via the invite flow — legacy
+password-based admin-create removed; invite/resend enforced super-admin-only
+
+Work Log:
+- User: "only admin can register and invite another admin. and push it
+  if it is not pushed to github until now."
+- Audited every path that can mint a User with roles=ADMIN:
+  1. adminInvite.service (invite + re-invite on resend) — the legit
+     flow: random placeholder credential, single-use 48h setup link,
+     invitee sets their own password.
+  2. user.service.adminCreateUser + POST /api/users/admin-create — the
+     LEGACY password form (the creating admin typed a password and
+     shared it out-of-band). Still live with NO frontend caller.
+     REMOVED: endpoint, service method and UserAdminCreateBodyDto —
+     the invite flow replaces it; minting admins with a credential the
+     creating admin knows defeats the no-shared-secrets model.
+  3. Generic POST /api/users + GraphQL createUser — already safe
+     (strips password/passwordHash/roles from client input, substitutes
+     an unguessable placeholder hash); its comment now points at
+     admin-invite as the only admin-creation path.
+  4. Public signups (driver, private + business customer) hardcode
+     non-ADMIN roles; the SPA has no admin-signup page at all.
+- Invite/resend permission aligned with the shipped UI: the admin UI
+  has always shown the Invite Admin button and the admin Resend action
+  to SUPER admins only (its comment even claimed the server rejects
+  regular admins) — but the capability registry had admins.invite /
+  admins.resendInvite = false, so any admin could invite through the
+  API. Flipped both to true and added SuperAdminGuard to
+  POST /api/users/admin-invite and POST /api/users/:id/admin-resend-invite
+  (the service already asserts the capability — same defense-in-depth
+  pattern as disable/enable/promote/demote).
+- Sandbox note: backend/node_modules was empty (recycled sandbox) —
+  reinstalled with --legacy-peer-deps (pre-existing @nestjs/websockets@11
+  vs @nestjs/core@10 peer conflict in the lockfile) + npx prisma
+  generate. Real bootstrap check: 55 modules initialized, including
+  DisputeCaseModuleBase and AdminGateModule, with zero "Nest can't
+  resolve" errors; the boot then stops at "BCRYPT_SALT is not defined"
+  because the sandbox has no backend/.env — environment, not code.
+- Gates: backend tsc = 2 errors (exact pre-existing baseline:
+  auth.service.spec.ts + token.service.spec.ts), nest build green.
+- This entry and the Task 30 entry above are committed together; Task
+  30's worklog text was left uncommitted by the previous stage.
+
+Stage Summary:
+- Admin accounts can only be created by a super admin through the
+  single-use email invite (no shared passwords, audit-logged); the
+  legacy known-password admin-create path is gone, and the API now
+  enforces the super-admin-only invite rule the UI always showed.
+
+---
+
+Task ID: 32
+Agent: main agent (Super Z)
+Task: MailModule re-exports AdminGateModule — MailService now boots
+inside every consuming module's DI context
+
+Work Log:
+- User boot log: "Nest can't resolve dependencies of the MailService
+  (ConfigService, ?) ... the argument AdminGateService at index [1] is
+  available in the DisputeCaseModule context."
+- Root cause: the previous DI fix (98646a64) made feature modules
+  import MailModule instead of registering MailService locally, and
+  MailModule imports AdminGateModule — but it only exported MailService.
+  In Nest, an imported module's exports are NOT transitive unless
+  re-exported, so when Nest instantiates MailService inside the
+  CONSUMING module's context, AdminGateService is unreachable one hop
+  down. DisputeCaseModule was just the first importer to load; all 11
+  MailModule importers shared the same latent crash.
+- Fix (one line + comment): MailModule exports: [MailService,
+  AdminGateModule]. Re-exporting the leaf gate module makes
+  AdminGateService visible to every module that imports MailModule —
+  the transitiveness 98646a64's commit message wrongly claimed already
+  existed.
+- Verification — full boot this time. The Task 31 bootstrap died at the
+  missing-sandbox-env wall (BCRYPT_SALT) BEFORE these modules loaded,
+  which is how this slipped through. Booted dist/main.js with inline
+  throwaway env (BCRYPT_SALT, JWT_SECRET_KEY, JWT_ACCESS_SECRET,
+  JWT_EXPIRATION, DB_URL — nothing written to the repo): 114 modules
+  initialized, custom DisputeCaseModule included, ZERO "can't resolve"
+  errors; MailService constructs (its SMTP-misconfig warn proves the
+  constructor + AdminGateService injection ran). The only remaining
+  error is PrismaClientInitializationError "Can't reach database
+  server" — the sandbox has no postgres; the app reaches the
+  DB-connect stage, i.e. ALL dependency injection completed.
+- Gates: nest build green; tsc unchanged at the 2 pre-existing spec
+  errors.
+
+Stage Summary:
+- The backend boots past the MailService/AdminGateService DI error in
+  every module; the invite-email + gate-key chain works wherever the
+  shared MailService is injected.
+
+---
+
+Task ID: 33
+Agent: main agent (Super Z)
+Task: Domain migration — 101drivers.com everywhere, no techbee.et host
+left in the product
+
+Work Log:
+- Directive: "do not use 101drivers.techbee.et anywhere; use
+  101drivers.com". The user's message wrote "101drvers.com" (no i);
+  the domain already used across the codebase (SEO tags in index.html,
+  the gate-cookie fix) is 101drivers.com — used that and flagged it.
+- ~50 references replaced. Bulk string swap 101drivers.techbee.et →
+  101drivers.com in 16 files: all seed scripts plus delete-seeded-users
+  and harden-test-usernames (kept email-consistent with each other),
+  send-invite-approval-emails APP_DOMAIN fallback, Stripe FRONTEND_URL
+  fallbacks, mail.service link fallback, ops@ support routing,
+  driverApproval onboarding link, Swagger dto examples, help page
+  mailto links, PublicTrackPage displayed domain.
+- Semantic edits (a blind swap would have broken auth):
+  1. cors-cookie.util.ts — CORS allowlist now .com + www + localhost
+     only; the auth-cookie Domain was HARDCODED ".techbee.et", the
+     exact silently-dropped-cookie bug class the host-only gate-cookie
+     fix solved. Now env-driven via authCookieDomain(): ROOT_DOMAIN
+     env with "101drivers.com" default.
+  2. auth.service.ts logout — ROOT_DOMAIN fallback techbee.et →
+     101drivers.com so cookie-clearing candidates match the set side.
+  3. query-wrapper.tsx — the SPA's one hardcoded
+     https://api.techbee.et refresh-token URL now uses VITE_API_URL
+     (the same base adminGate/cms/analytics already use) with a
+     same-origin fallback when unset.
+  4. upload.service.ts — CDN host cdn.techbee.et → cdn.101drivers.com
+     (affects new uploads; existing DB rows keep their old URLs).
+  5. admin-gate.controller.ts comment updated to the new shared-domain
+     wording.
+- Deploy requirements given to the user: set ROOT_DOMAIN=101drivers.com
+  in the backend env; rebuild the frontend bundle (old dist/assets
+  still carry api.techbee.et); make sure cdn.101drivers.com resolves.
+- Sandbox recycle hit twice mid-task: rolled HEAD back to 0982820,
+  deleted tracked backend/src/upload/* and node_modules, and a stash
+  pop conflicted on the stale base. Recovered by fetch + reset --hard
+  origin/master and reapplying edits deterministically; verified the
+  feb3010f mail.module re-export intact before continuing.
+- Gates: backend tsc = 2 baseline spec errors; nest build green (dist
+  now techbee-free); vite build green; git grep techbee (excl. worklog
+  history) = zero.
+
+Stage Summary:
+- The product references only 101drivers.com now — seeds, emails,
+  Stripe, onboarding links, CDN, CORS, auth-cookie domains and the
+  SPA's refresh endpoint. Old worklog history deliberately keeps its
+  original text.
+
+---
+
+Task ID: 34
+Agent: main agent (Super Z)
+Task: Re-send lifecycle emails with the corrected 101drivers.com URLs —
+campaign script fixed and ready (ops runs it on the server)
+
+Work Log:
+- Ops request: after the domain migration everyone holding a lifecycle
+  email still holds a techbee.et link; re-send per current status,
+  EXCEPT meeting-requested drivers.
+- Audit of what the system emails with a link inside:
+  * driver-invited (onboarding token link) — INVITED drivers
+  * driver-approved (driver-signin link) — APPROVED drivers
+  * dealer-approved — APPROVED customers (BUSINESS/PRIVATE copy)
+  Everything else (WAITLISTED, PENDING_APPROVAL, REJECTED drivers;
+  PENDING/REJECTED customers) has no link-bearing template — nothing
+  to re-send. MEETING_REQUESTED drivers deliberately excluded (their
+  scheduling email is admin-composed and personal; ops decision).
+  SUSPENDED drivers excluded by default (no suspension template; the
+  approval copy would contradict their status) — can be added on ask.
+- The existing campaign script scripts/send-invite-approval-emails.ts
+  already implements the whole pipeline (per-status templates verbatim,
+  NotificationEventEngine.queueAndSend ledger, dry-run/--yes/--limit,
+  stagger, 421 rate-limit pauses, JSON+MD reports, --retry-failed-from
+  resume). It needed ONE fix: MailService gained AdminGateService in
+  its constructor for the invite-key feature, so the script's
+  `new MailService(new ConfigService())` would crash before queueing
+  anything. Now `new MailService(new ConfigService(), new
+  AdminGateService())` — the gate service needs no constructor args
+  and the campaign path never consults it (only the admin-invite
+  email does). Header documents the scope matrix + this resend.
+- Template links are APP_DOMAIN-driven and default to 101drivers.com
+  since Task 33, so every re-sent email carries the right URL.
+  INVITED drivers keep their EXISTING onboarding token (links they
+  already have keep working; only the host changes).
+- Gates: campaign script typechecks clean (tsc --strict, ES2021;
+  project target is es2022); backend tsc = 2 baseline spec errors; no
+  src changes in this task.
+- Runbook (on the server, where SMTP + DB env live):
+    npm run email:campaign -- --dry-run        # review recipients
+    npm run email:campaign -- --yes --limit=5  # smoke test
+    npm run email:campaign -- --yes            # full run (nohup/pm2)
+  SMTP hourly caps (~20/h on the shared host) make the full run take
+  hours BY DESIGN; Ctrl+C is safe; resume with --retry-failed-from.
+
+Stage Summary:
+- One command now re-emails every INVITED driver, APPROVED driver and
+  APPROVED customer with the corrected 101drivers.com links, skips
+  meeting-requested by design, is dry-runnable, resumable, and cannot
+  double-send within a run. No product code changed this task.
+
+---
+
+Task ID: 35
+Agent: main agent (Super Z)
+Task: independent verification of Tasks 31-34 (DI fix, domain sweep, campaign script)
+
+Work Log:
+- Fresh sandbox (node_modules reinstalled from lockfile). A parallel
+  session had already pushed Tasks 31-34 (98646a64, 1c2b2127, feb3010f,
+  be9572a9, 9cee2fab); this session's overlapping re-implementation was
+  discarded in favor of the pushed architecture, then everything was
+  re-verified from scratch on origin/master@9cee2fab.
+- npm run build green (nest build = full src typecheck).
+- Campaign script: npx ts-node scripts/send-invite-approval-emails.ts
+  compiles clean and reaches the SMTP pre-check (aborts correctly in
+  the sandbox where SMTP is unset) — TS2554 confirmed gone.
+- Boot: resolved the ENTIRE Nest DI graph with zero "can't resolve"
+  errors (MailService instantiated in every consuming module), passed
+  config validation, and stopped ONLY at PrismaClientInitializationError
+  (sandbox has no Postgres and no root to install one). On the server
+  the DB exists, so the app comes up.
+- Repo-wide grep: 101drivers.techbee.et = zero occurrences in src +
+  scripts (cdn.techbee.et remains by design — real file-storage host).
+- Operational caveat for the re-send: code defaults are 101drivers.com,
+  but server .env values OVERRIDE them — APP_DOMAIN / 101_DOMAIN /
+  FRONTEND_URL must be https://101drivers.com (or those lines removed);
+  ROOT_DOMAIN=101drivers.com (or unset) so auth cookies derive the .com
+  domain.
+- Worklog committed together with this entry (matches the Tasks 31-34
+  convention).
+
+Stage Summary:
+- Tasks 31-34 verified independently: build green, campaign script runs
+  (TS2554 gone), Nest DI resolves in all modules (the DisputeCaseModule
+  boot error is dead), no techbee.et left in any user-facing URL. The
+  campaign is ready to run on the server after the .env domain check.
+
+---
+
+Task ID: 36
+Agent: main agent (Super Z)
+Task: campaign re-send restricted to the emails that actually carried the techbee.et link
+
+Work Log:
+- User: the point of the re-send is to fix the wrong techbee.et URLs, so
+  only emails that contain a domain link should be re-sent — e.g. the
+  approved-driver and invited-driver emails, but NOT the customer
+  approval email, which has no domain in it.
+- Verified against the templates: buildInvitedDriverEmail embeds
+  https://<domain>/driver-onboarding-complete?token=… and
+  buildApprovedDriverEmail embeds https://<domain>/driver-signin — both
+  were sent with the wrong host, both stay in scope. The customer
+  approval email ("Your business/customer account has been approved",
+  business AND private copy) contains NO link at all — only text and the
+  COO signature — so there was never a techbee.et URL in it to fix.
+- Removed the whole customer path from
+  scripts/send-invite-approval-emails.ts: buildApprovedDealerEmail(),
+  the prisma.customer.findMany collection, the two APPROVED_DEALER_*
+  categories + Recipient fields, the scope-summary lines (incl. the
+  suspended-but-approved flag, which was dealer-only), and the
+  queueAndSend dealer branch. Header now documents the scope rule:
+  only link-bearing emails get re-sent. INVITED + APPROVED drivers
+  remain; MEETING_REQUESTED still excluded.
+- Gates: script compiles and runs under ts-node (reaches the SMTP
+  pre-check, aborts cleanly in the sandbox); remaining customer/dealer
+  mentions are documentation only.
+
+Stage Summary:
+- The campaign now re-emails exactly two groups — INVITED drivers and
+  APPROVED drivers — each with the corrected 101drivers.com link.
+  Approved customers are never re-emailed (their email had no URL to
+  fix). Dry-run, resume and rate-limit machinery unchanged.
+
+---
+
+Task ID: 37
+Agent: main agent (Super Z)
+Task: --test-to flag — check the campaign emails in the owner's inbox before the real blast
+
+Work Log:
+- User: "I want the script to check by sending it to my email first" — a
+  test-send mode with its own command.
+- Checked prisma/schema.prisma first: NotificationEvent.driverId is a real
+  FK to Driver, so a synthetic "test driver" row would violate the
+  constraint. Design: --test-to=<email> picks the FIRST real INVITED
+  driver (with a live onboarding token) and the FIRST real APPROVED
+  driver, builds their real emails (real tokens → the onboarding link in
+  the sample actually works), and redirects delivery to the given
+  address. No real recipient is emailed, no driver data is mutated (the
+  token-regeneration path is disabled in test mode), and the --yes gate
+  is skipped because the only possible destination is TEST_TO.
+- Implementation in scripts/send-invite-approval-emails.ts: TEST_TO flag
+  parsed + regex-validated at startup (bad address = instant exit); test
+  branch replaces the scoped recipient list right before the scope
+  summary (so --limit/--retry-failed-from cannot damage it); ledger
+  payload note marks the rows "TEST send — sample redirected to owner";
+  header usage docs updated with the flag and the check-then-live flow.
+- Gates: --test-to=notanemail → rejected before anything runs;
+  --test-to=<valid> and plain live both compile and abort cleanly at the
+  SMTP pre-check in the sandbox (no SMTP creds here); plain behavior of
+  every other flag unchanged.
+
+Stage Summary:
+- New command (run from backend/ on the server):
+    npm run email:campaign -- --test-to=you@yourdomain.com
+  → 2 messages land in that inbox: the invited-driver email (with a
+  working 101drivers.com onboarding link) and the approved-driver email.
+  Dry-run, resume and rate-limit machinery untouched; once the inbox
+  check passes, the live command stays
+    npm run email:campaign -- --yes
+
+---
+
+Task ID: 38
+Agent: main agent (Super Z)
+Task: clarify test-mode semantics + confirm PENDING_APPROVAL drivers get nothing (no code change)
+
+Work Log:
+- Owner ran --test-to and received BOTH samples; asked why, since his own
+  account is PENDING_APPROVAL ("you are misleading drivers since they are
+  not approved").
+- Explained: test mode deliberately samples one email per in-scope
+  template, built from two DIFFERENT real drivers (first INVITED, first
+  APPROVED — printed in the output) and redirects both to the owner's
+  inbox. The owner's own status is never consulted; no driver receives
+  anything. The REAL blast already follows the one-email-per-status rule:
+  the recipient's DB status picks the template (INVITED → invitation
+  email, APPROVED → approval email); a driver cannot be in both statuses.
+- Verified in code for the pending-approval question: completeOnboarding
+  (driver.service.ts:692) requires INVITED status and stores license +
+  photos + SSN + address + selfie, sets status=PENDING_APPROVAL and
+  onboardingCompletedAt — owner's assumption ("pending approval = details
+  already entered") is CORRECT. Enumeration of every queueAndSend caller:
+  driver emails are only driver-invited / driver-approved /
+  driver-meeting-request (admin-composed, MEETING_REQUESTED). NO email is
+  sent when a driver reaches PENDING_APPROVAL.
+- Conclusion (no code change): there is no pending-approval email to
+  re-send, so PENDING_APPROVAL drivers correctly receive nothing from the
+  campaign even though they have an email on file — the invite link is
+  spent (the endpoint refuses re-completion) and the approval email would
+  mislead. They get the approval email from the LIVE flow at approve
+  time, which now carries the fixed 101drivers.com domain.
+- Tip surfaced for the owner: test a single template with
+  --test-to=<addr> --only=approved (or --only=invited).
+
+Stage Summary:
+- Behavior confirmed correct end-to-end: one email per driver, matched to
+  status; PENDING_APPROVAL excluded by design (no such email exists in
+  the system); test mode = owner-only samples. No code changes this task.
+
+---
+
+Task ID: 39
+Agent: main agent (Super Z)
+Task: prove test-email recipients + diagnose "invalid or expired" onboarding link
+
+Work Log:
+- Owner received the two test samples and asked: names weren't his, the
+  onboarding link said "invalid or expired", did the emails go to others?
+- Recipients proven: the run output shows both MailService lines "Email
+  sent to solomonyalew664@gmail.com"; ledger events
+  cmw0k3y4l000182itrgx9oqim / cmw0k41rh000382itl620mhth carry that
+  toEmail; server-side double-check = grep the report JSON under
+  email-campaign-reports/. The greeting name comes from the SAMPLE
+  driver's record (first INVITED = Robert William ODonnell Jr, first
+  APPROVED = Nathnael Mesfin) so the email is byte-identical to what
+  that driver will get — delivery was redirected to the owner only.
+- Link diagnosis (read-only curl probes from the sandbox):
+  * GET https://101drivers.com/api/public/drivers/onboarding-status?token=<Robert's real token> → 302 → https://101drivers.com/availability.html (same for token+"." — the token is never evaluated)
+  * / , /driver-signin , /driver-onboarding-complete → ALL 302 → availability.html, a static placeholder reading "Our service is currently unavailable in your region."
+  * https://101drivers.techbee.et/api/... → 502 Bad Gateway (nginx up, backend process down)
+  * Schema: onboardingToken String? — NO expiry; the endpoint only checks
+    token existence + status INVITED + onboardingCompletedAt. The token
+    itself is fine; the API simply is not reachable behind the new domain.
+  * Conclusion: the emails are correct; 101drivers.com serves no app yet.
+- Repo hardening pushed with this task: the invite email body now puts
+  the URL alone on its own line (live engine inviteDriver body + campaign
+  copy) so no mail client can glue the sentence's trailing period to the
+  token. The reminder (re-invite) template was already own-line.
+- Pre-existing (unrelated) tsc errors noted in src/auth/auth.service.spec.ts
+  and src/tests/auth/token.service.spec.ts — untouched by this change.
+
+Stage Summary:
+- Ops must deploy before the live blast: build the frontend (vite) into
+  the 101drivers.com vhost, replace the blanket 302 with SPA serving
+  (try_files … /index.html) + proxy /api/ to the backend upstream, and
+  start the backend node process (techbee's 502 says it is down). Then
+  re-run --test-to and click BOTH links; only after they open the real
+  app, run npm run email:campaign -- --yes.
+
+---
+
+Task ID: 40
+Agent: main agent (Super Z)
+Task: revert invite-copy change to as-it-was + full every-email audit (code only)
+
+Work Log:
+- Owner instruction: everything stays exactly as it was except the admin
+  approval email carrying its link (already in the baseline via owner's
+  commit 275ad936); audit every email message for validity; no
+  infrastructure topics.
+- Reverted Task 39's rewording: engine invite body and campaign copy are
+  byte-identical to the pre-change baseline again (git checkout
+  5f078136 -- driverApproval.engine.ts send-invite-approval-emails.ts).
+  tsc clean (pre-existing spec-file errors aside, untouched).
+- Full audit — every send path enumerated (queueAndSend: ~60 templates
+  across delivery lifecycle, payments, disputes, admin alerts, support;
+  direct MailService: signup confirmation, email verification/password
+  reset, admin invite, meeting-request, rating reminder, SMTP fallback).
+  Link-bearing emails and their construction:
+  1. driver-invited (invite + reminder): https://$APP_DOMAIN
+     /driver-onboarding-complete?token=<onboardingToken> — token is the
+     driver row's own value, String?, NO expiry; endpoint requires token
+     match + status INVITED + not completed. Token dies only via
+     re-invite (regenerates by design) or completed onboarding. Campaign
+     preserves existing tokens. NOTE (left as-is per owner): the main
+     invite body puts the URL mid-sentence with a trailing period.
+  2. driver-approved: https://$APP_DOMAIN/driver-signin — own line, no
+     token. Valid by construction.
+  3. email verification / password reset: Continue here: <url> on its
+     own line; encodeURIComponent; appDomain = 101_DOMAIN env ??
+     https://101drivers.com; OTP hashed (tokenHash) with expiresAt
+     (intentional security expiry).
+  4. admin invite: $appDomain/auth/accept-invite?token=…&key=… — encoded.
+  5. tracking emails: $appDomain/track/<shareToken> (101_DOMAIN env);
+     share token has its own expiry by design.
+  6. rating reminder: static https://101drivers.com link; Stripe admin
+     alerts: dashboard.stripe.com/payments/<intentId>. No other template
+     embeds any URL (delivery/support templates verified text-only).
+- "Invalid or expired" strings exist ONLY in API error responses
+  (onboarding 404, auth refresh 401, ws guard, referral codes) and the
+  frontend onboarding page's error card. NO email contains or sends
+  that text.
+
+Stage Summary:
+- Code can never email an invalid token: every token-bearing link reads
+  the recipient's own DB value at send time; onboarding tokens have no
+  expiry; the only invalidation paths are by-design (re-invite,
+  completion). Invite copy restored to as-it-was; approval email keeps
+  its link. No other changes.
+
+---
+
+Task ID: 41
+Agent: main agent (Super Z)
+Task: fix driver-signup rejection of tablets (iPadOS desktop-mode iPads)
+
+Work Log:
+- Owner reports an iPad/tablet user rejected at driver registration; UA:
+  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) ... Version/27.0.1
+  Safari/605.1.15" — the byte-for-byte macOS UA that iPadOS sends when
+  "Request Desktop Website" is on (the iPadOS 13+ default).
+- The gate is two independent checks that MUST agree (both documented as
+  such): the client gate (src/lib/device.ts shouldShowMobileOnlySignup —
+  touch-capable + Macintosh = iPad → shows the FORM) and the server
+  guard (backend/src/auth/guards/mobile-only-signup.guard.ts on
+  POST /auth/signup/driver — needs the x-device-touch: 1 header to tell
+  the desktop-mode iPad from a real Mac).
+- Root cause: the header was attached ONLY in the TanStack query-wrapper
+  fetcher (query-wrapper.tsx:66). The signup POST actually goes through
+  src/lib/tanstack/dataQuery.ts baseFetch (useDataMutation → baseFetch),
+  which set Content-Type + Authorization but NEVER the touch header.
+  Result: form shown → submitted → server sees no hint + "Macintosh" UA
+  → classifySignupUserAgent → BLOCKED DESKTOP_UA → 403 "Driver signup is
+  available on phones and tablets only…" + BlockedSignup row. The
+  comment in driverOnboarding.tsx:243 even claimed the server gets the
+  signal — it never did.
+- Proof with the owner's exact UA (classifySignupUserAgent):
+    header missing (bug)        → blocked DESKTOP_UA
+    header present (after fix)  → pass MOBILE_UA
+    real Mac (touch=0)          → still blocked DESKTOP_UA (design)
+    normal iPad UA              → pass MOBILE_UA (design)
+    Windows touchscreen + hint  → still blocked DESKTOP_TOUCH_UA (design)
+- Fix (one line + comment): baseFetch headers now start with
+  "x-device-touch": deviceTouchHint() (import from @/lib/device), same
+  convention as query-wrapper (per-request headers can override).
+  Covers signup, driver-verify-email and onboarding posts (all route
+  through baseFetch). Multipart uploads and the token-refresh fetch are
+  not gated and untouched.
+- Frontend typecheck: 137 pre-existing errors before and after, none in
+  dataQuery.ts / device.ts (verified via git stash A/B).
+- Sandbox note: this turn began with the local checkout rolled back to
+  09828203 (recycle artifact) — the fix was first committed there
+  (6f59c049), then re-applied onto current origin/master and the stray
+  base discarded. Uncommitted upload-file deletions found on disk were
+  discarded (origin still carries those files — never committed).
+
+Stage Summary:
+- Desktop-mode iPads (the default iPad configuration) can now complete
+  driver signup; every desktop/laptop class stays blocked exactly as
+  before. Fix ships to users with the next frontend build. Owner can
+  confirm the historical rejections on the admin metrics page
+  (BlockedSignup reasons, DESKTOP_UA, with this UA and attempted email).
+
+---
+
+Task ID: 42
+Agent: main agent (Super Z)
+Task: link emails as a button + clickable copy-fallback; root cause of the glued-URL token corruption
+
+Work Log:
+- Owner ask: stop telling drivers to "copy this link" — send a real
+  BUTTON (click → navigates) with a clickable copy fallback, and make
+  the links clickable.
+- Renderer (notificationEvent.engine.ts):
+  * wrapSimpleHtml(subject, body, action?) now renders, when the sender
+    supplies an action: a blue button (same style as the tracking
+    "Track Delivery" button) + "Or copy this link: <a>url</a>" under the
+    body. Plain-text part keeps the URL on its own line (unchanged
+    contract).
+  * The action rides in the event payload (actionUrl/actionLabel) —
+    persisted, so deferred delivery is safe; deliver() selects payload
+    and forwards it. Every queueAndSend sender (engine templates AND
+    the campaign script) gets the button with zero extra plumbing.
+  * Linkify hardening (the big one): the old regex baked TRAILING
+    PUNCTUATION into the clickable href — the old invite sentence
+    "…token=<token>. You'll need…" produced href "…token=<token>." →
+    token "abc." ≠ "abc" → "Invalid or expired token" page. This was
+    almost certainly the ORIGINAL token complaint. The new linkifier
+    strips trailing .,!??:;')" from every URL in every email; render
+    test proves the old glued sentence now yields the clean token href.
+- Templates (driverApproval.engine.ts):
+  * driver-invited: no more mid-sentence URL — "Click the button below,
+    or copy this link, to complete your application:" + URL on its own
+    line (no trailing period); payload gains actionUrl +
+    actionLabel "Complete Your Application".
+  * re-invite: same treatment ("…to finish your onboarding:").
+  * driver-approved: body unchanged (URL already own-line); payload
+    gains actionUrl + actionLabel "Log In to Your Account".
+- Campaign script: invite text mirrored to the engine's new copy; both
+  campaign payloads carry the same actionUrl/actionLabel, so campaign
+  samples render exactly like production emails.
+- Verification: backend tsc clean (node_modules restored via
+  `npm ci --legacy-peer-deps` after the recycle wiped it — 1022 pkgs);
+  render test on the REAL wrapSimpleHtml: button + fallback rendered,
+  3/3 hrefs byte-equal the clean onboarding URL.
+
+Stage Summary:
+- Driver link emails now read "Click the button below, or copy this
+  link" and both the button and the link are clickable and clean; the
+  trailing-period href corruption (invalid-token class) is fixed for
+  every template. Ships with the next backend deploy.
+
+---
+
+Task ID: 43
+Agent: main agent (Super Z)
+Task: landing page — #dealers cards and hero chooser share one selection state
+
+Work Log:
+- Owner report: the landing page shows the Business/Personal cards in
+  TWO places (hero quote-form chooser ~line 1025, #dealers signup cards
+  ~line 1645); clicking one did not select the matching card in the
+  other. Root cause: same component, TWO states — the hero chooser used
+  `deliveryType` (useState, line 187) while the #dealers cards had their
+  own `signupCard` (useState, line 157).
+- Minimal shared-state change, nothing else:
+  * deleted the separate `signupCard` useState;
+  * `signupCard` is now DERIVED: `deliveryType ?? "BUSINESS"` (null →
+    BUSINESS preserves the pre-existing default look for fresh guests);
+  * `setSignupCard` is now an alias of `handleDeliveryTypeChange`, so
+    the #dealers cards, the navbar tabs (SELECT_SIGNUP_CARD_EVENT) and
+    the #dealers-business/#dealers-personal hash all write the ONE
+    state. Selecting Business/Personal anywhere selects it everywhere.
+  * The type-changing side effects (drop stale quote, persist prefill)
+    come with the shared state — identical to what hero-card clicks
+    always did; no new behavior invented.
+- Frontend typecheck: 137 pre-existing errors, unchanged, none in
+  homePage.tsx; no separate signupCard state remains.
+
+Stage Summary:
+- Both card sections (and the navbar tabs + hash links) now express one
+  selection: pick Personal in the #dealers section and the hero chooser
+  shows Personal selected too, and vice versa. Ships with the next
+  frontend build.
+
+---
+
+Task ID: 44
+Agent: main agent (Super Z)
+Task: investigate owner report "signupCard is not defined" on production; verify Task 43 at runtime
+
+Work Log:
+- Owner reported the landing page throwing "signupCard is not defined"
+  after the Task 43 deploy, with a fair process complaint: the change
+  was pushed on typecheck alone, without a runtime test.
+- Investigation of current master (a4b14e44):
+  * every signupCard/setSignupCard reference enumerated in file order —
+    derived const at line 196, alias at 615, all usages after; no TDZ,
+    no out-of-scope reference, no other file references it;
+  * vite production build PASSES;
+  * the built site served via vite preview and loaded in a headless
+    browser (agent-browser): the landing page renders with ZERO page
+    errors and zero console references to signupCard (only environment
+    noise: Maps API key, no backend behind preview);
+  * the Task 43 FEATURE is proven working at runtime, both directions:
+    (1) clicked Personal in the #dealers section (a <Link> — it also
+    navigated to the individual signup, correct behavior) → returned
+    to the landing page → hero chooser AND #dealers both show Personal
+    selected (aria-pressed false/true in both sections);
+    (2) clicked Business in the hero chooser → #dealers re-rendered to
+    Business live (aria-pressed true/false in both sections).
+- Conclusion: the reported ReferenceError does NOT exist in current
+  master — neither the old code (signupCard was declared) nor the new
+  (derived const, verified running) can throw it. The production error
+  almost certainly comes from a stale/partial deploy bundle or a stale
+  service-worker cache serving old chunks against new HTML (the app
+  ships sw.js with a build stamp). Recommended to the owner: redeploy
+  current master and hard-refresh; if it still errors, send the console
+  stack trace.
+- Process fix going forward: every FE push is now gated on (1) tsc,
+  (2) production build, (3) headless-browser load + console sweep,
+  (4) interaction test of the touched feature — before the push, not
+  after. The Task 43 push skipped (2)-(4); that miss is on this agent.
+
+Stage Summary:
+- No code change needed or made; current master is runtime-verified.
+  Task 43's shared selection confirmed working end-to-end in a real
+  browser environment.
+
+---
+
+Task ID: 45
+Agent: main agent (Super Z)
+Task: invite-link "expiry" question answered; status board becomes the post-login home for every driver status
+
+Work Log:
+- Owner asked how many days after invite links expire (they tested and
+  saw the "Invalid or Expired Link" screen) and said: if the link never
+  expires by time, keep the behavior as is.
+- ANSWER (verified in code, backend + frontend): there is NO day count —
+  the link never expires by time. The onboarding-complete page shows
+  "Invalid or Expired Link" for ANY failed token lookup; the token stops
+  matching an INVITED driver in exactly these cases: (1) the admin used
+  Resend invite — the token is ROTATED, the previous email's link dies
+  instantly and only the newest email works; (2) the driver already
+  completed onboarding — the link is one-time use; (3) the driver's
+  status left INVITED (approved/rejected/on hold); (4) unknown/typo'd
+  token. An expiry system briefly started this turn was FULLY REVERTED
+  per the owner's keep-as-is instruction (schema field, migration and
+  redemption checks all removed; master carries zero expiry code).
+- FE change (the live ask): after sign-in EVERY driver status now lands
+  on the status board (/driver-application-submitted) instead of
+  /driver/dashboard — the old onboardingCompleted → dashboard branch is
+  gone from DealerSignIn. The board is status-aware, reading the login
+  payload from localStorage: WAITLISTED (waitlist copy), INVITED (+
+  "Complete Your Application" carrying the onboarding token), PENDING /
+  PENDING_APPROVAL / MEETING_REQUESTED ("Under Review"), APPROVED (+
+  "Open Driver Dashboard"), ON_HOLD, SUSPENDED, REJECTED — same card
+  design throughout. Anonymous visitors (the signup flow's
+  application-submitted step) still get the original static
+  "Thank You — Waitlisted" screen, byte-for-byte.
+- Environment note: the sandbox recycled again mid-turn and rolled the
+  local repo back to 09828203, deleting committed work from the working
+  tree (including backend/src/upload/*). Recovered with reset --hard
+  origin/master (1ddffd55) — nothing committed was lost.
+- Verification (all four gates, before the push): tsc error-set diff vs
+  HEAD — zero new errors, four pre-existing ones removed by the deleted
+  branch (137 → 133); vite production build passes; headless browser
+  (built site via vite preview): anonymous screen identical, all six
+  seeded statuses render their correct board, "Complete Your
+  Application" navigates to /driver/onboarding-complete?token=… and
+  "Open Driver Dashboard" enters the driver area; zero page errors and
+  zero "not defined" console messages. Click-blocking during testing was
+  the app's own full-screen "Install the App" PWA prompt, not a defect.
+
+Stage Summary:
+- Invite links: unchanged (no TTL) — "expired" in that screen means the
+  token was rotated by a re-invite or already used, not that days passed.
+- All drivers now see a status board that tells the truth about their
+  application after sign-in; the dashboard is one tap away for approved
+  drivers. Ships with the next frontend build.
+
+---
+
+Task ID: 46
+Agent: main agent (Super Z)
+Task: "why cors?" — admin sign-in blocked by CORS preflight while driver sign-in works; CORS report verified against the LIVE API and the header allowlisted on the backend
+
+Work Log:
+- The owner's CORS report claimed admin login dies because the frontend
+  sends x-device-touch and the API's Access-Control-Allow-Headers omits
+  it. Verified against the LIVE API with curl preflights:
+  OPTIONS /api/auth/login from Origin https://101drivers.com returns 204
+  with the fixed allow-list (Content-Type, Authorization, …,
+  X-Admin-Gate-Token) — x-device-touch is NOT in it. The cors middleware
+  echoes its configured array regardless of what was requested, so the
+  BROWSER is what rejects the real request when it carries that header —
+  "Failed to fetch" before anything reaches the server. Origins and
+  credentials on the live API are correct (ACAO echoes the origin,
+  credentials true), so the header allow-list is the one broken piece —
+  the report's mechanism is real and confirmed.
+- The asymmetry (drivers can log in, admins cannot) is a DEPLOYED-BUNDLE
+  artifact, not a master-code one: on current master NO live code path
+  sends x-device-touch at all. The header lives only in
+  src/lib/tanstack/query-wrapper.tsx baseFetch, which nothing imports
+  (checked with grep); the login path used by BOTH /driver/signin and
+  /auth/admin-signin (the same DealerSignIn component → useDataMutation
+  → dataQuery.ts baseFetch) sends only Content-Type (+Authorization) —
+  and the live preflight for exactly that request PASSES. So whichever
+  bundle the admin browser runs was built from a tree where the header
+  sat in the shared fetch path; drivers' installed PWAs (service-worker
+  caches, rarely hard-refreshed) run older bundles without it. Could not
+  download the deployed bundle to prove which build: 101drivers.com
+  geo-gates this sandbox to availability.html and the .techbee.et host
+  is 502 — the reporter's DevTools observation is the ground truth for
+  what the admin browser sent.
+- Bonus finding: the backend's mobile-only-signup.guard READS
+  x-device-touch as the device gate's second signal, so the missing
+  allow-list entry silently disabled that signal for every cross-origin
+  (101drivers.com) signup — the gate has been running UA-only. The fix
+  repairs the gate too, not just login.
+- Fix (backend, 10 lines): x-device-touch / X-Device-Touch added to
+  allowedHeaders in src/common/cors-cookie.util.ts with a comment
+  explaining the preflight failure mode. Nothing else changed; master's
+  frontend needs no change (it doesn't send the header), but deploying
+  the API unblocks every bundle variant regardless.
+- Verification: project tsc — 2 pre-existing spec-file errors only
+  (auth.service.spec, token.service.spec — identical without my change);
+  cors echo test (scripts/cors-echo-test.js, real allowlist semantics
+  via the cors package): preflight now covers every requested header,
+  browser-style check true. Deploy of the backend is what ships this.
+- Environment: the sandbox recycled AGAIN mid-turn (HEAD rolled back to
+  09828203, backend/src/upload/* deleted, backend/node_modules wiped).
+  Recovered via reset --hard origin/master (a8979e82) + npm ci; the CORS
+  edit was re-applied on top of the CURRENT file after the first re-
+  apply accidentally resurrected an older file version from the rolled-
+  back tree (caught in diff review: it would have reintroduced the
+  retired techbee.et origin).
+
+Stage Summary:
+- Root cause of "Login failed / Failed to fetch" on admin sign-in: a
+  CORS allow-list that never included x-device-touch while some deployed
+  bundle sends it; drivers are unaffected because the bundles they run
+  never send it. Backend now allows the header — deploy the API and
+  admin login works from every bundle variant; the signup device gate
+  regains its touch signal as a side effect.
+
+---
+
+Task ID: 47
+Agent: main agent (Super Z)
+Task: laptop could do NOTHING while phone drivers could log in — x-device-touch was attached to EVERY API call; rescoped to driver signup only, exactly as the owner directed
+
+Work Log:
+- Owner correction: drivers also could not log in from the laptop — no
+  request worked at all — while phone drivers could. Root cause is the
+  same header from Task 46's report: the committed master tree attached
+  x-device-touch inside dataQuery.ts baseFetch, i.e. on EVERY query and
+  mutation. Any custom header forces a CORS preflight, and the live API
+  (without the b3f18ae1 allowlist deploy) rejects them all — so a laptop
+  browser running the current bundle loses every call, while phones run
+  older service-worker-cached bundles without the header and keep
+  working. (Task 46's "the header is dead code" conclusion was based on
+  a rolled-back working tree during another sandbox recycle — wrong at
+  HEAD; corrected here.)
+- The mobile-only guard needed NO change: it is and was applied to
+  exactly one route, POST /auth/signup/driver (auth.controller.ts:77) —
+  never to login or anything else. The owner's rule ("mobile-only is
+  only for driver onboarding") already holds on the backend.
+- FE fix (this commit): baseFetch no longer attaches x-device-touch;
+  useDataMutation gained an optional `headers` passthrough (documented:
+  use sparingly, custom headers force preflights); the header is now
+  attached ONLY to the three mutations that call
+  POST /auth/signup/driver (driver onboarding send-OTP, verify-email
+  resend + verify). The dead attach in the never-imported
+  query-wrapper.tsx removed; device.ts doc corrected. The client-side
+  mobile-only gate on the onboarding page is untouched — onboarding
+  stays phone/tablet-only by design.
+- Verification: FE tsc — 133 errors, identical count to the pre-change
+  baseline, none in the touched logic (the driver-verify-email
+  error.message ones pre-exist at HEAD lines 124/154; query-wrapper's
+  3-arg baseFetch calls pre-exist; driverOnboarding is @ts-nocheck);
+  vite build passes; built-bundle grep — x-device-touch appears only in
+  the driverOnboarding + index (verify-email) chunks, zero occurrences
+  in the shared fetch; headless-browser runtime capture with fetch
+  patched — the login POST carries keys [Content-Type] with
+  x-device-touch ABSENT, and the page's other calls likewise.
+- Deploys: the FRONTEND deploy removes the header from every non-signup
+  request — the laptop recovers even before the API deploy. The API
+  deploy (b3f18ae1) is still wanted so the signup request itself can
+  carry the header cross-origin and the device gate gets its touch
+  signal. Both are code fixes; nothing lives on techbee.
+
+Stage Summary:
+- One header, one purpose, three requests: driver signup OTP flow only.
+  Every other request goes out preflight-light (Content-Type only) and
+  works from any browser on any deploy combination. Backend untouched —
+  the guard was already scoped correctly.
+
+---
+
+Task ID: 48
+Agent: main agent (Super Z)
+Task: INVITED driver clicked "Complete Your Application" and got the invited card again instead of the form — two route paths, a layout guard dead-end, and a missing icon import
+
+Work Log:
+- Reproduced in the headless browser: clicking the board's "Complete
+  Your Application" (INVITED driver, token present) navigated to
+  /driver/onboarding-complete and NEVER reached the form. Two causes,
+  plus one latent crash behind them:
+  1. THE GUARD DEAD-END: the nested /driver/onboarding-complete route
+     sits under the /driver LAYOUT route, whose DriverLayout wraps
+     every child in DriverRouteGuard. For driverStatus INVITED the
+     guard renders its own "You've Been Invited!" card with copy
+     promising "You will be redirected to continue the process" — and
+     never redirects. That card at the onboarding URL is exactly what
+     the owner saw. (A no-token/unauthenticated visitor instead hits
+     the guard's needs_signin → /driver-signin, which is what the
+     first reproduction saw.)
+  2. TWO ROUTES, ONE BROKEN: a TOP-LEVEL /driver-onboarding-complete
+     route also exists (unguarded, correct validateSearch, renders the
+     form) and is ALREADY the guard's own needs_onboarding redirect
+     target — but the status board's button linked to the nested,
+     guarded one.
+  3. LATENT CRASH: the onboarding form referenced a lucide <Camera>
+     icon that was never imported (TS2304, pre-existing) — Section 4
+     "Verification Photo" threw ReferenceError the moment the form
+     rendered. The owner would have hit this right after any fix that
+     got them onto the page.
+- Fixes: board INVITED action now links to the top-level
+  /driver-onboarding-complete (unguarded); DriverRouteGuard's invited
+  state now actually redirects to that route with the token — same
+  target and mechanism as its needs_onboarding branch, no loop (the
+  guard does not wrap the top-level route) — and the card copy now
+  says the form is opening, with the card remaining only as the
+  no-token fallback; Camera added to the lucide imports; both guard
+  navigate() search payloads use the same `as never` cast the board
+  Link already used (routeTree typing doesn't surface validateSearch).
+- Verified end-to-end in the headless browser (INVITED user + token in
+  localStorage, status endpoint mocked 200): board click → URL
+  /driver-onboarding-complete?token=… → FORM RENDERS ("License",
+  "Verification Photo", "Take a clear selfie" all present, no crash,
+  no invalid-token card). Guard path: opening /driver/dashboard
+  directly as INVITED auto-redirects to
+  /driver-onboarding-complete?token=… . tsc 131 errors — two BELOW the
+  133 baseline (the casts cleared the guard's own typing errors); vite
+  build passes. Live API already serves
+  /api/public/drivers/onboarding-status (custom "Invalid or expired
+  token" 404 body proves the route is deployed).
+- Housekeeping: removed all three .docx files from download/ at the
+  owner's request (the right-drawer documents).
+
+Stage Summary:
+- INVITED drivers now have ONE working path into onboarding from
+  everywhere: board button, guard auto-redirect on any /driver page,
+  and the guard's own needs_onboarding flow all land on the unguarded
+  /driver-onboarding-complete?token=… form, which now renders fully.
+
+---
+
+Task ID: 49
+Agent: main agent (Super Z)
+Task: Owner completed driver onboarding from a LAPTOP — driver onboarding must be phone/tablet/iPad only (desktop gate was missing from the onboarding-complete flow)
+
+Work Log:
+- Root cause: the mobile-only rule existed ONLY on the driver signup
+  page. Task 48's fixes made /driver-onboarding-complete the one live
+  onboarding path (board button + guard auto-redirect), and that page
+  never grew the gate — so a desktop/laptop could open the form and
+  submit onboarding data. The backend endpoints had no gate either.
+- Frontend (src/components/pages/driverOnboardingComplete.tsx):
+  `shouldShowMobileOnlySignup()` now runs FIRST in the component, before
+  every other branch — a desktop/laptop gets the shared
+  MobileOnlySignupCard instead of the form, from BOTH entry routes
+  (covers the top-level route and the nested /driver route with one
+  change, so a route wrapper can never bypass it again). Placed after
+  all hooks (verified none after the branch point) so React rules hold.
+- Frontend submit headers: both onboarding-complete POSTs (public
+  token-based fetch and auth-based authFetchRaw) now send
+  `x-device-touch: deviceTouchHint()` — required so the server gate can
+  tell the iPadOS desktop-mode iPad (Macintosh UA + touch) apart from a
+  real Mac, exactly like the signup request already does.
+- Backend: MobileOnlySignupGuard (the same guard that protects POST
+  /auth/signup/driver — classifies UA + touch hint, writes every
+  desktop rejection to the BlockedSignup audit ledger) now guards BOTH
+  onboarding-complete endpoints: public POST /public/drivers/
+  onboarding-complete and authenticated POST /drivers/onboarding-
+  complete. PrismaService/AppEventsService are @Global so the guard's
+  DI works in DriverModule unchanged. The read-only onboarding-status
+  GET stays open (no data entry).
+- Verified in the headless browser:
+  • Desktop viewer (no touch, desktop UA): top-level route direct →
+    MOBILE-ONLY CARD, no form. Nested route with an INVITED session →
+    guard auto-redirects to the top-level route → MOBILE-ONLY CARD.
+  • Faithful iPhone profile (real iPhone UA + maxTouchPoints 5 + 390px
+    viewport): board → "Complete Your Application" →
+    /driver-onboarding-complete?token=… → FULL FORM renders ("License",
+    "Verification Photo"), no device card, no invalid-token card.
+    (Note: an iPhone-UA viewer with ZERO touch points is correctly
+    blocked — real iPhones always report touch, so the no-touch branch
+    can only catch spoofed/devtools viewers, as designed.)
+- Gates: FE tsc 131 errors (baseline — no new), vite build passes,
+  backend tsc clean except the 2 pre-existing spec-file errors; no
+  errors in the touched controllers.
+
+Stage Summary:
+- The owner's rule is now enforced end to end: the onboarding form
+  cannot be opened on a desktop/laptop (FE gate on both routes) and
+  cannot be submitted from one (server guard on both endpoints, every
+  attempt audited). Phones, tablets and iPads — including iPadOS
+  desktop-mode iPads — keep working unchanged.
+
+---
+
+Task ID: 50
+Agent: main agent (Super Z)
+Task: APPROVED driver saw the "You're Approved!" status board after login — approved drivers must go login → dashboard with no intermediate screens; only drivers with pending business may see the board
+
+Work Log:
+- Root cause: DealerSignIn's onSuccess sent EVERY driver to
+  /driver-application-submitted after sign-in (an explicit older owner
+  decision recorded in the comment: "EVERY driver status lands on the
+  status board... APPROVED drivers a dashboard shortcut"), with a 1s
+  setTimeout in front of it. The approved driver therefore always
+  painted the board's "You're Approved!" card and had to click through
+  to the dashboard themselves. The board route also had no beforeLoad,
+  so even a stale link to the board would paint it for an approved
+  driver.
+- Fix 1 — DealerSignIn driver branch is now status-aware with ONE
+  navigation per destination: APPROVED + onboardingCompleted →
+  /driver/dashboard; APPROVED + onboardingToken (not yet onboarded) →
+  /driver-onboarding-complete?token=…; APPROVED with neither →
+  /driver/dashboard (the driver route guard owns that edge case);
+  every other status → the status board. LoginResponse gained the
+  onboardingCompleted/onboardingToken/fullName fields it already
+  carried at runtime — killing the three pre-existing TS2339s on those
+  lines.
+- Fix 2 — the board route now has a beforeLoad guard: an
+  authenticated APPROVED driver who lands on
+  /driver-application-submitted by ANY path (stale link, manual URL,
+  redirect race) is thrown a redirect during route matching — BEFORE
+  any paint, so the board can never flash for them: onboarded →
+  /driver/dashboard, not-onboarded + token → the onboarding form.
+  Sync localStorage reads only; INVITED/PENDING/WAITLISTED/ON_HOLD/
+  REJECTED drivers still see the board unchanged, and the board's
+  "You're Approved!" card remains as a live-status fallback for a
+  driver sitting on the board when the admin approves them mid-session.
+- Verified in the headless browser (all four paths):
+  1. APPROVED+onboarded → /driver-application-submitted → redirected
+     to /driver/dashboard before any board paint; dashboard renders
+     (its pre-existing one-time proof-cam explainer fires on first
+     visit via the hasSeenProofCam flag — existing product step, not
+     part of this change).
+  2. APPROVED+not-onboarded+token → board URL → redirected to
+     /driver-onboarding-complete?token=… (device gate applies there on
+     a desktop, by design).
+  3. INVITED driver → board renders as before (regression check).
+  4. APPROVED+onboarded → /driver/dashboard directly → dashboard
+     content renders (map + AVAILABLE/MY BOOKINGS/ACTIVE tabs).
+- Gates: FE tsc 128 errors — three BELOW the 131 baseline (the
+  LoginResponse typing fixed the pre-existing errors); vite build
+  passes.
+
+Stage Summary:
+- The post-login rule now matches the owner's spec exactly: approved
+  drivers go login → dashboard (no intermediate screens, no flicker —
+  the board redirects before paint on every path), drivers still in
+  the application pipeline see the status board, and the board's
+  approved card is a live fallback rather than a mandatory stop.
+
+---
+
+Task ID: 51
+Agent: main agent (Super Z)
+Task: Central management for "only APPROVED drivers see the dashboard" — a SUSPENDED driver could reach the dashboard, and per-status messaging was scattered across guard screens
+
+Work Log:
+- Root causes found:
+  1. The central guard (DriverRouteGuard) had SEVEN inline outcomes: it
+     rendered its own full-screen cards for pending/waitlisted/on-hold/
+     invited/rejected and a special suspended "Access Denied", while the
+     status board (/driver-application-submitted) ALSO has a card for
+     every status (including SUSPENDED). Two parallel message systems —
+     the classic setup for drift.
+  2. The stale-snapshot hole: every gate (login redirect, root and /home
+     beforeLoad, the guard) reads driverStatus from localStorage, which
+     is a snapshot from LOGIN time. A driver the admin suspends or
+     rejects MID-SESSION keeps a valid token with a stored status of
+     APPROVED — every gate passes and they keep the dashboard for the
+     life of the (refreshable) session.
+  3. DealerSignIn hard-blocked SUSPENDED/REJECTED logins with a toast,
+     contradicting the owner rule that non-approved drivers should be
+     navigated to a screen showing their status.
+- Central rewrite (src/components/auth/DriverRouteGuard.tsx, the guard
+  that wraps the /driver layout AND every standalone driver page — one
+  function, one decision):
+  authenticated ⇔ DRIVER && APPROVED && onboardingCompleted.
+  needs_onboarding (APPROVED, form outstanding) → the onboarding form.
+  EVERY other driver status → /driver-application-submitted (the board
+  owns the per-status card + message). Non-DRIVER role keeps the access-
+  denied screen (a role problem, not a status one). The five inline
+  status screens and the suspended special case are DELETED — one
+  destination, so a future status only needs a board card, never a
+  guard change.
+- Mid-session enforcement (src/routes/driver.tsx layout): the driver
+  layout mounts once for ALL /driver/* pages, so it now revalidates the
+  driver's CURRENT status (GET /api/drivers/:profileId, read-own ACL)
+  with a 30s-stale query. If the server status (or onboarding flag)
+  differs from the stored snapshot, the stored user is refreshed and —
+  when no longer APPROVED — the driver is navigated to the board, which
+  renders the fresh card. First paint still uses localStorage, so
+  approved drivers never see a flicker or spinner; the suspended driver
+  is evicted within the first second of any driver page.
+- Login (DealerSignIn): the driver SUSPENDED/REJECTED door-blocks are
+  removed — every driver logs in; the Task 50 redirect sends APPROVED to
+  the dashboard and everyone else to the board with their status card.
+- Consistency: the root "/" and /home beforeLoad bounces now require
+  APPROVED + onboardingCompleted (was APPROVED only), matching the login
+  redirect and the guard.
+- Verified in the headless browser against a local stub API (built with
+  VITE_API_URL pointed at it; stub status file flipped per scenario):
+  A. Stale-session eviction: stored APPROVED + server SUSPENDED →
+     /driver/dashboard → redirected to the board, "Account Suspended"
+     card, stored user refreshed to SUSPENDED.
+  B. Approved regression: server APPROVED → dashboard renders, status
+     untouched.
+  C. REJECTED direct URL → board, "Application Not Approved" card.
+  D. INVITED direct URL → board, "You've Been Invited!" card (CTA to the
+     onboarding form remains on the card).
+  (First attempt with a window.fetch patch failed — location.href is a
+  full page load and the patch dies with the document; the stub-API
+  approach replaced it. scripts/stub-api.js kept for future proofs.)
+- Gates: FE tsc 128 errors (= baseline), vite build passes.
+
+Stage Summary:
+- One rule, one place: only an APPROVED + onboarded driver can render a
+  driver page, enforced by the central guard; every other status lands
+  on the status board that shows exactly their status and its message;
+  and a mid-session suspension is enforced by the layout's server
+  revalidation, closing the stale-snapshot hole that let suspended
+  drivers keep the dashboard.
+
+---
+
+Task ID: 52
+Agent: main agent (Super Z)
+Task: "Contact support" was a dead end for suspended/rejected drivers, and the PM2 log showed Prisma 500s from invalid delivery status filters ("OPEN", comma-joined legacy list)
+
+Work Log:
+- Contact support (frontend):
+  - The SUSPENDED and REJECTED board cards said "Please contact support"
+    with NO action, and the support pages themselves sit behind the
+    central driver guard — a suspended driver bounced off them could
+    never open a ticket. Two fixes:
+    1. DriverRouteGuard exempts the support routes (support-list,
+       issue-report, inbox + the nested /driver/* variants) for EVERY
+       authenticated driver regardless of status: the ticket pages are
+       the contact channel the cards point to; they never expose
+       dashboard data.
+    2. Both cards gained actions: a primary "Contact Support" button
+       (to /driver-issue-report) and a secondary "Chat on WhatsApp"
+       anchor using useWhatsAppSupportUrl() — the admin-configurable
+       URL from Config Hub (GET /api/appSettings/public/
+       whatsapp-support) with the built-in fallback constant. The
+       PolicySheet already lists driver@101drivers.com for email.
+- PM2 log errors (backend):
+  - The log lines came from GET /api/deliveryRequests/admin:
+    getAdminDeliveries spread the raw query string straight into the
+    Prisma where (status: input.status as any). EnumDeliveryRequestStatus
+    has no "OPEN" and no "UNASSIGNED", so a single invalid value or a
+    comma-joined list crashed with "Invalid value for argument `status`.
+    Expected EnumDeliveryRequestStatus."
+  - The current web admin page only sends valid enum values (the 'all'
+    option is never sent), so the callers are older cached PWA bundles
+    or the mobile app — hardening the backend is the central fix.
+  - getAdminDeliveries now normalizes the filter: split on commas, keep
+    only real enum values, query with { in }. Legacy "all" (and empty)
+    means no filter. A filter whose values are ALL unknown stays
+    impossible — { in: [] } matches ZERO rows, never silently
+    "everything". So "OPEN" returns an empty list instead of a 500, and
+    the comma list filters on its five valid statuses, dropping
+    UNASSIGNED.
+- Verified:
+  - Node simulation of the normalizer on the exact logged inputs:
+    "OPEN" -> filter applied, zero rows; "DRAFT,QUOTED,LISTED,BOOKED,
+    UNASSIGNED,ACTIVE" -> in:[DRAFT,QUOTED,LISTED,BOOKED,ACTIVE];
+    LISTED / CLOSED / ACTIVE,CLOSED -> matched rows; "all"/"" -> no
+    filter.
+  - Backend tsc: only the two pre-existing spec-file errors (baseline).
+  - FE tsc 128 (= baseline), vite build passes.
+  - Headless browser: suspended driver on the board sees "Account
+    Suspended" with both contact actions (wa.me link present); clicking
+    Contact Support renders /driver-issue-report (no bounce); the
+    suspended driver typing /driver/dashboard is still bounced to the
+    board — the exemption did not leak into the status rule.
+
+Stage Summary:
+- "Contact support" is now real for suspended and rejected drivers: an
+  in-app ticket button, an admin-configurable WhatsApp chat link, and
+  the existing driver@ email — and the support pages accept every
+  authenticated driver. The admin deliveries endpoint can no longer 500
+  on legacy or malformed status filters: unknown statuses yield zero
+  rows, comma lists are validated, and valid multi-status filters work.
+
+---
+
+Task ID: 53
+Agent: main agent (Super Z)
+Task: E2E test the driver sign-in / onboarding / onboarding-complete flows; verify the device gate (x-device-touch / MobileOnlySignupGuard) on driver onboarding never touches other roles
+
+Work Log:
+- Environment: the real Nest backend needs PostgreSQL which the sandbox
+  cannot run (no sudo), so the E2E ran against a mock API server
+  (scripts/mock-api-53.mjs) implementing the exact contracts these flows
+  touch (login payload incl. driverStatus/onboardingCompleted/
+  onboardingToken, /auth/me, refresh-token, public onboarding-status +
+  onboarding-complete, driver-selfie uploads) with the backend's CORS
+  allow-list mirrored. Real FE driven via vite dev with
+  VITE_API_URL=http://localhost:4550. One mock bug found and fixed
+  during the run: JSON.parse on a FormData body crashed the server —
+  now only application/json bodies are parsed.
+- Device-gate scoping audit (static):
+  - MobileOnlySignupGuard is attached to exactly THREE routes, all
+    driver-only: POST /auth/signup/driver, POST /drivers/onboarding-
+    complete (auth), POST /public/drivers/onboarding-complete (token).
+    No customer/admin/dealer route carries it.
+  - Client gate shouldShowMobileOnlySignup() renders a mobile-only card
+    on exactly three driver pages (signup, verify-email,
+    onboarding-complete).
+  - dataQuery.ts baseFetch does NOT attach x-device-touch globally (the
+    Task 46 CORS break cannot recur from master); only the driver
+    signup/verify/onboarding call sites send it explicitly.
+  - Server classification verified against the REAL backend code
+    (esbuild-bundled user-agent.util): iPhone/iPad/desktop-mode iPad
+    (Macintosh + touch=1) PASS; real Mac DESKTOP_UA, Windows laptop
+    DESKTOP_UA, touchscreen Windows DESKTOP_TOUCH_UA all BLOCKED.
+- E2E results (headless browser against the mock):
+  - Sign-in matrix: APPROVED+onboarded driver -> /driver/dashboard
+    (first run via the proof-cam explainer), INVITED driver ->
+    /driver-application-submitted board ("You've Been Invited!"),
+    APPROVED+onboardingToken driver -> /driver-onboarding-
+    complete?token=… . Dealer -> /dealer-dashboard; admin ->
+    /admin-dashboard. All login requests carried NO x-device-touch
+    header (mock log audit) — the device signal is nowhere near other
+    roles' flows.
+  - Desktop onboarding-complete shows the "Signup is mobile only" card
+    (client gate) while the server gate would 403 the same client —
+    consistent by design on both layers.
+  - Full tablet flow (navigator.maxTouchPoints/UA spoofed + canvas-backed
+    fake getUserMedia injected in-page before SPA navigation; the real
+    LivePhotoCapture camera chain runs): form renders with the token ->
+    all six text fields fill -> three captures fire the REAL upload
+    path (3 POSTs to /api/public/uploads/driver-selfie) -> Submit ->
+    POST /api/public/drivers/onboarding-complete with x-device-touch: 1
+    on the public token path -> "Onboarding Complete!" screen
+    ("We'll run your background check…").
+- Noted, not fixed (separate issue): /signin renders the app's 404 — its
+  only page file is routes/signin/-index.tsx whose dash prefix EXCLUDES
+  it from the URL tree. If customer sign-in is expected at /signin it is
+  currently unreachable; customer/dealer/admin access otherwise works.
+
+Stage Summary:
+- All three driver sign-in destinations verified against the login
+  contract, the onboarding-complete flow works end-to-end for a
+  touch client and is correctly refused for desktops on BOTH layers,
+  and the device gate is provably driver-only (3 routes, 3 pages, no
+  global header). The pasted board button (Contact Support) is the
+  unchanged primary action and still works.
+---
+Task ID: 50
+Agent: Main Agent
+Task: Pending-driver access — onboarding-data edit page + Application Status board checklist/support (client dev instructions)
+
+Work Log:
+- Confirmed the onboarding-token lifecycle against the engine before building: token is generated ONLY by admin invite (WAITLISTED → INVITED) and resend; completion requires INVITED and flips status to PENDING_APPROVAL; approval only runs from PENDING_APPROVAL. So "APPROVED + token + not onboarded" cannot exist — the login/guard token branches are defensive only. Corrected the earlier test-matrix assumption (mock artifact).
+- Backend, additive only:
+  - New DTO `driverOnboardingUpdate.dto.ts` (PATCH body): same contract as CompleteDriverOnboardingDto but ssn OPTIONAL (omitted → stored hash/encryption kept), dateOfBirth OPTIONAL (MM/DD/YYYY), zip optional.
+  - `driver.service.getOnboardingData(driverId)` — full prefill payload (license fields, photo URLs, address, DOB incl. a TZ-safe `dateOfBirthDisplay`, ssnLastFour ONLY — raw SSN never leaves the vault) + an `editable` flag (onboardingCompleted && status ∈ PENDING_APPROVAL/MEETING_REQUESTED/ON_HOLD/REJECTED).
+  - `driver.service.updateOnboardingData(driverId, dto)` — reuses the completion rulebook: identity uniqueness via `assertIdentityNotTaken(..., excludeDriverId)` (signature extended with an optional exclude param; both completion callers unchanged), 25+ DOB rule with real-calendar-date check, CA ZIP backstop (5-digit, 90001–96199, ZIP+4 normalized), license hash always rewritten, SSN writes only when re-entered, best-effort zip → service-area re-derivation, audit log (OTHER, actor null, before/after snapshots of the editable subset — ssnHash/ssnEncrypted never logged). status/onboardingCompletedAt are intentionally NOT written.
+  - `driverOnboarding.controller.ts`: GET /drivers/onboarding-data (own read) + PATCH /drivers/onboarding-data with the SAME MobileOnlySignupGuard as onboarding-complete (live-camera rule, refused on both layers for desktops).
+- Frontend:
+  - New page `driverOnboardingEdit.tsx` + route `/driver-onboarding-edit` (top-level, OUTSIDE the /driver DriverRouteGuard so non-approved drivers can reach it; self-guards: device gate → auth → GET editable check with per-status locked copy). UI mirrors onboarding-complete (reuses its exported Header/Footer/US_STATES): everything prefilled incl. photos shown as "tap to retake", DOB prefilled with "currently on file" hint, SSN shown masked "••• - last4 on file" behind an Update toggle, ZIP collected here (prefilled; completion form never asks). Submit → PATCH with x-device-touch; 409 SSN/LICENSE codes surface on-field; "Changes Saved" screen.
+  - Board (`driverApplicationSubmitted.tsx`) — dev-instruction gaps closed, no existing behavior changed:
+    - "Application Checklist" card for non-approved drivers: Personal info (Submitted), Driver's license (Uploaded / Not uploaded yet / Not started yet — driven by onboardingCompleted), Background check (Not started — begins after approval; the schema has no background-check fields yet, so this is the only truthful state).
+    - Contact Support button on EVERY status card (suspended/rejected keep their WhatsApp; the extra standard button is hidden there to avoid duplicates — REJECTED/SUSPENDED's primary action already IS Contact Support).
+    - "Edit Application Info" outline button for the editable statuses.
+  - driverOnboardingComplete.tsx: only three `export` keywords added (US_STATES, Header, Footer) — zero behavior change.
+- Verification:
+  - `nest build` clean; backend jest = exact baseline (8 failed / 445 passed suites+tests unchanged — failures pre-date this work); `vite build` clean.
+  - Live UI run-through with vite dev + a CORS mock of the two new endpoints (no DB in this sandbox): board asserted for PENDING_APPROVAL (checklist Uploaded + Edit + Support), REJECTED (primary Contact Support + WhatsApp + Edit), INVITED (Complete Your Application, license "Not uploaded yet", no Edit), SUSPENDED (WhatsApp, no dup support), WAITLISTED (Support only). Edit page: desktop shows the mobile-only card; touch-injected SPA nav renders the form; prefill verified field-by-field (DOB 05/14/1990, SSN •••-6789 on file, both photos loaded from stored URLs); PATCH payload captured — ssn/dateOfBirth omitted when untouched, ssn present after Update, x-device-touch:1 + Bearer present; Changes Saved screen; unauthenticated → redirects to /driver-signin; editable:false → "Editing not available" card with status chip; API-down → load-error card.
+  - Known limitation: no Postgres/docker in this sandbox, so the Nest handlers themselves were verified by types/build + baseline tests, not against a live DB; the mock captured the exact wire payloads the handlers will receive.
+
+Stage Summary:
+- Non-approved drivers can now log in, see an honest status board (status, short message, 3-row checklist, support always reachable) and edit everything they submitted at onboarding — prefilled, including images and dates — from a phone, without ever reaching jobs/map/earnings (guard untouched).
+- An edit never changes status or onboarding-completion state; identity uniqueness, 25+ DOB and CA ZIP rules still hold; SSN stays masked unless actively replaced; every edit is audit-logged with before/after snapshots and no identity material.
+- Deferred (needs owner decisions, backend fields that don't exist yet): background-check real states (waiting-on-authorization/in-progress/complete) and an admin-set "DL needs re-upload" flag; the board currently shows only the truthful "Not started"/"Uploaded" states and the edit page doubles as the DL re-upload path.
+---
+Task ID: 51
+Agent: Main Agent
+Task: License-only edit, PENDING_APPROVAL-only gate, admin-visible audit trail (scope correction to Task 50)
+
+Work Log:
+- Owner corrections applied to the onboarding-data feature:
+  1. Admin visibility: the trail is the AdminAuditLog row (driverId linked) which the existing /admin-audit-logs page already renders with before/after diffs. Fixed the entry so it reads correctly there: actorType SYSTEM (was USER, which the page labels "Admin User" — wrong for a driver-initiated action), reason made searchable ("Driver license info updated by driver during PENDING_APPROVAL (self-service edit)" — the page filters by action OTHER, driver, and reason-contains), and driverName added to the before/after JSON so the summary card names the driver. No identity material (hashes) in the log.
+  2. Mid-background-check edits: impossible by design now — the background check begins after approval, and editing is restricted to PENDING_APPROVAL ONLY. ONBOARDING_EDITABLE_STATUSES shrunk to [PENDING_APPROVAL] (was also MEETING_REQUESTED/ON_HOLD/REJECTED); the board hides the button for every other status and the server rejects them.
+  3. Field restriction: PATCH /drivers/onboarding-data now accepts ONLY licenseNumber, licenseState, licenseFrontUrl, licenseBackUrl (DTO rewritten). SSN, DOB, address, ZIP, selfie are no longer editable (validateEditDriverAge and the ZIP backstop became dead code and were removed; assertIdentityNotTaken signature widened so a license-only call type-checks and skips the SSN clash). GET payload trimmed to the license fields + status/editable — no DOB/address/SSN material shipped at all anymore.
+- Frontend: driverOnboardingEdit.tsx rewritten as a license-only page ("Update your driver's license", "Only your license can be updated here" alert, prefilled number/state/photos with tap-to-retake, license-409 surfaced on the number field, Changes Saved screen). Board button relabeled "Update Driver's License". Device gate, auth guard, not-editable card (now with per-status copy incl. APPROVED/SUSPENDED) and route all unchanged.
+- Verified: nest build clean; vite build clean; backend jest = exact baseline (8 failed / 445 passed, failures pre-date this work). Live UI over the mock: PENDING_APPROVAL board shows the button + checklist + support + Back to Home; REJECTED and MEETING_REQUESTED boards show NO edit button; edit form renders license-only with prefill (D1234567), PATCH captured with exactly {licenseNumber, licenseState, licenseFrontUrl, licenseBackUrl} + x-device-touch:1 + Bearer; Changes Saved screen; editable:false → "Editing not available" + PENDING APPROVAL chip; desktop UA → mobile-only card. Same sandbox limitation as Task 50: handlers verified by types/build/baseline (no DB here); the mock captured the exact wire payloads.
+
+Stage Summary:
+- Flow now exactly as the owner described: non-approved driver logs in → Application Status board (status, checklist, Contact Support, Back to Home) → ONLY a PENDING_APPROVAL driver sees one extra button ("Update Driver's License") → license-only edit page (number, issuing state, front/back photos, prefilled) → save never changes status.
+- Admins see every edit on the existing Audit Logs page (filter by driver / action OTHER / reason "license"), with before/after values and no identity material.
+- Everything else (SSN, DOB, address, selfie) is locked for self-service — support or admin paths only.
+---
+Task ID: 52
+Agent: Main Agent
+Task: Fix live 404 on /api/drivers/onboarding-data — route-order shadowing by the :id catch-alls
+
+Work Log:
+- Owner hit the bug on a real device: GET /api/drivers/onboarding-data answered the driver module's base 404 `No resource was found for {"id":"onboarding-data"}`. Diagnosis: the self-service routes lived in a second @Controller("drivers") class (DriverOnboardingController) registered AFTER DriverController, which redeclares the Amplication base catch-alls as its own methods (driver -> GET /:id, updateDriver -> PATCH /:id). NestJS scans controller methods in DECLARATION order and Express matches in registration order, so the catch-alls won every single-segment subpath: GET /onboarding-data and GET /onboarding-status -> base 404; PATCH /onboarding-data -> fell into PATCH /:id and failed (500 in the reproduction). Only POST /onboarding-complete survived (no POST /:id catch-all exists) — which is why onboarding completion kept working while the edit page was dead.
+- Fix: the four route methods (onboarding-complete, onboarding-status, GET/PATCH onboarding-data) moved VERBATIM into DriverController and declared BEFORE the catch-alls (right after the constructor); DriverOnboardingController deleted; driver.module.ts controllers array updated with a comment warning that a second @Controller("drivers") class gets its GET/PATCH routes swallowed. No path, payload, guard or status-gate change — the frontend and the Task-51 PDF contract are untouched.
+- Verification (this time against the REAL router, not a mock — the Task 50/51 mock-based e2e could never see this class of bug):
+  1. New backend/src/driver/driverRouting.spec.ts boots the real DriverController behind the "api" global prefix (matching main.ts) and asserts each self-service route reaches ITS handler (stub service returns marker payloads) while GET/PATCH /:id still serve real drivers and still 404 unknown ids. Run against the pre-fix arrangement it failed exactly like production (3 failed: GET data 404, PATCH data, GET status); after the fix it passes 6/6.
+  2. First placement attempt appended the routes at the BOTTOM of DriverController — still shadowed (declaration order); a route-stack dump (express layer order) proved the mechanism and the reposition. The spec now locks this in permanently.
+  3. driver.controller.base.spec.ts updated to override MobileOnlySignupGuard (the onboarding routes make it a guard of this controller; its PrismaService/AppEventsService deps don't exist in that bare module) — mirrors the existing guard-override pattern.
+  4. nest build clean. Full backend jest run serially, A/B against pristine 492fe07d: identical failure set (8 suites / 29 tests — auth spec compile errors, other modules' base specs, pricing engine, user service; all pre-date this work), plus 6 new passing tests from the routing spec.
+
+Stage Summary:
+- The Update Driver's License flow now actually works end to end: prefill GET returns the license payload, PATCH reaches the license-only validator, and onboarding-status serves the board — every self-service route reaches its own handler instead of the ":id" catch-all.
+- A route-ordering regression spec guards the ordering constraint permanently; anyone who redeclares the routes elsewhere or re-appends them below the catch-alls will see the suite fail with the production 404 message.
+---
+Task ID: 53
+Agent: Main Agent
+Task: Fix live 403 "Driver profile not found" on GET /api/drivers/onboarding-data — handlers read a request.user field the JWT layer never sets
+
+Work Log:
+- Owner hit the endpoint from the edit page on the Task-52 build: every GET /api/drivers/onboarding-data answered 403 {"message":"Driver profile not found","error":"Forbidden","statusCode":403}. Root cause: the onboarding handlers resolved the driver from `request.user.profileId`, but JwtStrategyBase.validate() rebuilds request.user from the DB on EVERY request and returns ONLY { id, username, roles, isSuperAdmin } — profileId is never present, so auth + ACL passed and the handler 403'd for every driver, always. DriverPayoutController.resolveDriverId even documents this exact contract ("req.user only contains { id, username, roles } from the JWT — no profileId"). The Task-52 routing spec masked the bug because its stub user smuggled profileId onto request.user — a shape production never produces (same class of miss as the Task-50/51 mock e2e: a mock can only prove what it assumes).
+- Fix (driver.controller.ts only): injected PrismaService (PrismaModule is @Global, no module changes) and added resolveDriverProfileId(request) — reads the AUTHENTICATED user id, prisma.driver.findUnique({ where: { userId } }) (Driver.userId is @unique in the schema), 403 "Driver profile not found" only when the row genuinely does not exist. All four self-service handlers (POST onboarding-complete, GET/PATCH onboarding-data, GET onboarding-status) now use it; getOnboardingStatus keeps its graceful default shape when no row exists, as before. No path, payload, guard, DTO or status-gate change; frontend untouched.
+- Test layers rebuilt so the stubs match production:
+  1. driverRouting.spec.ts: the auth stub now mirrors the real JwtStrategy output ({ id, username, roles, isSuperAdmin } — NO profileId), the user id is switchable via an x-test-user-id header, and a prisma.driver.findUnique fake is keyed on userId. New test pins the exact production 403 payload for a DRIVER user with no driver row. 7/7 (was 6/6).
+  2. NEW backend/src/driver/driverOnboarding.e2e.spec.ts — the layer that would have caught this bug: boots the REAL request pipeline (real DefaultAuthGuard + JwtStrategyBase.validate() pointed at the in-memory user store, real ACGuard + grants.json, real MobileOnlySignupGuard device gate, real ACL interceptors, real ValidationPipe, real DriverService + DriverDomain; only the Prisma boundary and DriverService's unused domain deps (policy / approval engine / service area) are faked — as a PLAIN OBJECT, not a Proxy: a Proxy get-trap returning functions for every property stalls Nest's DI lifecycle scan and the module never compiles). Real access tokens are minted with TokenServiceBase's exact payload { sub, username, roles, type: "access" }. 7/7: 401 unauthenticated; GET onboarding-data 200 with the real service payload; GET 403 with the exact production body for a profile-less DRIVER; PATCH from an iPhone UA 200 with the license updated through the real updateOnboardingData + the AdminAuditLog row written; PATCH from a desktop UA 403 (mobile-only gate); GET onboarding-status real payload; GET /:id catch-all still serves real ids.
+  3. driver.controller.base.spec.ts: supplies the new PrismaService constructor dep. 5/5.
+- Verified: driver specs 19/19. tsc --noEmit shows only 2 errors that also exist on pristine 13a5bb6c (auth.service.spec.ts:105, tests/auth/token.service.spec.ts:24 — pre-existing). Full backend suite serially: failure set IDENTICAL to the Task-52 baseline — 8 suites / 29 tests, all in unrelated modules (auth spec compile errors, other modules' base specs, pricing engine, user service); passed 445 -> 459, the +14 being exactly this task's new green tests (routing +1, e2e +7, plus Task-52's 6 now counted in the same run).
+
+Stage Summary:
+- Pull and retest: GET /api/drivers/onboarding-data with a logged-in driver now returns the license payload; PATCH saves from a phone/tablet. The 403 remains only for an authenticated user with genuinely no Driver row — the honest business failure, not a routing/auth artifact.
+- Reminder: PATCH /onboarding-data and POST /onboarding-complete stay PHONE/TABLET-ONLY by design (MobileOnlySignupGuard) — a desktop browser gets the mobile-only 403 card. The GET endpoints work everywhere.
+- The e2e spec now guards the user-shape contract permanently: any handler that starts reading a field JwtStrategyBase.validate() does not set will fail the suite with the production 403 body.
+---
+Task ID: 54
+Agent: Main Agent
+Task: Enforce PHONE/TABLET-ONLY on the whole driver self-service onboarding surface (all four /drivers/onboarding-* routes) — including anti-spoof hardening for DevTools device toolbar / UA switchers
+
+Work Log:
+- Owner rule after the Task-53 fix: the GET endpoints were still reachable from desktops because only POST/PATCH carried a device gate — and the owner explicitly worried about DevTools' device toolbar ("toggle device toolbar as a phone"). The GET prefill was a leak (a desktop saw the license data), so the gate now covers ALL FOUR routes: POST /onboarding-complete, GET/PATCH /onboarding-data, GET /onboarding-status.
+- New stricter classifier classifyDriverDeviceRequest in backend/src/common/user-agent.util.ts, layered on top of the signup rules:
+  1. x-device-touch REQUIRED — device.ts attaches it to every driver-onboarding call, so a real phone/tablet always carries it; a curl/Postman/scripted replay with a borrowed iPhone UA does not know to (NO_TOUCH_HINT). (Signup cannot require it — the header is only sent on FE calls that opt in.)
+  2. Client-hint coherence: Chrome derives sec-ch-ua-mobile / sec-ch-ua-platform from the REAL browser on every request, and UA-switcher extensions rewrite the UA but NOT these. "?0" while the UA claims a phone, a platform hint claiming Windows/macOS/Linux/Chrome OS, or an Android platform report next to an iPhone UA → CLIENT_HINT_MISMATCH. This also closes the old "Mac UA + touch hint = iPad" shortcut for desktop Chromium — its platform hint says "macOS".
+  3. iPadOS desktop-mode iPad unchanged: Safari and Chrome-on-iOS are WebKit and send NO client hints, so the touch hint alone keeps admitting them.
+  4. Honest limitation, documented in code and tests: DevTools' device toolbar rewrites UA AND client hints coherently, so it still passes at the HTTP layer — the request line is the only evidence the server ever gets. The deterrent is the audit: every block writes a BlockedSignup row (reason + " (driver portal)" suffix) feeding the admin spam radar.
+- New MobileOnlyDriverGuard (backend/src/auth/guards/mobile-only-driver.guard.ts) mirrors the signup guard (fire-and-forget BlockedSignup write + APP_EVENT ping + 403 mobileOnlyDriverPayload with message/storeUrl — same body shape the FE cards already handle) and replaces MobileOnlySignupGuard on POST/PATCH and is ADDED to both GETs.
+- FE: driverOnboardingEdit.tsx GET prefill now attaches x-device-touch (PATCH and the auth-based POST already did); any server block (403 + storeUrl) renders the MobileOnlySignupCard instead of a form flash or toast — covers the spoof case where the client gate passes but the server disagrees. device.ts doc comment synced (hint now goes on signup + driver-onboarding calls; still never global — CORS preflight).
+- Verification:
+  1. user-agent.util.spec.ts: +14 tests — real-device matrix (iPhone / Android phone+tablet with coherent hints / iPad classic / desktop-mode iPad with NO hints) and the strict rules (no hint, ?0, desktop platform report, Android-platform+iPhone-UA, empty UA, and the pinned DevTools coherent-pass case). jest-each gotcha: rows with fewer entries than the callback arity made jest wait for a done() — every row now carries all five columns.
+  2. driverRouting.spec.ts (7/7) + driver.controller.base.spec.ts (5/5): guard override swapped to MobileOnlyDriverGuard.
+  3. driverOnboarding.e2e.spec.ts over the real pipeline (real DefaultAuthGuard/JwtStrategy/ACGuard/MobileOnlyDriverGuard/ACL/ValidationPipe/DriverService, real signed tokens): 10 tests — happy paths carry iPhone UA + hint (GET data, PATCH save + audit row, GET status); new negatives: GET without the hint → exact blocked body; GET with iPhone UA + ?0/"Windows" hints (extension spoof) → blocked; GET with Windows UA + touch hint → blocked; 401 without token unchanged; GET /:id catch-all (ungated admin surface) still serves real ids.
+  4. Full backend suite serially: failure set IDENTICAL to the Task-52/53 baseline — 8 suites / 29 tests, all pre-existing in unrelated modules; passed 459 -> 473 (+14 = this task's new green tests). vite build clean.
+
+Stage Summary:
+- Pull and retest: phone/tablet (any iPad mode) → the whole flow works as before; desktop → the client gate shows the phone/tablet card immediately and the server refuses every onboarding route; UA-switcher extension or scripted replay → server 403 + BlockedSignup audit row. DevTools device-toolbar emulation still passes at the HTTP layer (physically undetectable from headers alone) but is now documented, pinned in tests, and every other spoof class lands in the audit trail.
+- The touch hint is now a load-bearing signal: any new driver-onboarding FE call MUST attach x-device-touch (deviceTouchHint()) or the server will read it as a scripted replay — device.ts and the e2e specs document this.
+---
+Task ID: 55
+Agent: Main Agent
+Task: "Last Updated" tracking for driver onboarding details on the admin Users surface — new Driver columns, table column on admin-users, date + actor on the user-detail card
+
+Work Log:
+- Owner rule: admins must see WHEN a driver last updated their onboarding details (license edit page or any other self-service path) and BY WHOM.
+- Schema (backend/prisma/schema.prisma + migration 20261106090000_driver_last_onboarding_update): Driver.lastOnboardingUpdateAt (TIMESTAMP(3), nullable) + Driver.lastOnboardingUpdateBy (TEXT, actor email). Nullable on purpose — rows that predate the column stay NULL, no backfill (same policy as invitedAt/ssnEncrypted); the UI hides the empty state instead of showing a fake date.
+- Stamped at every DRIVER self-service write of onboarding data (backend/src/driver/driver.service.ts), actor = the driver's own email (read from the row's user relation the service already loads — no extra query):
+  1. updateOnboardingData (PATCH /api/drivers/onboarding-data — the edit page; the main post-completion path).
+  2. completeOnboarding (authed POST /api/drivers/onboarding-complete) and 3. completeOnboardingByToken (public token path) — the initial submission IS the first onboarding-detail update, so both stamp it.
+  Deliberate scope: admin-side profile tweaks (adminUpdateUser edits phone/photo/zip) do NOT restamp — that surface is already covered row-by-row by AdminAuditLog; this column answers "when did the DRIVER last submit onboarding details".
+- Exposed on the admin surface (backend/src/user/user.service.ts): the V2 unified list select (GET /api/users/admin/v2 rows → driver embed) and getAdminUserDetail (GET /api/users/:id/admin-detail) now include both fields. The driver endpoints' own response shapes are UNCHANGED (the onboarding-data GET/PATCH responses still return the license payload only — no FE contract drift on the driver side).
+- FE: src/types/users.ts AdminDriverEmbed + AdminUserDriverDetail carry lastOnboardingUpdateAt/By (string | null). admin-users.tsx: new "Last Updated" column (Created → Actions) rendering the date for driver rows and "—" for customers/admins (they have no onboarding to update); both colSpans widened 7 → 8 (loading skeleton + empty state). admin-user-detail.tsx Driver Profile card: "Last updated" row (formatDateTime) with "by <actor email>", hidden when the stamp is NULL — same conditional pattern as the Invited row.
+- Sandbox note: the recycle restored a STALE snapshot this session — local .git sat at an Oct 30 commit, backend/node_modules and the Task-54 guard file were missing. Recovered by git fetch + reset --hard origin/master (remote tip b7a4c92c held everything) and `bun install` for backend deps; prisma client regenerated with the pinned CLI (npx pulls prisma@8 which has no `generate` — always use node_modules/.bin/prisma).
+- Verification: driverOnboarding.e2e.spec.ts now seeds the driver's email and asserts the PATCH stamp (lastOnboardingUpdateAt instanceof Date, lastOnboardingUpdateBy = the driver email) against the in-memory store. Affected suites green (driver e2e/routing/base, user base). Full serial suite: failure set IDENTICAL to baseline — 8 suites / 29 tests, all pre-existing; 473 passed (unchanged count — the stamp assertions extend an existing e2e test). vite build clean.
+
+Stage Summary:
+- Pull and retest: the admin Users table has a "Last Updated" column (drivers show the date their onboarding details last changed; other roles show —); the user-detail Driver Profile card shows "Last updated <datetime> by <actor email>". Save a license edit from a phone → the stamp moves. Run `prisma migrate deploy` on deploy (migration 20261106090000).
+- Rows onboarded before this ship show "—" / hide the row (NULL, no backfill) — intentional and consistent with the invitedAt policy.
+---
+Task ID: 56
+Agent: Main Agent
+Task: Rotate button on the shared PhotoDialog (admin license/selfie viewing) + senior-dev recommendation for image-quality detection at capture
+
+Work Log:
+- User: license pics on the admin user-detail page need a rotate function on the click-to-view dialog. Second ask (question only): some DL images are so blurred they are unreadable — what tools/how to detect image quality when the driver captures license + selfie. Answered in conversation (client-side heuristics at capture, server-side sharp-based scoring with a flag-not-block policy, commercial ID-capture SDKs as the buy option).
+- Rotate is VIEW-ONLY by design: license/selfie/delivery-proof images are submitted evidence — rewriting the stored file from a viewer (rotate → re-encode → re-upload) would silently change what the driver submitted, with no audit trail. Rotation resets whenever the dialog opens or the image swaps (front → back), so a stale angle never leaks into the next photo.
+- src/components/ui/photo-dialog.tsx: always-visible Rotate button (RotateCw, 90° steps, aria-label), CSS transform with transition. A transform never changes the layout box, so while sideways (90/270) the img is constrained to max-w-[60vh] — a wide license photo rotated upright then fits the same area instead of overflowing the dialog. The button row now renders for every dialog (previously hidden when neither Download nor Update was shown — view-only dialogs gain Rotate).
+- One shared component → 10+ pages get it for free: admin-user-detail (license front/back, selfie), admin-support-detail, dealer-support-detail/-request, admin-delivery-details, driver-issue-report, driver-preferences, dealer-dashboard, dealer-delivery-details, driver-support-detail. No caller changes needed (no new props).
+- Sandbox note: the flaky file-sync reverted repo files AND .git mid-session again (HEAD fell back to 09828203; backend/src/upload/*, worklog and node_modules vanished). Recovered with git fetch + reset --hard origin/master (17c0c62f intact on GitHub) + bun install + prisma generate. Everything verified before editing.
+- Verification: vite build clean. No FE component tests exist for the dialog (pricing lib tests only); the change is purely presentational local state — no data flow touched.
+
+Stage Summary:
+- Pull and retest: open any license/selfie image on the admin user-detail page → Rotate button under the photo; each click turns it 90° clockwise, image stays inside the dialog when rotated upright; closing and reopening (or switching front/back) resets the angle. Same button now appears on every evidence-photo dialog across the app.
+- If ops later wants rotation PERSISTED on the stored file, that is a deliberate v2: canvas re-encode → the same upload endpoint the admin Update Photo path uses → new URL on the driver record + AdminAuditLog row — it rewrites evidence, so it needs the audit trail by design.
+---
+Task ID: 57
+Agent: Main Agent
+Task: Investigate 101drivers.techbee.et links in invite/approval emails + harden the link-host resolution (emails only, per user scope)
+
+Work Log:
+- User: invited drivers receive emails linking to https://101drivers.techbee.et/driver-onboarding-complete?token=… but the domain should be 101drivers.com; user states no env var mentions techbee.et. Scope fixed by user afterwards: ONLY invite/approve emails that include links; do NOT touch Stripe (user: "no stripe url is changed"), cookies/auth.
+- IMPORTANT CORRECTION mid-task: the first diagnosis ("two hardcoded techbee.et fallbacks at engine:922 / campaign script:207, APP_DOMAIN unset") was made against STALE file content served by the sandbox's flaky file-sync — the .git dir and tree reverted to pre-Oct-31 states mid-session (recovered twice via git fetch + reset --hard origin/master). After a verified reset to true origin/master (ce6b1eed) the REAL state is: commit be9572a9 (2026-11-03, "101drivers.com everywhere") already removed every techbee.et fallback from the email paths. All 7 active link sites in driverApproval.engine.ts (143/159 onboarding invite, 261/272 signin approval, 930/949 reminder/resend, incl. actionUrl variants) + the campaign script const already fall back to 101drivers.com.
+- TRUE root cause therefore: any server build deployed before 2026-11-03 still emits techbee.et links (the fallback strings existed 2026-05-13 → 11-03; the campaign script itself was born 10-19 with a techbee fallback and its header docs say it exists partly to re-send correct links). With the user's env (101_DOMAIN/APP_DOMAIN/ROOT_DOMAIN all = https://101drivers.com), a CURRENT build always emits .com. Action for user: deploy/restart the backend on current master, then re-send invites to affected drivers (tokens stay valid; new .com links work).
+- Hardening applied anyway (defense against a missing/stale APP_DOMAIN in any context, e.g. a shell export that dotenv won't override): backend/src/domain/driver/driverApproval.engine.ts gains exported driverLinkHost() — precedence 101_DOMAIN (canonical, matches .env.example + MailService) → APP_DOMAIN (legacy) → bare 101drivers.com — strips scheme + trailing slashes; replaces the inline expression at all 7 sites (incl. the commented historical copy). backend/scripts/send-invite-approval-emails.ts: same precedence for its appDomain const + a startup console.log of the resolved base so a wrong-domain campaign is visible before sending.
+- Side observation (NOT changed, cookie/auth out of scope): user's ROOT_DOMAIN=https://101drivers.com includes the scheme; auth.service.ts:456 uses it raw as a cookie Domain candidate (.${root}) — recommend setting ROOT_DOMAIN=101drivers.com (no scheme) on the server.
+- Sandbox note: sync reverted .git + backend/src/upload/* + worklog + node_modules AGAIN during this task; all recovered (patch of email edits saved to /home/z/my-project/scripts/email-domain-fix.patch before reset — did not apply cleanly against newer files, so edits were re-applied manually on the true HEAD).
+- Verification: npm run build (prisma generate + nest build) clean at final state; driverLinkHost() present ×8 (signature + 6 active + 1 commented); zero techbee.et in code strings (remaining mentions are the script's doc comments describing its purpose).
+
+Stage Summary:
+- Pull and deploy the backend on current master, then re-send invites/approvals to any driver who received a techbee.et link — current code + the user's env can only emit 101drivers.com. The bulk campaign (`npm run email:campaign:dry` first) now logs its resolved link base at startup: "[email-campaign] invite/approval links will use: https://…".
+- Recommend: set ROOT_DOMAIN=101drivers.com (no scheme) in the server env — the cookie code uses the value raw.
+---
+Task ID: 58
+Agent: Main Agent
+Task: email:audit script — extract the URLs actually sent to drivers and confirm they point at 101drivers.com
+
+Work Log:
+- User: "we need to extract the latest email we sent to drivers and confirm if the urls sent are correct… sent this week."
+- Where sent emails live: every email goes through NotificationEventEngine.queueAndSend → NotificationEvent ledger row (channel EMAIL, status SENT/FAILED/QUEUED, full email text in `body`, plus templateCode/toEmail/driverId/sentAt). No SMTP access needed — the ledger IS the source of truth for "what did we send".
+- New backend/scripts/audit-email-urls.ts (read-only, standalone PrismaClient, same dotenv pattern as the campaign script): window via --days N (default 7) or --since YYYY-MM-DD; default scope = driver emails (driverId set), --all-recipients to widen; extracts every URL from body + payload (JSON.stringify), histogram by host, allow-list = 101drivers.com/www.101drivers.com, flags every row containing a foreign host (e.g. techbee.et) with status/template/recipient/sentAt so re-sends can be targeted; writes email-url-audit-<timestamp>.csv (one row per email, hosts+urls joined) for spreadsheets.
+- npm script "email:audit" added next to the campaign entries.
+- Verification: standalone tsc --noEmit passes (skipLibCheck, commonjs). NOT executed against a live DB — the sandbox has no production DATABASE_URL; the query is a plain findMany against the schema-verified NotificationEvent model (enums EMAIL/SENT/FAILED/QUEUED confirmed, no @@map so table name is "NotificationEvent"). First real run happens on the server.
+- Companion instant check that needs no deploy (psql against prod DB): SELECT count(*) FROM "NotificationEvent" WHERE channel='EMAIL' AND status='SENT' AND "sentAt" >= now() - interval '7 days' AND body LIKE '%techbee.et%';
+---
+Task ID: 59
+Agent: Main Agent
+Task: Admin "Emails Sent" page — visible ledger of every email the system sent, with wrong-domain URL flagging
+
+Work Log:
+- User: "isn't there any page that shows emails sent. we need to have." → no such page existed; the NotificationEvent ledger was API/script-only. Built the page + its admin endpoint.
+- Backend — new adminEmails module (mirrors the hand-written adminDashboard pattern, NOT the generated ACL CRUD style): GET /api/adminEmails, guarded by DefaultAuthGuard + AdminGuard (the hard DB-backed ADMIN role gate — deliberately no ACL resource, so no grants.json change is needed). GET (not POST/search — read-only, cacheable, query params are simple): filters days (default 7, clamp ≤365) / since / until, status (SENT|FAILED|QUEUED), templateCode + recipient q (both insensitive contains), audience all|drivers (drivers = driverId NOT NULL), page/pageSize (clamp 1..100, default 25). Selects the ledger fields incl. body; excludes payload (bulky, not needed on the page). Plain findMany/count on NotificationEvent — no writes, ever: the ledger is engine-authored.
+- Frontend — src/routes/admin-emails/index.tsx (file route + AdminRouteGuard, same shape as admin-audit-logs) + src/components/pages/admin-emails.tsx + navItems entry "Emails Sent" after "Audit Logs". The page mirrors admin-audit-logs conventions (authFetch + VITE_API_URL, lime accent, Card/Badge/Select, dark classes): filter bar (status, recipients all/drivers, window 1/7/30/90 days, recipient search, template search — debounced), table (sent time, status badge green/red/amber, template, recipient, subject), a Links column with one host badge per distinct link host — red ⚠ badge for anything not 101drivers.com/www.101drivers.com (same allow-list as the email:audit script) and the whole row tinted red — and a View dialog with the full body, every link green-checked/⚠-flagged, plus failed-send errorMessage. Pagination prev/next (25/page), "N flagged on this page" header badge, empty + loading + error states in the house style.
+- Admin sees "emails sent this week" with zero SQL now; the email:audit script stays as the CSV/server-side deep audit (same allow-list constant — update both together).
+- Sandbox: no further sync incidents this task; backend node_modules survived from the earlier reinstall.
+- Verification: backend nest build 0 errors; FE vite build clean, routeTree.gen.ts regenerated with /admin-emails (13 refs). No unit tests exist for admin list endpoints (no harness for Prisma-backed controllers without a live DB) — logic is a plain findMany/count against the schema-verified model; first real click happens after deploy.
+
+Stage Summary:
+- Pull + deploy both apps. Admin sidebar → "Emails Sent": filter to Last 7 days + Drivers only → every invite/approval/reminder email with its status and links; any red host badge = a wrong-domain email → re-send that driver. The list is the live version of `npm run email:audit`.
+- The endpoint is read-only and admin-gated; nothing in the notification flow changes.
+
+
+Stage Summary:
+- Pull on the server, then from backend/: `npm run email:audit` (or `-- --since 2026-11-03` to bracket the Nov 3 domain fix). The console prints the host histogram — every host must be 101drivers.com; any ⚠ row is a driver to re-send (tokens stay valid). The CSV lands in backend/ for a spreadsheet review.
+---
+Task ID: 60
+Agent: Main Agent
+Task: email:proof — one-command per-driver evidence pack ("we sent the correct email to every driver")
+
+Work Log:
+- User: "how can I show a proof that we sent the correct email for all drivers. invitation and that campaign proof. is there any?"
+- Proof that ALREADY existed: (1) NotificationEvent ledger rows — per-email toEmail/templateCode/status SENT-FAILED/sentAt + full body text (URLs included); (2) the bulk campaign stamps a campaignId into every row's payload and writes its own per-recipient report files (backend/email-campaign-reports/email-campaign-report-<timestamp>.json + .md) when it runs; (3) Task 58's email:audit CSV + Task 59's Emails Sent page. What was missing: a driver-completeness cross-check — the audit only looks at emails that were sent, not at drivers who should have received one and didn't.
+- New backend/scripts/email-proof-report.ts (npm run email:proof, read-only): joins Driver × NotificationEvent — default scope = drivers with status INVITED/APPROVED/REJECTED (every status that passes through the invite flow; --statuses to override); for each driver evaluates the latest driver-invited + driver-approved ledger rows: send status (SENT/FAILED/QUEUED/MISSING), sentAt, distinct URL hosts from the body, compliance vs the 101drivers.com allow-list (same constant as email:audit), campaignIds from payload. Verdicts: OK / NO_EMAIL / SEND_FAILED / PENDING / URL_BAD — non-OK rows ARE the re-send worklist. Optional --campaign <id> filters ledger rows to one bulk campaign; --since narrows which sends count as proof. Console prints per-verdict counts + problem list + explicit "✓ PROOF" line when clean; CSV lands in email-campaign-reports/email-proof-<timestamp>.csv next to the campaign reports (one proof folder).
+- Fixed two draft artifacts before commit (no-op filter with `|| true`, unused summarize param); added missing driverId to the EmailRow type + select after tsc caught it.
+- Verification: standalone tsc --noEmit passes. Not executed against a live DB (no prod DATABASE_URL in sandbox) — plain findMany on schema-verified models (Driver.status EnumDriverStatus, driver.user.email/fullName as used by DriverApprovalEngine itself). First real run is on the server.
+- Deliberate choice: report is all-time by default — completeness ("every driver got it") is a timeless claim; window filters exist for proving post-fix sends only.
+
+Stage Summary:
+- The evidence pack, end to end: `npm run email:proof` → console verdicts + email-campaign-reports/email-proof-<stamp>.csv; the campaign's own per-recipient reports (email-campaign-reports/*.json/.md) cover "that campaign"; the Emails Sent admin page covers ad-hoc eyeballing. Any non-OK verdict = re-send that driver (Resend Invite / campaign --retry-failed-from) — tokens stay valid.
+---
+Task ID: 61
+Agent: Main Agent
+Task: Emails Sent page — header stats endpoint + campaign filter + dialog UI fixes
+
+Work Log:
+- User: (1) "show the stat above… in another endpoint. include how many invite email sent, approval, meeting requested, etc"; (2) campaign filter showing how many it sent + filtering the table; (3) dialog is horizontally scrollable instead of wrapping and the close icon overlaps the title.
+- Template codes enumerated (62 total): the meeting one is "driver-meeting-request"; main codes for cards: driver-invited, driver-approved, dealer-approved, driver-meeting-request, payment-receipt/failed, support-*, email-verification. FE keeps a TEMPLATE_LABELS map with raw-code fallback, so any future template shows up unstyled but correct.
+- Backend: new GET /api/adminEmails/stats (declared BEFORE the root list route): same window/audience/recipient-search filters as the list (NOT status/template/campaign — the cards are the overview, the table is the drill-down). Per-template SENT/FAILED/QUEUED via groupBy(templateCode,status). Campaign list via $queryRaw: payload->>'campaignId' GROUP BY with COUNT(*) FILTER (WHERE status='SENT'), lastAt, newest first, LIMIT 20 — Prisma groupBy cannot group on a JSON path, hence SQL. List endpoint gains campaign param: payload { path: ["campaignId"], equals } JSON filter. resolveWindow() extracted (shared by list/stats).
+- FE: stat-card row above the filters — "All emails" card (sent big, failed/queued small, red for failures) + up to 7 per-template cards (sent count big; clicking a card drills the table into that template via the existing template filter; active card highlighted lime). Campaign dropdown added to the filter bar (6-col grid): "All campaigns" default + the 20 most recent campaigns labelled with readable dates (campaign-2026-11-08T14-30… → "2026-11-08 14:30 UTC · N sent"), full id on title; selecting filters the table and the page count below updates.
+- Dialog UI fixes per user report: DialogContent now overflow-x-hidden + w-[calc(100%-2rem)] sm:max-w-2xl; title gets pr-10 + break-words (clears the absolute close icon that overlapped it — pr-6 was not enough) and description pr-10 + break-all; link rows get min-w-0/flex-1 so long URLs wrap instead of forcing horizontal scroll; full-body <pre> gets break-all alongside whitespace-pre-wrap; both body sections overflow-hidden.
+- Verification: backend nest build 0 errors (JSON path filter + raw SQL compile); FE vite build clean, route tree unchanged. Not clicked against a live DB from the sandbox — groupBy + $queryRaw against Postgres enum/JSON literals verified against schema (channel/status are PG enums — string literals cast implicitly; payload is Json → ->> works).
+
+Stage Summary:
+- Deploy both apps → Emails Sent page now opens with stat cards (invites, approvals, meeting requests, …, per selected window) and a Campaign dropdown listing the last 20 bulk campaigns with sent counts; picking one filters the table. Dialog no longer scrolls horizontally and the close button no longer covers the title.
+- If a campaign ran with --all-recipients it includes dealer emails — the audience filter still applies on top of the campaign filter.
+---
+Task ID: 62
+Agent: Main Agent
+Task: Email & Support Log rename, cdn.101drivers.com allow-list, FAILED-row highlighting, image attachments in dialog
+
+Work Log:
+- User: (1) the page includes support requests → rename away from "Emails Sent"; (2) cdn.101drivers.com is a right link → no red rows for it; (3) red should mark FAILED rows instead; (4) dialog should show images, not just attachment text.
+- Rename: nav item + page title → "Email & Support Log" (route /admin-emails and files unchanged — no churn for a label change). Subtitle now names the page's scope: invites, approvals, meeting requests, support tickets. TEMPLATE_LABELS gains support-replied/assigned/status so support traffic shows friendly names in the stat cards (the support-* templates exist: the support-request-orchestrator emails ops@101drivers.com with templateCode support-created and the driver's message as body).
+- cdn.101drivers.com added to the allow-list in all three places that share it: FE page, audit-email-urls.ts, email-proof-report.ts. Root cause it's legit: upload.service serves uploads at https://cdn.101drivers.com/101-drivers/<file> — license images and support attachments ride in email bodies as CDN links, which the audit would otherwise flag as foreign hosts.
+- Row tint switched from "has non-compliant host" to `status === 'FAILED'` (per user: red = failed sends). The header badge now counts failed rows ("N failed on this page") instead of wrong-domain rows. Host badges keep flagging non-compliant domains — still the audit trail, just no longer drives the row color.
+- Image attachments in the dialog: new isImageUrl (path extension png/jpe?g/gif/webp/bmp/svg) + rowImages helpers; the dialog renders an "Images in this email" section between Links and Full body — grid of thumbnails (h-32 object-cover, rounded, lime hover border) linking to the full image in a new tab. So a support email whose body says "attachment" now shows the actual image(s).
+- Verification: FE vite build clean; both backend scripts pass standalone tsc. isImageUrl handles query strings via pathname-only test (CDN URLs are extension-terminated; presigned/query URLs still match by path). Images render via <img> directly from the CDN — no backend proxy, no upload change.
+- Sandbox: no sync incidents; edits applied on freshly read files.
+
+Stage Summary:
+- Deploy both apps → sidebar shows "Email & Support Log"; cdn.101drivers.com links count as compliant everywhere (page + email:audit + email:proof); failed sends glow red instead of wrong-domain rows; the View dialog shows image attachments inline.
+- Note for the audit scripts: re-running them on the server now yields fewer flagged rows — cdn hosts are expected, techbee.et still flags.
+---
+Task ID: 63
+Agent: Main Agent
+Task: Emails page stat cards rebuilt in admin-users style; loading dots instead of disappearing; campaign labels as readable dates
+
+Work Log:
+- User: stat cards should look like admin-users ("small and UI"); when stats change they must show loading dots on the card instead of completely disappearing; campaign filter label shows "21-11-03:21 UTC" garbage — wants "Oct 20, 2026" style.
+- Inspected admin-users RoleStatCard anatomy and mirrored it exactly: Card rounded-2xl p-2; header button = h-6 w-6 icon chip + text-[10px] font-bold uppercase tracking-widest title + text-xl font-black total + active dot; border-t breakdown row of inline chips (text-xs count + text-[9px] uppercase label, active chip gets its color bg + ring). Wrote local MiniStatCard + AnimatedNumber (count-up, ease-out 600ms, prefers-reduced-motion aware) in admin-emails.tsx — same behavior, no cross-page import.
+- Five cards, one row (grid-cols-1 sm:grid-cols-2 xl:grid-cols-5): All emails (Mail, lime) / Invites (UserPlus, sky) / Approvals (BadgeCheck, emerald) / Meeting requests (CalendarClock, violet) / Support (LifeBuoy, amber). Chips on every card = Sent (emerald) / Failed (rose) / Queued (amber). Card total filters to the group; chip stacks a status filter; clicking an active card/chip clears. Group totals computed with groupStat(): sum byTemplate entries whose templateCode CONTAINS the group needle ('' for all, 'driver-invited', 'approved' → driver+dealer+compliance-approved, 'driver-meeting-request', 'support' → all support-*) — identical match to the backend templateCode contains-filter, so a card's number always equals what clicking it shows.
+- Disappearing cards fixed structurally: the section is ALWAYS mounted; loading renders '…' in totals and '–' in chips (exact admin-users behavior). TEMPLATE_LABELS removed (no longer rendered per-template).
+- Campaign dropdown: campaignLabel(id, lastAt) → toLocaleDateString {month:'short', day:'numeric', year:'numeric'} → "Nov 8, 2026 · 47 sent"; falls back to parsing the campaign-YYYY-MM-DD id, then the raw id. Full id still on title hover.
+- Verification: vite build clean; section unmount bug impossible by construction (no conditional wrapper); card totals cross-checked against groupStat semantics ('' includes-matches all codes).
+
+Stage Summary:
+- Deploy FE → stat cards now match admin-users: small ERP cards with animated totals and Sent/Failed/Queued chips; they stay on screen with dots while loading/refetching; campaign dropdown reads "Nov 8, 2026 · N sent".
+---
+Task ID: 64
+Agent: Main Agent
+Task: Campaign filter drives stats + window; pagination keeps campaign; Template dropdown
+
+Work Log:
+- User reports: (1) with a campaign picked, stat cards still show whole-window numbers (272 vs the table's 173); (2) the 7-day window fights the campaign ("campaign is one day only") and older campaigns can't be picked at all; (3) clicking Next loses the campaign filter; (4) Template should be a dropdown, not free text.
+- Scope rule change (the core fix): a campaign is now its OWN time scope. Backend list() and stats() both drop the createdAt window when campaign is present (payload path filter replaces it) — last month's campaign is browsable without touching the window. The campaigns SQL in stats() is windowless entirely (LIMIT 20 newest), so every recent campaign is selectable regardless of the visible window. stats() groupBy WHERE gains the campaign payload filter, so per-template counts and totals now reflect the selected campaign → "All emails" card == table total (user's 173 case).
+- FE: statsParams gains campaign (and drops days when campaign selected); queryParams drops days as well; the Window select is disabled with "(campaign overrides)" hint + tooltip while a campaign is active. Both useQuery calls get placeholderData: keepPreviousData — pagination no longer blanks the table/pagination mid-fetch.
+- Next-click filter loss root cause: the list useQuery had no keepPreviousData, and any list error triggered a WHOLE-PAGE isError early-return that replaced the entire UI (filters included) with an error card — exactly "the campaign filter becomes gone". Removed the early return; errors now render an inline red banner above the table (Retry button), filters/dropdown/pagination stay mounted.
+- Template field: Input → Select fed by statsData.byTemplate (codes active in the current scope — window OR selected campaign — busiest first), labels from a re-added TEMPLATE_LABELS map ("Driver approval · 12"); "All templates" sentinel '__all__' (Radix forbids empty values); a synthetic "Filter: <needle>" item appears when a stat card set a contains-needle (e.g. 'approved') that isn't an exact code, so the dropdown never shows a wrong selection. Backend still does contains-matching, unchanged.
+- Verification: FE vite build clean; backend nest build 0 errors. Stat/table parity follows from shared campaign scope + groupStat contains-match semantics (needle group totals == what the filter returns).
+
+Stage Summary:
+- Deploy both → picking a campaign now rescores EVERYTHING to that campaign (cards == table), ignores the day window, works for campaigns older than 7 days (dropdown lists the 20 newest campaigns all-time), and survives pagination. Template is a dropdown of the codes actually in scope. Errors keep the page intact.
+---
+Task ID: 65
+Agent: Main Agent
+Task: Backend CSV/Excel export of the full filtered email log; pagination loading spinners top+bottom
+
+Work Log:
+- User: (1) All-emails card must show the campaign total, not the week total; (2) export as CSV AND Excel, from the backend, covering ALL matching emails — not just the current page; (3) loading indicator near the Prev/Next buttons at the top AND bottom of the table.
+- (1) Verified in code: Task 64 already scopes stats() to the campaign (payload path filter replaces the window) and the FE sends campaign + omits days on the stats call — the All-emails card total comes from those scoped totals, so it equals the table total. The user's remaining symptom is a deployment issue: the fix spans backend + frontend and BOTH must be redeployed. No code change needed.
+- Export endpoint: GET /api/adminEmails/export?format=csv|xlsx (admin-guarded like the rest). Extracted buildListWhere() shared by list() and exportEmails() so the export ALWAYS matches the table's scope: campaign-or-window, status, templateCode contains, recipient q, audience. NO pagination — findMany takes up to MAX_EXPORT_ROWS=20000 newest-first. CSV: UTF-8 BOM + CRLF + RFC-4180 quoting; Excel: real .xlsx via ExcelJS (already a dependency) — bold frozen header row, autoFilter, date cells numFmt yyyy-mm-dd hh:mm:ss, campaignId pulled from payload JSON, body truncated at 32000 chars (Excel cell cap), filename email-log-<stamp>.{csv,xlsx} via StreamableFile Content-Disposition.
+- FE export: CSV + Excel buttons next to Refresh, disabled while an export runs (spinner in the button), authFetchRaw → blob → anchor download (same auth/refresh path as the rest of the page), filename honored from the Content-Disposition header, failures surface as small red error text next to the buttons. exportParams derives from queryParams by stripping page/pageSize — one source of truth, export always equals the visible filters.
+- Loading cues: new top toolbar inside the table card (Page X of Y · N emails · "updating…" + spinner + Prev/Next) and the bottom pagination bar now shows the same spinner next to Prev/Next while isFetching. With keepPreviousData rows stay visible during refetch — the spinners are the "it is loading" signal on filter changes and page flips.
+- Verification: backend build clean; exceljs runtime smoke test (writeBuffer → valid PK zip); vite build clean. Export row cap and scope parity follow from the shared buildListWhere (single code path for list + export).
+
+Stage Summary:
+- Deploy BOTH apps → campaign-selected stats show the campaign total; CSV and Excel buttons export the full filtered set from the backend; spinners appear next to Prev/Next at the top and bottom of the table while data loads.
+
+
+
+
+
+
+
+
+
+
+
+
+
+---
+Task ID: 66
+Agent: Main Agent
+Task: Meeting request From-scope choice (mine/platform) + always-BCC triggerer + provenance in the emails log
+
+Work Log:
+- User: admins should choose "send from my email" (pre-filled, editable) vs "send from platform"; the mail keeps leaving from the shared address; the triggerer always gets a copy; the panel must show who triggered it, when, and the exact email.
+- MailService.sendMail gains optional replyTo/bcc (nodemailer supports both; from stays the platform address — an arbitrary personal From would fail SPF/DKIM and land in spam).
+- DTO UserAdminRequestMeetingDto gains fromMode (platform|mine, IsIn) + fromEmail (IsString/MaxLength); controller -> user.service -> driver.service -> DriverApprovalEngine passthrough. Engine: validates the address in mine mode, resolves the acting admin (email+name) from actorUserId BEFORE the tx, computes replyTo (mine only) and bcc (always — the chosen address in mine mode, the admin's account email in platform mode). A personal send signs with the admin's name and adds a small footer "Sent by <name (email)> ... replies go directly to them"; platform keeps the plain 101 Drivers signature.
+- Provenance: audit afterJson gains email{fromMode,replyTo,bcc,triggeredBy}; NotificationEvent payload gains fromMode/replyTo/bcc/triggeredBy/triggeredByName/triggeredByUserId. adminEmails list select now returns payload; the Emails & Support Log detail dialog shows a "Triggered by ..." block (name, email, From scope, BCC) for meeting-request sends — who/when/exact body all visible without anyone's Sent folder.
+- FE: RequestMeetingDialog gains a "Send from" Select (default "My email address", pre-filled from getUser().email, editable; alternative "Platform — info@101drivers.com"), a validity check disabling Send, and helper copy explaining Reply-To + BCC mechanics; onConfirm(message, fromMode, fromEmail); both call sites (admin-users table + driver profile page) pass fromMode/fromEmail into the mutation; RequestDriverMeetingRequest typed; currentUser store type gains email.
+
+REPO RESCUE (same task): mid-turn the sandbox came back with local master parked on 09828203 (another session's last commit — an ANCESTOR of origin/master, missing the whole adminEmails module) and wiped backend node_modules. Recovered by: reinstalling BE deps (--legacy-peer-deps), restoring git-deleted backend/src/upload, saving the in-progress Task 66 diff to a patch, `git checkout -B master origin/master` (back to 439b5078 with Tasks 60-65), `git apply --3way` the code-only patch (all 11 files clean). The other session's uncommitted worklog entry is preserved in /home/z/my-project/task66-on-other-lineage.patch; their tip is an ancestor of master, nothing lost.
+
+Verification: backend nest build 0 errors; vite build clean. Deliverability reasoning: platform From + Reply-To/BCC is the only safe personal-send mechanism for a single-mailbox SMTP account.
+
+---
+Task ID: 67
+Agent: Main Agent
+Task: Resend Meeting Request for Meeting-Requested drivers + From-dialog email pre-fill fix
+
+Work Log:
+- User: (1) there should be a resend-meeting-request button for meeting-requested drivers; (2) the "from my email" input is NOT pre-filled with the logged-in admin's email.
+- Backend (DriverApprovalEngine.requestMeetingDriver): the status pre-guard and the ATOMIC in-transaction updateMany guard now accept BOTH PENDING_APPROVAL (first request) and MEETING_REQUESTED (resend — status is set idempotently). Approved / rejected / on-hold / suspended still throw 400 before anything is written. Provenance: a `resend: true` flag lands in the AdminAuditLog afterJson.email block AND the NotificationEvent payload whenever the driver was already Meeting-Requested, so the Email & Support Log can tell a resend from the first send; beforeJson.status records which state it came from. Same endpoint (POST /api/users/:id/request-meeting-driver), same single-transaction email+audit+notification semantics — a failed SMTP send still rolls everything back.
+- Pre-fill root cause: Task 66 stored the login payload (which includes email), but (a) sessions logged in BEFORE that deploy have no email in localStorage and never will via the refresh flow because the token-refresh merge in dataQuery.ts did NOT copy data.email — and admins keep their session alive for weeks via the sliding refresh cookie, so they never re-login; (b) GET /api/auth/me didn't return email either (JwtStrategyBase.validate returned only id/username/roles/isSuperAdmin). Fixes: refresh merge now carries `email: data.email ?? prev?.email ?? null` (heals every existing session within one keep-alive cycle, ~10 min); JwtStrategyBase.validate returns the account email (validate already reads the full user row) so /me is a reliable source; RequestMeetingDialog on open falls back to a one-shot GET /api/auth/me and heals the stored user when localStorage has no email — the field is then pre-filled and editable as before.
+- FE buttons: admin-users.tsx MEETING_REQUESTED row block gains a violet "Resend Meeting" button between Approve and Reject; admin-user-detail.tsx gains "Resend Meeting Request" in the meeting-requested action row. Both pass mode='resend' into RequestMeetingDialog (derived from the row's driver status), which switches its title, description, info box, and Send-button copy ("Resend Email" / "Resending..."); status stays Meeting-Requested (no funnel move). Request/idle default keeps the original copy.
+- schema.graphql: regenerated by the verification boot — it now emits the driver-lifecycle audit enum values (DriverHold/DriverMeetingRequest/DriverRelease/DriverServiceAreaChange/ServiceAreaUpdate) that were added to Prisma in earlier tasks but never synced into the committed GraphQL schema. Additive only.
+- NEW verification spec src/tests/meeting-resend/userMeetingResend.spec.ts: boots the REAL AppModule (production module graph — real UserController → UserService → DriverService → DriverApprovalEngine, none mocked) with ONLY the external boundaries overridden: PrismaService (proxy-backed in-memory mock; generic fallback covers getAdminUserDetail's ~6 parallel findMany probes) and MailService (records sends; isConfigured=true; a real SMTP account is never exercised). Guard/interceptor overrides use overrideGuard/overrideInterceptor (overrideProvider silently misses route-level @UseGuards classes). Env: JWT_SECRET_KEY + JWT_EXPIRATION + BCRYPT_SALT must exist or boot fails (PasswordService throws at construction; AuthModule factory reads JWT_SECRET_KEY via SecretsManager — NOT JWT_SECRET).
+- Spec results: 5/5 — (1) MEETING_REQUESTED resend: one email, Reply-To+BCC = the picked admin address, updateMany where.status.in == [PENDING_APPROVAL, MEETING_REQUESTED], resend=true in BOTH audit + notification, beforeJson.status == MEETING_REQUESTED; (2) PENDING_APPROVAL first-request regression: no resend flag; (3) APPROVED driver → 400 with zero writes; (4) SMTP failure → 500, no email leaves; (5) platform mode ignores fromEmail, BCC falls back to the admin's ACCOUNT email.
+- Targeted suites: driverRouting, user.controller.base, jwt.strategy (email addition covered) all PASS; auth.service.spec + token.service.spec still fail — CONFIRMED pre-existing by running them on the stashed clean baseline (same compile errors, 0 tests, unchanged). Full jest run OOM-killed in the sandbox (Killed) — sandbox memory limit, not a regression; targeted coverage spans every touched path. Backend nest build 0 errors; vite build clean.
+
+Stage Summary:
+- Deploy BOTH apps → meeting-requested drivers show "Resend Meeting" (users table) / "Resend Meeting Request" (driver profile); the dialog opens with the admin's REAL address pre-filled and editable (heals old sessions via refresh merge + /me fallback), and every resend is a fully audited second email with resend provenance in the log.
+
+---
+Task ID: 68
+Agent: Main Agent
+Task: Shared-record BCC (info@101drivers.com) on every admin meeting-request send
+
+Work Log:
+- User's real requirement clarified: they only have their own mailbox, so the point is (1) driver replies land in THEIR mailbox and (2) info@101drivers.com keeps a shared record of every send. They believed the From header must be their address for replies to come to them — wrong: Reply-To decides that. Reply-To (mine mode) already routes driver replies to the admin's mailbox; the From header never did.
+- Transport facts (unchanged): sends leave via ONE shared SMTP account (SMTP_USER, documented smtp.gmail.com + app password). Gmail only files a send in the AUTHENTICATED account's Sent folder and silently rewrites a From that is neither the authenticated address nor a verified "Send mail as" alias on it — so a literal From=<admin> cannot be done in code and would be rewritten anyway. Sent-tab visibility for each admin would require per-mailbox auth (Workspace OAuth / per-admin app passwords) — declined for now; not needed for the reply requirement.
+- Implemented the BCC half of the request: MailService gains platformFromAddress getter (bare mailbox behind SMTP_FROM / default info@101drivers.com) and sendMail bcc widened to string|string[]|null. DriverApprovalEngine.requestMeetingDriver builds a dedupe'd BCC set: the admin tracking copy (mine: the picked address; platform: the account email) PLUS the platform record address; the recipient's own address is filtered out (filter applied after toEmail is resolved — it lives below the driver pre-read). Audit afterJson.email.bcc and NotificationEvent payload.bcc now carry the array.
+- FE RequestMeetingDialog helper copy updated: states info@101drivers.com gets a hidden record copy of every send; mine-mode line now explicitly says driver replies come straight to the admin's mailbox (the thing the user was unsure about); platform-mode line says replies go to info@.
+- Spec updated: mailMock gains platformFromAddress; both BCC assertions now expect [admin copy, info@101drivers.com].
+
+Verification: backend tsc -p tsconfig.build.json --noEmit clean; userMeetingResend.spec 5/5 PASS (resend, first-request, guard, rollback, platform mode). FE tsc -p tsconfig.fe-check.json: 0 errors in RequestMeetingDialog.tsx (128 pre-existing errors elsewhere, untouched by this change — JSX copy-only edit).
+
+Stage Summary:
+- Deploy backend + FE → every meeting-request email (first send and resend, both From modes) silently BCCs info@101drivers.com as the shared record in addition to the triggering admin's copy; driver replies keep landing in the admin's own mailbox via Reply-To. Optional ops step if the visible From should be a specific admin: add that address as a verified "Send mail as" alias on the SMTP account (Gmail Settings → Accounts → Send mail as) — no code change needed.
+
+---
+Task ID: 69
+Agent: Main Agent
+Task: Driver replies reach BOTH the admin's mailbox and info@ (dual Reply-To) — completes the shared-inbox workflow
+
+Work Log:
+- User asked to confirm the end-to-end workflow: (1) when a driver replies, the admin (who only has their own mailbox) can see it; (2) the admin can write to those drivers again while info@101drivers.com sees it. (1) already worked via Reply-To (Task 66); (2) was half-covered for panel sends (Task 68's shared-record BCC) but the DRIVER'S REPLY still went only to the admin, so info@ never saw the conversation.
+- Fix (DriverApprovalEngine.requestMeetingDriver, mine mode): Reply-To is now a list — the admin's address FIRST plus the platform record address (info@101drivers.com, deduped if identical). Consequences: a driver's "Reply" arrives in the admin's mailbox AND info@; and because the reply lands in both mailboxes addressed to both, the admin's "Reply All" from their own mailbox keeps info@ on the thread with zero manual steps (plain "Reply" drops info@ — documented to the user). Platform mode unchanged: no Reply-To, replies go to the From address (info@ itself). No deliverability impact — Reply-To headers don't affect SPF/DKIM/DMARC.
+- Footer copy updated: "replies go directly to them" → "replies reach them and the team inbox" (accurate with the dual Reply-To). FE RequestMeetingDialog helper copy now states driver replies reach the admin's mailbox AND info@101drivers.com.
+- REPO RESCUE (same task): sandbox recycled again — local master parked on 09828203 (the other session's ancestor commit), backend node_modules wiped, backend/src/upload git-deleted, and the other session's uncommitted Task 30 worklog entry sitting in the working tree. Recovered identically to the Task 66 rescue: entry preserved to /home/z/my-project/task30-other-session-worklog.patch, worklog.md reverted, `git checkout -B master origin/master` (→ 961ea59c with Tasks 60-68), `git checkout -- backend/src/upload`, backend deps reinstalled (--legacy-peer-deps).
+
+Verification: backend tsc -p tsconfig.build.json --noEmit clean; userMeetingResend.spec 5/5 PASS — mine-mode now asserts replyTo === "admin@101drivers.com, info@101drivers.com" and bcc === [admin copy, info@]; platform-mode still asserts replyTo null. FE tsc -p tsconfig.fe-check.json: 0 errors in RequestMeetingDialog.tsx.
+
+Stage Summary:
+- Deploy backend + FE → the full shared-inbox workflow works with no per-email manual steps: driver replies land in the admin's own mailbox (and info@), every panel send is recorded in info@ via BCC, and the admin's "Reply All" keeps info@ in the ongoing thread. If the admin replies from their own mailbox with plain "Reply" (not Reply All), info@ drops off — adding info@ to BCC by habit covers that case.
+
+---
+Task ID: 71
+Agent: Main Agent
+Task: REVERT Task 70 per user direction
+
+Work Log:
+- User corrected the intent: "just an idea" meant brainstorm, not a build request, AND the idea itself was different — the admin sends the meeting email from their OWN mailbox and the admin PANEL should detect it on its own and move the driver to MEETING_REQUESTED automatically (no button at all). Task 70 built a manual mark-only button instead and was pushed without a go-ahead.
+- Action: `git revert -n 801d9d4a` — exact inverse of the Task 70 commit (12 files, +94/-277). Working tree verified byte-identical to 986163d3 (Task 69). userMeetingResend.spec re-run: 5/5 PASS. The auto-detection idea is NOT implemented; it stays a proposal for the user to approve or change (short version: copy outbound admin mail via a mailbox routing rule or a dedicated CC address like meeting@101drivers.com → small inbox-ingestion step matches From (known admin) + To (driver email on file) + status INVITED/PENDING_APPROVAL → auto-flip with provenance; needs mailbox access and false-positive handling).
+
+Stage Summary:
+- Code is back to the Task 69 state (dual Reply-To + BCC meeting-request sends, no mark-only feature, no INVITED widening). Nothing else changed.
+
+---
+Task ID: 72
+Agent: Main Agent
+Task: Onboarding live-camera fixes — false "camera blocked" despite Allow, iPhone black screen, X under the iPhone status bar
+
+Work Log:
+- Driver report: (1) tapping the capture box shows "Camera access was blocked..." even after allowing the camera; (2) on iPhone the live preview is a black screen with no way out; (3) the overlay's X (top-right) is not clickable — the phone's built-in header covers it. Both onboarding pages (driverOnboardingEdit/Complete) capture exclusively via shared/LivePhotoCapture, so all three symptoms live there.
+- Why it happened: (a) the "blocked" message fired for NotAllowedError/SecurityError with generic copy — on iPhone several quirks masquerade as denial even when the driver allowed: in-app webviews (links opened from Instagram/Facebook/WhatsApp/Gmail hard-deny the camera), home-screen-PWA permission regressions after iOS updates, and a remembered earlier site denial (no prompt re-appears). NotReadableError (camera busy — e.g. another app or a just-stopped stream) was mislabeled "No usable camera was found". (b) Black screen: video attach happened in a requestAnimationFrame with play() rejections silently swallowed — a live stream could sit on a paused <video> forever (Safari also needs the muted DOM property, which React's muted attribute doesn't reliably set pre-autoplay). (c) X: index.html sets viewport-fit=cover, so the page draws under the iPhone status bar; the overlay was the only screen without env(safe-area-inset-top) padding (routes/driver.tsx and app bars all pad), so the X row rendered under the built-in header — untappable, hence "nothing to exit".
+- Fixes (LivePhotoCapture.tsx only): busy-camera auto-retry (NotReadableError → one silent retry after 900ms) before erroring; scenario-precise error copy (blocked: in-app-browser + iOS Settings + re-add-PWA steps; busy: its own message); a small "Technical detail: <DOMException name>" line in the error panel so future reports are diagnosable; stream attach + playback moved to an effect (runs after the overlay DOM commits) with a loadedmetadata → play() → loadeddata-retry ladder and video.muted set as a property — kills the black-screen state; overlay container pads with env(safe-area-inset-top) (X now clears the status bar in every state) and the shutter row pads calc(2.5rem + env(safe-area-inset-bottom)) for the home indicator.
+- Repo state on arrival: origin/master already at 0ccfe1ff (the approved Task 71 revert) — nothing unapproved on the remote; recycled sandbox re-rescued (parked 09828203, PWA session's uncommitted worklog entry parked to /home/z/my-project/task32-other-session-worklog.patch).
+
+Verification: FE tsc — zero errors in LivePhotoCapture.tsx (project total 130, all pre-existing baseline, down from 139 as other sessions fix theirs); vite build green (18.3s, sw stamped 20261111105427). No behavior change for the happy path; iOS needs a device check after deploy.
+
+Stage Summary:
+- Drivers who open onboarding links from in-app browsers now get copy that tells them exactly why the camera won't start and how to fix it; genuinely busy cameras self-heal via one retry; the iPhone preview can no longer strand a driver on a black screen (play ladder + muted property); the X and shutter respect the notch/home-indicator safe areas. Deploy FE; if a driver still reports "blocked", the technical-detail line will name the exact failure mode.
+
+---
+Task ID: 73
+Agent: Main Agent
+Task: "Once allowed, the system should know" — camera permission auto-resume + in-app-webview escape
+
+Work Log:
+- Owner direction: we must not leave drivers to struggle with browser settings — once permission is granted, the app should react on its own. The OS-owned first prompt can never be removed, but everything AFTER it can be ours.
+- Auto-resume watcher (LivePhotoCapture): while the error panel is up, the component now watches the browser's camera permission (Permissions API, best-effort — Safari 16+/Chrome; older iOS keeps the manual Try again). The moment the driver flips the setting to Allow and returns, the capture re-opens BY ITSELF — no "Try again" tap. Only a state CHANGE to granted triggers it; an already-granted first read never fires (it would loop against a busy camera). The blocked-state copy now promises exactly this ("the camera opens here by itself").
+- In-app webview pre-check: Facebook/Instagram/WhatsApp/TikTok (UA markers) refuse getUserMedia permanently — the old flow fired a doomed prompt there. Now detected BEFORE requesting: no prompt is fired; the error explains it and offers a one-tap "Copy link for Safari / Chrome" action (clipboard API with execCommand fallback) so the driver can finish in the real browser. The OS forbids auto-leaving a webview, so copy-link is the shortest honest path.
+- Verification: FE tsc zero errors in the file (baseline untouched); vite build green (19.4s, sw stamped 20261111111358). Note: a first build ran from the recycled sandbox's reset cwd (/home/z/my-project) and failed with UNRESOLVED_ENTRY — re-run from /home/z/my-project/repo, clean.
+
+Stage Summary:
+- The allow-then-stuck gap is closed: allow in settings → camera resumes automatically; webview users are told up front and get a one-tap link copy instead of a dead prompt; busy cameras already self-healed in Task 72. Deploy FE. Remaining user actions are only what the OS physically owns: the first-ever Allow popup, and leaving an in-app browser (copy-link provided).
+---
+Task ID: 74
+Agent: Main Agent
+Task: Better Auth for DRIVERS (email/password + Google/Microsoft/Apple/Yahoo) — identity layer, sessions, account linking, social application flow
+
+Work Log:
+- Inspected the existing stack first (per owner instruction): NestJS+Express (REST+GraphQL), bcrypt passwords, access JWT + sliding refresh cookie (.techbee.et domain — third-party cookie pain already existed, hence the x-refresh-token fallback), JwtAuthGuard on protected routes, OTP email verification, driver signup with CA-zip + age-25 + mobile-UA gates → User+Driver atomic create (WAITLISTED), FE localStorage cache + DriverRouteGuard state machine. Plan written to docs/auth/better-auth-plan.md BEFORE any code change.
+- Official docs consulted (better-auth.com, 1.7.x): NestJS page recommends a community module requiring global bodyParser:false — REJECTED (breaks Stripe raw-body + GraphQL); used the official Express toNodeHandler mount instead at /api/better-auth (registered before app.listen, ahead of the JSON parser). Verified Prisma adapter + modelName/fields mapping, generic OAuth plugin, password.hash/verify customization, account-linking rules, cookies/trustedOrigins, Apple ES256 client secret pattern, Microsoft tenantId semantics. Yahoo endpoints verified against developer.yahoo.com (request_auth / get_token + official OIDC discovery for userinfo/jwks).
+- Prisma (additive only): User + emailVerified/image + password/username defaults; new Account/Session/Verification tables with @@unique([providerId, accountId]) and cascade FKs. Migration SQL generated offline via prisma migrate diff — NO destructive command, NOT applied anywhere. prisma generate run.
+- Backend (src/better-auth/): ba-env.ts (env-conditional providers — missing creds disable a provider, never crash; trustedOrigins mirror the CORS allowlist + appleid.apple.com; cookie posture mirrors getCookieOptions: None+Secure prod / Lax dev), create-better-auth.ts (Prisma adapter mapped onto the EXISTING User model — name→fullName, emailVerified→emailVerified + hook mirrors into emailVerifiedAt; password hash/verify = SAME bcrypt via BCRYPT_SALT so legacy hashes work unchanged; requireEmailVerification + MailService callbacks — no second SMTP; genericOAuth Yahoo via discoveryUrl; bearer plugin for the Safari/iOS-PWA Authorization-header fallback; cookieCache 5min; built-in rate limits), better-auth.service.ts + global module, ba-driver.controller.ts (/api/auth/ba/providers secret-free enablement map, /driver-context returns the EXACT legacy UserInfo shape incl. driverStatus/onboarding, /social-driver-signup), ba-driver-gates.ts (pure copies of the legacy CA/age gates), social-driver-signup.service.ts (session-identity only; WAITLISTED; referral + service-area verdict + waitlist email + appEvents + analytics all non-blocking like legacy).
+- Hybrid JwtAuthGuard (transition): Better Auth session → request.user loaded FRESH from DB (roles/isSuperAdmin/isActive never trusted from the session; dead user hard-fails); no session → legacy passport JWT unchanged. Internal Better Auth failures fall back to legacy (a pre-migration deploy can never take the API down). DefaultAuthGuard forwards through.
+- Backfill script (ops, idempotent, dry-run flag): mints credential Account rows from existing driver bcrypt hashes → zero password resets at cutover.
+- Frontend: official React client + bearer; ba-session bridge mirrors sessions into the legacy cache so DriverRouteGuard/dataQuery needed ZERO structural changes (authSystem marker routes keep-alive/refresh to the bridge; session token in MEMORY only, never localStorage); DealerSignIn (driver mode) gains configured-only social buttons; /auth/social-callback routes by driver state; /driver/social-application form (live ZIP verdict via the existing public endpoint); /driver/signin-methods (list/link/unlink/change password via official client APIs; last-credential unlink blocked server-side).
+- Microsoft deliberately NOT a trusted provider (Entra emails unverified) — implicit auto-link only on provider-verified email matches; explicit linkSocial for everything else.
+
+Verification: BE tsc (build scope) clean; nest build exit 0; 17/17 new unit tests pass (ba-env provider/cookie/secret semantics, gates incl. exact legacy messages; jose mocked — ESM-only); legacy jwt.strategy.spec still passes. FE vite build green (21s, sw stamped); tsc baseline: zero errors in every Better Auth file (only pre-existing baseline errors remain — DealerSignIn's LoginResponse typing, useAuth profileId, token.service.spec compile failure are all pre-existing and untouched). OAuth round-trips NOT verified with real provider credentials (none exist) — documented as the remaining manual step.
+
+Stage Summary:
+- Drivers now have Better Auth: email/password (legacy bcrypt compatible), Google/Microsoft/Apple/Yahoo, secure account linking, HTTP-only cookie sessions + bearer fallback, email verification + password reset via the existing MailService — with authentication cleanly separated from driver approval and the legacy stack untouched for every other role. Deploy: prisma migrate deploy → backfill script → backend → frontend; register the four OAuth apps (redirect URIs in docs/auth/better-auth-drivers.md) to enable providers one by one.
+---
 Task ID: 75
 Agent: Main Agent
 Task: QR handoff fix — scan lands on driver onboarding, not /downloads

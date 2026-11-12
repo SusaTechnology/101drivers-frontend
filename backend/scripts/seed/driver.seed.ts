@@ -6,7 +6,7 @@ import { Salt } from "../../src/auth/password.service";
 export async function seedDriver(bcryptSalt: Salt) {
   const user = await upsertUser({
     username: "driver",
-    email: "driver@101drivers.techbee.et",
+    email: "driver@101drivers.com",
     passwordPlain: "driver",
     role: EnumUserRoles.DRIVER,
     fullName: "Chris Driver",

@@ -13,11 +13,28 @@
  *   2. APPROVED drivers  (Driver.status = APPROVED)
  *        → the exact "Your driver application has been approved" email from
  *          DriverApprovalEngine.approve (templateCode "driver-approved").
- *   3. APPROVED dealers/customers (Customer.approvalStatus = APPROVED)
- *        → the exact approval email from CustomerApprovalEngine.approve
- *          (templateCode "dealer-approved"): BUSINESS copy carries the
- *          referral-code line + COO signature; PRIVATE copy is the generic
- *          one. Subject differs by customerType, exactly like the engine.
+ *
+ *   Scope rule (2026-11): ONLY the emails that actually carried a
+ *   101drivers.techbee.et link get re-sent — the campaign exists to fix
+ *   that wrong URL, so any email whose body contains no domain link is
+ *   left alone (no pointless re-mailing).
+ *
+ *   Deliberately NOT in scope:
+ *     - APPROVED dealers/customers (Customer.approvalStatus = APPROVED) —
+ *       their approval email ("Your business/customer account has been
+ *       approved") contains NO link at all, only text and the COO
+ *       signature, so there is no techbee.et URL in it to fix.
+ *     - MEETING_REQUESTED drivers — their scheduling email is admin-composed
+ *       and personal; there is no template to re-send (per ops: skip them).
+ *     - WAITLISTED / PENDING_APPROVAL / REJECTED drivers and PENDING /
+ *       REJECTED customers — the system never sent them a link-bearing
+ *       email, so they hold no stale techbee.et URL to fix.
+ *     - SUSPENDED drivers — no suspension email exists; re-sending the
+ *       approval copy would contradict their status.
+ *
+ *   2026-11 domain-fix resend: the two driver templates below now point at
+ *   101drivers.com; re-running the campaign re-emails everyone still in
+ *   the in-scope statuses with the corrected URLs.
  *
  * ── Delivery pipeline ─────────────────────────────────────────────────────
  *   Emails go through the REAL NotificationEventEngine.queueAndSend → the
@@ -34,12 +51,21 @@
  *   Exit code 0 = every queued email SENT; 1 = any FAILED/timeout/abort.
  *
  * ── Usage ─────────────────────────────────────────────────────────────────
+ *   npx ts-node scripts/send-invite-approval-emails.ts --test-to=me@mydomain.com  # 1. check
  *   npx ts-node scripts/send-invite-approval-emails.ts --dry-run
- *   npx ts-node scripts/send-invite-approval-emails.ts --yes            # live
+ *   npx ts-node scripts/send-invite-approval-emails.ts --yes            # 2. live
  *   Flags:
+ *     --test-to=me@mydomain.com        TEST MODE: send ONE real invited-driver
+ *                                      email + ONE real approved-driver email
+ *                                      (built from real driver records, real
+ *                                      onboarding tokens/links) to this
+ *                                      address ONLY — no real recipient is
+ *                                      emailed and no driver data is touched.
+ *                                      No --yes needed. Check your inbox,
+ *                                      then run the live command.
  *     --dry-run                        list recipients + templates, send nothing
  *     --only=invited                   only the invited-driver email
- *     --only=approved                  only the approved (driver + dealer) emails
+ *     --only=approved                  only the approved-driver email
  *     --limit=N                        cap recipients (smoke test on the server first)
  *     --yes                            skip the interactive confirmation (live runs)
  *     --wait=180                       seconds for the FINAL settle pass (default 180)
@@ -82,6 +108,7 @@ import {
 import { ConfigService } from "@nestjs/config";
 import { PrismaService } from "../src/prisma/prisma.service";
 import { MailService } from "../src/common/mail/mail.service";
+import { AdminGateService } from "../src/admin-gate/admin-gate.service";
 import { NotificationEventEngine } from "../src/domain/notificationEvent/notificationEvent.engine";
 
 // ── env: shell first, then backend/.env, then repo root .env ──────────────
@@ -100,6 +127,12 @@ const DRY_RUN = flag("dry-run") === "true";
 const ONLY = flag("only") as "invited" | "approved" | undefined;
 const LIMIT = Number(flag("limit") ?? 0) || 0;
 const ASSUME_YES = flag("yes") === "true";
+// TEST MODE — redirect sample emails to the owner's inbox (see header).
+const TEST_TO = (flag("test-to") ?? "").trim().toLowerCase() || null;
+if (TEST_TO && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(TEST_TO)) {
+  console.error(`--test-to "${TEST_TO}" does not look like an email address.`);
+  process.exit(1);
+}
 const WAIT_SECONDS = Number(flag("wait") ?? 180) || 180;
 // rate-limit resilience — see the "Rate limits" note in the header
 const RETRY_FROM = flag("retry-failed-from");
@@ -119,13 +152,11 @@ const REPORT_DIR =
 
 type Category =
   | "INVITED_DRIVER"
-  | "APPROVED_DRIVER"
-  | "APPROVED_DEALER_BUSINESS"
-  | "APPROVED_DEALER_PRIVATE";
+  | "APPROVED_DRIVER";
 
 type Recipient = {
   category: Category;
-  refId: string; // driverId or customerId
+  refId: string; // driverId
   name: string;
   email: string | null;
   suspended: boolean;
@@ -204,9 +235,19 @@ function loadPreviouslySent(reportPath: string): Set<string> {
 }
 
 // ── Templates: verbatim copies of the system's own emails ─────────────────
-const appDomain = (process.env.APP_DOMAIN || "101drivers.techbee.et").replace(
-  /^https?:\/\//,
-  ""
+// Same precedence as driverApproval.engine.driverLinkHost(): 101_DOMAIN is
+// canonical, APP_DOMAIN is the legacy name (dotenv never overrides a stale
+// shell export of it), bare 101drivers.com as last resort. Logged at start
+// so a wrong-domain campaign is visible before any email goes out.
+const appDomain = (
+  process.env["101_DOMAIN"] ||
+  process.env.APP_DOMAIN ||
+  "101drivers.com"
+)
+  .replace(/^https?:\/\//, "")
+  .replace(/\/+$/, "");
+console.log(
+  `[email-campaign] invite/approval links will use: https://${appDomain}`
 );
 
 /** DriverApprovalEngine.inviteDriver — templateCode "driver-invited" */
@@ -236,9 +277,13 @@ function buildInvitedDriverEmail(fullName: string, onboardingToken: string) {
     body: [
       `Hi ${fullName},`,
       "",
-      "good news \u2014 you\u2019ve been selected to move forward with your 101 Drivers application.",
+      "Good news \u2014 you\u2019ve been selected to move forward with your 101 Drivers application.",
       "",
-      `Complete it here: https://${appDomain}/driver-onboarding-complete?token=${onboardingToken}. You\u2019ll need your driver\u2019s license front and back, photos, Social Security number, current address, and a selfie for ID verification.`,
+      "Click the button below, or copy this link, to complete your application:",
+      "",
+      `https://${appDomain}/driver-onboarding-complete?token=${onboardingToken}`,
+      "",
+      "You\u2019ll need your driver\u2019s license (front and back photos), Social Security number, current residential address, and a selfie for ID verification.",
       "",
       "Once we receive everything, your application goes into review. A team member may follow up by email or phone with a quick two-to-three-minute call before we run the final background check. It only takes a few minutes and helps us get you approved faster.",
       "",
@@ -269,71 +314,20 @@ function buildApprovedDriverEmail(fullName: string, approvedAt: Date | null) {
   };
 }
 
-/** CustomerApprovalEngine.approve — templateCode "dealer-approved" */
-function buildApprovedDealerEmail(customer: {
-  customerType: string | null;
-  businessName: string | null;
-  contactName: string | null;
-  userFullName: string | null;
-  postpaidEnabled: boolean;
-}) {
-  const isBusiness = customer.customerType === "BUSINESS";
-  const displayName =
-    customer.businessName || customer.contactName || customer.userFullName || "Customer";
-  const subject = isBusiness
-    ? "Your business account has been approved"
-    : "Your customer account has been approved";
-  const approvalLine = isBusiness
-    ? "Your business account has been approved."
-    : "Your customer account has been approved.";
-  const loginLine = isBusiness
-    ? "You can now log in and start creating delivery requests."
-    : "You can now log in and continue using your account.";
-  const postpaidLine = customer.postpaidEnabled
-    ? "Postpaid billing has been enabled for your account."
-    : "";
-
-  const body = isBusiness
-    ? [
-        `Hi ${displayName},`,
-        "",
-        approvalLine,
-        "",
-        `${loginLine} ${
-          customer.postpaidEnabled
-            ? "Postpaid billing has been enabled for your account."
-            : "All deliveries are prepaid. If you\u2019d like to negotiate a postpaid plan, just contact us."
-        }`,
-        "",
-        "You also have your own referral code, which you can customize.",
-        "",
-        "Welcome aboard.",
-        "",
-        "Best, Maz Siam",
-        "COO, 101 Drivers Inc.",
-        "Cell 3107293250",
-        "Whatsup 4243132168",
-        "maz@101drivers.com",
-      ].join("\n")
-    : [
-        `Hi ${displayName},`,
-        "",
-        approvalLine,
-        postpaidLine,
-        loginLine,
-      ]
-        .filter(Boolean)
-        .join("\n");
-
-  return { type: EnumNotificationEventType.DEALER_APPROVED, templateCode: "dealer-approved", subject, body };
-}
+/** CustomerApprovalEngine.approve — templateCode "dealer-approved"
+ *  REMOVED from this campaign (2026-11): that email contains NO link —
+ *  only text and the COO signature — so there was never a techbee.et URL
+ *  in it to fix. Approved customers are deliberately not re-emailed. */
 
 async function main() {
   console.log("=== 101 Drivers — invite / approval email campaign ===");
   console.log(`mode: ${DRY_RUN ? "DRY-RUN (no emails sent)" : "LIVE"}`);
 
   // ── SMTP pre-check: abort before touching the ledger if mail can't go ──
-  const mail = new MailService(new ConfigService());
+  // MailService now also injects AdminGateService (invite emails carry the
+  // gate key); the gate is only consulted on the admin-invite path, never
+  // for these campaign emails — but the constructor requires the instance.
+  const mail = new MailService(new ConfigService(), new AdminGateService());
   if (!mail.isConfigured && !DRY_RUN) {
     console.error(
       "\nABORT: SMTP is not configured in this environment " +
@@ -366,7 +360,7 @@ async function main() {
     });
     for (const d of invited) {
       let tokenRegenerated = false;
-      if (!DRY_RUN && !d.onboardingToken && d.user?.email) {
+      if (!DRY_RUN && !TEST_TO && !d.onboardingToken && d.user?.email) {
         // INVITED drivers always get a token at invite time; regenerate only if missing.
         const token = randomBytes(32).toString("hex");
         await prisma.driver.update({
@@ -408,42 +402,8 @@ async function main() {
       });
       (recipients[recipients.length - 1] as any).approvedAt = d.approvedAt;
     }
-
-    const approvedDealers = await prisma.customer.findMany({
-      where: { approvalStatus: "APPROVED" },
-      select: {
-        id: true,
-        customerType: true,
-        businessName: true,
-        contactName: true,
-        contactEmail: true,
-        postpaidEnabled: true,
-        suspendedAt: true,
-        user: { select: { email: true, fullName: true } },
-      },
-    });
-    for (const c of approvedDealers) {
-      recipients.push({
-        category:
-          c.customerType === "BUSINESS"
-            ? "APPROVED_DEALER_BUSINESS"
-            : "APPROVED_DEALER_PRIVATE",
-        refId: c.id,
-        name: c.businessName || c.contactName || c.user?.fullName || "Customer",
-        email:
-          c.contactEmail?.trim().toLowerCase() ||
-          c.user?.email?.trim().toLowerCase() ||
-          null,
-        suspended: c.suspendedAt != null,
-        tokenRegenerated: false,
-      });
-      const r = recipients[recipients.length - 1] as any;
-      r.customerType = c.customerType;
-      r.postpaidEnabled = c.postpaidEnabled;
-      r.businessName = c.businessName;
-      r.contactName = c.contactName;
-      r.userFullName = c.user?.fullName ?? null;
-    }
+    // NO customer/dealer collection: their approval email has no link to
+    // fix (see the scope rule in the header).
   }
 
   let scoped = recipients;
@@ -464,14 +424,73 @@ async function main() {
 
   if (LIMIT > 0) scoped = scoped.slice(0, LIMIT);
 
+  // ── TEST MODE: --test-to=me@mydomain.com ────────────────────────────────
+  // Sends ONE real invited-driver email + ONE real approved-driver email to
+  // TEST_TO so the sender/subject/body/link can be checked in a real inbox
+  // BEFORE the real blast. Uses real driver records (the ledger driverId is
+  // an FK, and the onboarding link must carry a live token) but redirects
+  // delivery to TEST_TO — no real recipient is emailed, no driver data is
+  // mutated, and no --yes is needed since the only destination is TEST_TO.
+  if (TEST_TO) {
+    console.log(`\n── TEST MODE ── every email below goes to ${TEST_TO} ONLY ──`);
+    const testScoped: Recipient[] = [];
+    if (SEND_INVITED) {
+      const d = await prisma.driver.findFirst({
+        where: { status: "INVITED", onboardingToken: { not: null } },
+        select: { id: true, onboardingToken: true, user: { select: { fullName: true } } },
+      });
+      if (d) {
+        const r: Recipient = {
+          category: "INVITED_DRIVER",
+          refId: d.id,
+          name: d.user?.fullName || "Driver",
+          email: TEST_TO,
+          suspended: false,
+          tokenRegenerated: false,
+        };
+        (r as any).onboardingToken = d.onboardingToken;
+        (r as any).testRun = true;
+        testScoped.push(r);
+        console.log(`  sample INVITED email   ← built from real driver ${d.id} (${r.name})`);
+      } else {
+        console.log("  no INVITED driver with an onboarding token — invited sample skipped");
+      }
+    }
+    if (SEND_APPROVED) {
+      const d = await prisma.driver.findFirst({
+        where: { status: "APPROVED" },
+        select: { id: true, approvedAt: true, user: { select: { fullName: true } } },
+      });
+      if (d) {
+        const r: Recipient = {
+          category: "APPROVED_DRIVER",
+          refId: d.id,
+          name: d.user?.fullName || "Driver",
+          email: TEST_TO,
+          suspended: false,
+          tokenRegenerated: false,
+        };
+        (r as any).approvedAt = d.approvedAt;
+        (r as any).testRun = true;
+        testScoped.push(r);
+        console.log(`  sample APPROVED email  ← built from real driver ${d.id} (${r.name})`);
+      } else {
+        console.log("  no APPROVED driver — approved sample skipped");
+      }
+    }
+    if (testScoped.length === 0) {
+      console.error("TEST MODE found no in-scope drivers to sample — nothing to send.");
+      await prisma.$disconnect();
+      process.exit(1);
+    }
+    scoped = testScoped;
+  }
+
   // ── Scope summary ───────────────────────────────────────────────────────
   const countBy = (fn: (r: Recipient) => boolean) => scoped.filter(fn).length;
   console.log("\n── recipients in scope ──");
   console.log(`  invited drivers            : ${countBy((r) => r.category === "INVITED_DRIVER")}`);
   console.log(`  approved drivers           : ${countBy((r) => r.category === "APPROVED_DRIVER")}`);
-  console.log(`  approved dealers (BUSINESS): ${countBy((r) => r.category === "APPROVED_DEALER_BUSINESS")}`);
-  console.log(`  approved dealers (PRIVATE) : ${countBy((r) => r.category === "APPROVED_DEALER_PRIVATE")}`);
-  console.log(`  (suspended-but-approved    : ${countBy((r) => r.suspended)} — still included, flagged)`);
   console.log(`  total                      : ${scoped.length}\n`);
 
   if (DRY_RUN) {
@@ -487,8 +506,10 @@ async function main() {
     return;
   }
 
-  // ── Live confirmation ───────────────────────────────────────────────────
-  if (!ASSUME_YES && process.stdin.isTTY) {
+  // ── Live confirmation (skipped in TEST MODE — only TEST_TO is emailed) ──
+  if (TEST_TO) {
+    console.log("TEST MODE: skipping confirmation — the only destination is " + TEST_TO);
+  } else if (!ASSUME_YES && process.stdin.isTTY) {
     const ok = await new Promise<boolean>((resolve) => {
       process.stdout.write(`Type SEND to email ${scoped.length} recipients: `);
       process.stdin.once("data", (d) => resolve(String(d).trim() === "SEND"));
@@ -695,7 +716,11 @@ async function queueOne(
         payload: {
           campaignId: CAMPAIGN_ID,
           driverId: r.refId,
-          note: "Bulk invite re-send (campaign script)",
+          note: (r as any).testRun
+            ? "TEST send — sample redirected to owner (campaign script)"
+            : "Bulk invite re-send (campaign script)",
+          actionUrl: `https://${appDomain}/driver-onboarding-complete?token=${(r as any).onboardingToken ?? ""}`,
+          actionLabel: "Complete Your Application",
         } as Prisma.InputJsonValue,
       });
     } else if (r.category === "APPROVED_DRIVER") {
@@ -708,26 +733,11 @@ async function queueOne(
         payload: {
           campaignId: CAMPAIGN_ID,
           driverId: r.refId,
-          note: "Bulk approval re-send (campaign script)",
-        } as Prisma.InputJsonValue,
-      });
-    } else {
-      const tpl = buildApprovedDealerEmail({
-        customerType: (r as any).customerType ?? null,
-        businessName: (r as any).businessName ?? null,
-        contactName: (r as any).contactName ?? null,
-        userFullName: (r as any).userFullName ?? null,
-        postpaidEnabled: (r as any).postpaidEnabled ?? false,
-      });
-      queued = await engine.queueAndSend({
-        customerId: r.refId,
-        channel: EnumNotificationEventChannel.EMAIL,
-        toEmail: r.email!,
-        ...tpl,
-        payload: {
-          campaignId: CAMPAIGN_ID,
-          customerId: r.refId,
-          note: "Bulk approval re-send (campaign script)",
+          note: (r as any).testRun
+            ? "TEST send — sample redirected to owner (campaign script)"
+            : "Bulk approval re-send (campaign script)",
+          actionUrl: `https://${appDomain}/driver-signin`,
+          actionLabel: "Log In to Your Account",
         } as Prisma.InputJsonValue,
       });
     }

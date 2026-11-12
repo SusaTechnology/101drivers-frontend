@@ -355,6 +355,7 @@ export class NotificationEventEngine {
         body: true,
         toEmail: true,
         toPhone: true,
+        payload: true,
       },
     });
 
@@ -387,13 +388,27 @@ export class NotificationEventEngine {
           return;
         }
 
+        // Optional primary CTA — senders put actionUrl/actionLabel in the
+        // event payload (persisted, so deferral is safe). The renderer adds
+        // a button + a clickable copy-fallback link for it.
+        const payload = (event.payload ?? {}) as Record<string, unknown>;
+        const actionUrl =
+          typeof payload.actionUrl === "string" && payload.actionUrl.trim()
+            ? payload.actionUrl.trim()
+            : null;
+        const actionLabel =
+          typeof payload.actionLabel === "string" && payload.actionLabel.trim()
+            ? payload.actionLabel.trim()
+            : null;
+
         await this.mailService.sendMail({
           to: event.toEmail,
           subject: event.subject ?? "101 Drivers Notification",
           text: event.body ?? "",
           html: this.wrapSimpleHtml(
             event.subject ?? "Notification",
-            event.body ?? ""
+            event.body ?? "",
+            actionUrl ? { url: actionUrl, label: actionLabel } : null
           ),
         });
       } else if (event.channel === EnumNotificationEventChannel.SMS) {
@@ -3077,21 +3092,46 @@ async notifyTripCompleted(input: {
     return `${new Date(start).toISOString()} → ${new Date(end).toISOString()}`;
   }
 
-  private wrapSimpleHtml(subject: string, body: string): string {
+  private wrapSimpleHtml(
+    subject: string,
+    body: string,
+    action?: { url: string; label?: string | null } | null
+  ): string {
     const escapedSubject = this.escapeHtml(subject);
     const escapedBody = this.escapeHtml(body).replace(/\n/g, "<br />");
 
     // Convert URLs (especially tracking links) into clickable <a> tags
-    // so they work reliably on mobile email clients
+    // so they work reliably on mobile email clients. Trailing punctuation
+    // stays OUT of the href/anchor: a sentence like
+    // "...complete at: https://host/path?token=abc." must not mail a
+    // corrupted token (token "abc." → "Invalid or expired token").
     const withLinks = escapedBody.replace(
-      /(https?:\/\/[^\s<]+)/g,
-      '<a href="$1" style="color: #2563eb; word-break: break-all;">$1</a>'
+      /https?:\/\/[^\s<]+/g,
+      (match) => {
+        const url = match.replace(/[.,!?:;')"\]]+$/, "");
+        const trail = match.slice(url.length);
+        return (
+          `<a href="${url}" style="color: #2563eb; word-break: break-all;">${url}</a>` +
+          trail
+        );
+      }
     );
+
+    // Primary CTA when the sender supplied one: a real button (same style
+    // as the tracking "Track Delivery" button) + a clickable copy-fallback
+    // link, so the message reads "click the button, or copy this link".
+    const actionHtml = action
+      ? `
+      <div style="margin: 24px 0;">
+        <a href="${this.escapeHtml(action.url)}" style="display: inline-block; padding: 12px 24px; background-color: #2563eb; color: #ffffff; text-decoration: none; border-radius: 6px; font-weight: bold; font-size: 16px;">${this.escapeHtml(action.label ?? "Open")}</a>
+      </div>
+      <p style="font-size: 13px; color: #555;">Or copy this link: <a href="${this.escapeHtml(action.url)}" style="color: #2563eb; word-break: break-all;">${this.escapeHtml(action.url)}</a></p>`
+      : "";
 
     return `
       <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #111; max-width: 600px; margin: 0 auto;">
         <h2>${escapedSubject}</h2>
-        <p>${withLinks}</p>
+        <p>${withLinks}</p>${actionHtml}
       </div>
     `;
   }

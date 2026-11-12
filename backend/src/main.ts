@@ -12,6 +12,7 @@ import {
 import { configureCors } from "./common/cors-cookie.util";
 import { IoAdapter } from "@nestjs/platform-socket.io";
 import * as bodyParser from "body-parser";
+import { BetterAuthService } from "./better-auth/better-auth.service";
 
 const { PORT = 6000 } = process.env;
 
@@ -22,6 +23,17 @@ async function main() {
   // Stripe webhook requires RAW body for signature verification.
   // Must be registered BEFORE the global JSON body parser.
   app.use("/api/stripe/webhook", bodyParser.raw({ type: "application/json" }));
+
+  // Better Auth (drivers identity) — raw handler on the Express instance,
+  // registered BEFORE app.listen so it runs ahead of Nest's JSON body
+  // parser (Better Auth reads the raw request stream itself). Same
+  // early-mount pattern as the Stripe webhook above. The handler builds in
+  // BetterAuthService.onModuleInit (async provider config — Apple ES256).
+  const betterAuthService = app.get(BetterAuthService);
+  if (!betterAuthService.handler) {
+    throw new Error("Better Auth handler was not initialized");
+  }
+  app.use(betterAuthService.mountPath, betterAuthService.handler);
 
   configureCors(app);
 

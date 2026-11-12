@@ -155,3 +155,129 @@ export function mobileOnlySignupPayload(): {
       process.env.PUBLIC_APP_DOWNLOAD_URL || "https://101drivers.com/download",
   };
 }
+
+// ── Driver self-service gate (onboarding-complete / onboarding-data) ──
+//
+// The driver endpoints are gated STRICTER than public signup, because the
+// attacker here is not an anonymous spammer but a signed-in driver on a
+// desktop browser who wants the phone-only flow on a big screen — most
+// cheaply by DevTools' device toolbar or a UA-switcher extension:
+//
+//   1. The touch hint is REQUIRED. The FE attaches x-device-touch: 1/0 to
+//      every driver-onboarding call (see src/lib/device.ts deviceTouchHint),
+//      so a real phone/tablet always carries it — a curl/Postman/scripted
+//      replay with a spoofed iPhone UA does not know to. (Signup cannot
+//      require it because the header is only sent on FE calls that opt in.)
+//   2. Chrome's own client hints must agree with the claimed device.
+//      Desktop Chrome sends sec-ch-ua-mobile (?0/?1) and
+//      sec-ch-ua-platform ("Windows" | "macOS" | "Linux" | "Chrome OS" |
+//      "Android" | "iOS") on every request, derived from the REAL browser —
+//      a UA-switcher extension rewrites navigator.userAgent and the UA
+//      header but NOT these. An iPhone UA arriving with ?0 / "Windows" is
+//      a liar and is blocked. DevTools' device toolbar rewrites UA AND
+//      client hints coherently, so it still passes — that residual gap is
+//      physical (the request line is the only evidence the server ever
+//      gets), and it is why every block is audited: spoofing is cheap,
+//      getting caught is the deterrent.
+//   3. The iPadOS desktop-mode iPad stays safe: Safari and Chrome-on-iOS
+//      are WebKit and send NO client hints at all, so the touch hint alone
+//      admits them exactly as before. A platform hint claiming "macOS"
+//      can only come from a real desktop Chromium claiming touch — blocked.
+
+/** Values Chrome sends in sec-ch-ua-platform. Quotes arrive intact —
+ *  Chrome sends `sec-ch-ua-platform: "Windows"`. */
+const CLIENT_HINT_DESKTOP_PLATFORMS = ["windows", "macos", "linux", "chrome os"];
+
+/** Normalize a sec-ch-* header value: headers may arrive as string |
+ *  string[] | undefined; strip the surrounding quotes Chrome adds. */
+function clientHintValue(value: string | string[] | undefined | null): string {
+  const v = (Array.isArray(value) ? value.join(",") : (value ?? ""))
+    .toString()
+    .trim()
+    .toLowerCase()
+    .replace(/^"|"$/g, "");
+  return v;
+}
+
+export type DriverDeviceVerdict = {
+  blocked: boolean;
+  /** Signup reasons + NO_TOUCH_HINT | CLIENT_HINT_MISMATCH */
+  reason:
+    | "DESKTOP_UA"
+    | "DESKTOP_TOUCH_UA"
+    | "EMPTY_UA"
+    | "MOBILE_UA"
+    | "NO_TOUCH_HINT"
+    | "CLIENT_HINT_MISMATCH";
+};
+
+export function classifyDriverDeviceRequest(
+  userAgent: string | string[] | undefined | null,
+  touchCapableHint?: string | string[] | null,
+  secChUaMobile?: string | string[] | null,
+  secChUaPlatform?: string | string[] | null
+): DriverDeviceVerdict {
+  const ua = Array.isArray(userAgent)
+    ? userAgent.join(" ")
+    : (userAgent ?? "").toString().trim();
+
+  // The FE's device.ts attaches the hint to EVERY driver-onboarding call,
+  // so its absence means a non-FE client (scripted replay, curl with a
+  // borrowed UA). Checked before the UA rules: even a perfect iPhone UA
+  // without the hint is not this app's own client.
+  if (!touchHintFromHeader(touchCapableHint)) {
+    return { blocked: true, reason: "NO_TOUCH_HINT" };
+  }
+
+  // Same phone/tablet/desktop classification as signup — desktops and
+  // touchscreen laptops stay blocked here too.
+  const verdict = classifySignupUserAgent(ua, touchCapableHint);
+  if (verdict.blocked) {
+    return verdict;
+  }
+
+  // Client-hint coherence: the browser describing ITSELF contradicts the
+  // (spoofed) UA. Only positive evidence blocks — absence of hints is the
+  // WebKit norm (Safari, Chrome-on-iOS), never a strike.
+  const mobileHint = clientHintValue(secChUaMobile);
+  const platformHint = clientHintValue(secChUaPlatform);
+
+  if (mobileHint === "?0") {
+    // Chrome says "this is not a mobile device" while the UA claims one.
+    return { blocked: true, reason: "CLIENT_HINT_MISMATCH" };
+  }
+  if (platformHint && CLIENT_HINT_DESKTOP_PLATFORMS.includes(platformHint)) {
+    // A desktop Chromium's own platform report — with or without a spoofed
+    // phone UA. This also closes the old "Mac UA + touch hint = iPad"
+    // shortcut for desktop Chrome, whose platform hint would say "macOS".
+    return { blocked: true, reason: "CLIENT_HINT_MISMATCH" };
+  }
+  if (
+    platformHint === "android" &&
+    PHONE_SIGNAL_RE.test(ua) &&
+    !ANDROID_RE.test(ua)
+  ) {
+    // An Android device's own platform report next to an iPhone UA —
+    // UA-switcher extension, not a real phone.
+    return { blocked: true, reason: "CLIENT_HINT_MISMATCH" };
+  }
+
+  return { blocked: false, reason: "MOBILE_UA" };
+}
+
+/** The 403 body for a blocked driver-portal request (message + storeUrl). */
+export function mobileOnlyDriverPayload(): {
+  statusCode: number;
+  error: string;
+  message: string;
+  storeUrl: string;
+} {
+  return {
+    statusCode: 403,
+    error: "Forbidden",
+    message:
+      "The driver portal is available on phones and tablets only. Please open 101drivers.com/download on your phone or tablet to continue.",
+    storeUrl:
+      process.env.PUBLIC_APP_DOWNLOAD_URL || "https://101drivers.com/download",
+  };
+}

@@ -5,7 +5,7 @@ import { Salt } from "../../src/auth/password.service";
 export async function seedAdmin(bcryptSalt: Salt) {
   await upsertUser({
     username: "admin",
-    email: "admin@101drivers.techbee.et",
+    email: "admin@101drivers.com",
     passwordPlain: "admin",
     role: EnumUserRoles.ADMIN,
     fullName: "101 Drivers Admin",

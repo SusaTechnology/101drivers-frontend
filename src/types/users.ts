@@ -168,6 +168,12 @@ export interface AdminDriverEmbed {
   licenseBackUrl: string | null;
   createdAt: string;
   updatedAt: string;
+  // When the driver last (re)submitted onboarding details (initial
+  // completion, or the license edit page) and who did it — the actor's
+  // email (the driver themself on self-service paths). Null = the row
+  // never went through those paths (predates the stamp).
+  lastOnboardingUpdateAt: string | null;
+  lastOnboardingUpdateBy: string | null;
   // Referral relationship — present if this driver was referred by another driver.
   // Null if the driver signed up without a referral code.
   referredBy: DriverReferredBySummary | null;
@@ -413,6 +419,11 @@ export interface AdminUserDriverDetail {
   // When the driver submitted his information (license, selfie, SSN,
   // address) — through an invite link or the signup form.
   onboardingCompletedAt: string | null;
+  // When the onboarding details last changed (at completion or a later
+  // self-service edit) and who changed them — the actor's email. Null =
+  // the row predates the stamp.
+  lastOnboardingUpdateAt: string | null;
+  lastOnboardingUpdateBy: string | null;
   // Hold context — when the hold was placed and which funnel stage
   // "Release Hold" restores (null when the driver is not on hold).
   heldFromStatus: DriverStatus | null;
@@ -583,6 +594,10 @@ export interface InviteDriverRequest {
 export interface RequestDriverMeetingRequest {
   message: string;
   actorUserId?: string;
+  /** "mine" = admin address as Reply-To + BCC copy; "platform" = official send. */
+  fromMode?: 'platform' | 'mine';
+  /** The (editable) admin address used when fromMode is "mine". */
+  fromEmail?: string;
 }
 
 export interface SuspendCustomerRequest {

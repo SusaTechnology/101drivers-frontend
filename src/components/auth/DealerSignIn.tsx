@@ -35,6 +35,7 @@ import {
 import { setAccessToken, setRefreshToken, setUser, startSessionKeepAlive } from "@/lib/tanstack/dataQuery";
 import { toast } from "sonner";
 import { useDataMutation } from "@/lib/tanstack/dataQuery";
+import { SocialAuthButtons } from "@/components/auth/SocialAuthButtons";
 
 function CustomCard({
   className,
@@ -67,9 +68,15 @@ interface LoginResponse {
   refreshToken?: string;
   email?: string;
   name?: string;
+  fullName?: string;
   // Approval status for customers and drivers
   customerApprovalStatus?: 'PENDING' | 'APPROVED' | 'REJECTED' | 'SUSPENDED';
   driverStatus?: 'WAITLISTED' | 'INVITED' | 'PENDING' | 'PENDING_APPROVAL' | 'MEETING_REQUESTED' | 'APPROVED' | 'SUSPENDED' | 'REJECTED';
+  // Driver onboarding state (resolveAuthMeta attaches both for DRIVERs);
+  // drives the post-login destination — approved + onboarded go straight
+  // to the dashboard, approved but not yet onboarded to the form.
+  onboardingCompleted?: boolean;
+  onboardingToken?: string | null;
   // User active status
   isActive?: boolean;
 }
@@ -182,26 +189,14 @@ export function DealerSignIn({
         }
       }
 
-      // Check 4: Approval status for drivers
-      // WAITLISTED and INVITED drivers are allowed to log in — they see a waiting screen
-      // REJECTED drivers are blocked
-      if (isDriver && data.driverStatus) {
-        const status = data.driverStatus;
-        if (status === 'SUSPENDED') {
-          setLoginError(
-            "Your driver account has been suspended. Please contact support for assistance."
-          );
-          toast.error("Account suspended.");
-          return;
-        }
-        if (status === 'REJECTED') {
-          setLoginError(
-            "Your driver application was not approved. Please contact support for more information."
-          );
-          toast.error("Application not approved.");
-          return;
-        }
-      }
+      // Check 4: Driver status — NO status is blocked at the door anymore.
+      // Owner rule: every driver logs in and is navigated to the screen
+      // that shows their status. The login redirect below sends
+      // APPROVED drivers to the dashboard and everyone else (invited /
+      // pending / waitlisted / on hold / suspended / rejected) to the
+      // status board, whose cards carry each status's specific message.
+      // Mid-session changes are enforced by the driver layout's server
+      // revalidation, not here.
 
       // All checks passed - proceed with login
       setAccessToken(data.accessToken);
@@ -235,18 +230,26 @@ export function DealerSignIn({
           // customerType from the API.
           navigate({ to: "/dealer-dashboard" });
         } else if (userType === "driver") {
-          // Use login data to decide where to redirect — no extra API call needed
-          if (data.onboardingCompleted) {
+          // Owner decision: APPROVED drivers go straight to work — the
+          // dashboard when their onboarding is done, the onboarding form
+          // when it isn't. Only drivers with pending business (invited /
+          // pending / waitlisted / on hold / rejected) land on the status
+          // board. One navigation per destination, no intermediate screen.
+          if (data.driverStatus === "APPROVED" && data.onboardingCompleted) {
             navigate({ to: "/driver/dashboard" });
-          } else if (data.onboardingToken) {
+          } else if (
+            data.driverStatus === "APPROVED" &&
+            data.onboardingToken
+          ) {
             navigate({
-              to: "/driver/onboarding-complete",
-              search: { token: data.onboardingToken },
+              to: "/driver-onboarding-complete",
+              search: { token: data.onboardingToken } as never,
             });
-          } else if (data.driverStatus === 'WAITLISTED' || data.driverStatus === 'INVITED') {
-            navigate({ to: "/driver-application-submitted" });
-          } else if (data.driverStatus === 'PENDING_APPROVAL') {
-            navigate({ to: "/driver-application-submitted" });
+          } else if (data.driverStatus === "APPROVED") {
+            // Approved but neither onboarded nor holding a token — send
+            // them to the dashboard; the driver route guard decides from
+            // there instead of this handler guessing again.
+            navigate({ to: "/driver/dashboard" });
           } else {
             navigate({ to: "/driver-application-submitted" });
           }
@@ -569,6 +572,12 @@ export function DealerSignIn({
                     </>
                   )}
                 </Button>
+
+                {/* Better Auth social sign-in — drivers only. Only configured
+                    providers render (secret-free list from the backend). */}
+                {isDriver && (
+                  <SocialAuthButtons callbackURL="/auth/social-callback" />
+                )}
 
                 <div className="pt-3 border-t border-slate-100 dark:border-slate-800 space-y-2">
                   <p className="text-sm text-slate-600 dark:text-slate-400">

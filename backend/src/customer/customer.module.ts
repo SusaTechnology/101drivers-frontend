@@ -9,7 +9,7 @@ import { CustomerDomain } from "src/domain/customer/customer.domain";
 import { CustomerApprovalEngine } from "src/domain/customer/customerApproval.engine";
 import { CustomerPricingEngine } from "src/domain/customer/customerPricing.engine";
 import { NotificationEventEngine } from "src/domain/notificationEvent/notificationEvent.engine";
-import { MailService } from "src/common/mail/mail.service";
+import { MailModule } from "src/common/mail/mail.module";
 import { PostpaidBillingModule } from "src/postpaidBilling/postpaidBilling.module";
 
 @Module({
@@ -22,6 +22,10 @@ import { PostpaidBillingModule } from "src/postpaidBilling/postpaidBilling.modul
     // WITH postpaidEnabled=true. Atomic with rollback to prepaid if the
     // Stripe setup fails (no half-state).
     PostpaidBillingModule,
+    // MailModule supplies the shared MailService for NotificationEventEngine
+    // and CustomerApprovalEngine — a locally-registered MailService would
+    // crash DI (MailService requires AdminGateService, invisible here).
+    MailModule,
   ],
   controllers: [CustomerController],
   providers: [
@@ -32,7 +36,6 @@ import { PostpaidBillingModule } from "src/postpaidBilling/postpaidBilling.modul
     CustomerApprovalEngine,
     CustomerPricingEngine,
     NotificationEventEngine,
-    MailService
   ],
   exports: [CustomerService],
 })

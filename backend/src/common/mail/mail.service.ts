@@ -44,7 +44,7 @@ export class MailService {
     this.appDomain =
       this.normalizeBaseUrl(
         this.configService.get<string>("101_DOMAIN") ??
-          "https://101drivers.techbee.et"
+          "https://101drivers.com"
       );
 
     if (!host || !user || !pass) {
@@ -82,11 +82,27 @@ export class MailService {
     return this.smtpConfigured;
   }
 
+  /**
+   * The bare mailbox behind the platform From header (info@101drivers.com by
+   * default, or whatever SMTP_FROM holds). Admin-triggered sends add this as
+   * a second BCC so the shared mailbox keeps a record of every email that
+   * left the platform, even though Gmail files the message in the SMTP
+   * account's Sent folder rather than the acting admin's own mailbox.
+   */
+  get platformFromAddress(): string {
+    const match = this.from.match(/<([^>]+)>/);
+    return (match ? match[1] : this.from).trim().toLowerCase();
+  }
+
   async sendMail(params: {
     to: string;
     subject: string;
     text?: string | null;
     html?: string | null;
+    /** Replies go to this address (admin meeting requests "from my address"). */
+    replyTo?: string | null;
+    /** Silent copy — used to always BCC the admin who triggered a send. */
+    bcc?: string | string[] | null;
   }): Promise<void> {
     if (!this.smtpConfigured || !this.transporter) {
       this.logger.warn(
@@ -99,12 +115,19 @@ export class MailService {
       const info = await this.transporter.sendMail({
         from: this.from,
         to: params.to,
+        ...(params.replyTo ? { replyTo: params.replyTo } : {}),
+        ...(params.bcc ? { bcc: params.bcc } : {}),
         subject: params.subject,
         text: params.text ?? undefined,
         html: params.html ?? undefined,
       });
 
-      this.logger.log(`Email sent to ${params.to}: ${info.messageId}`);
+      this.logger.log(
+        `Email sent to ${params.to}` +
+          (params.replyTo ? ` (reply-to ${params.replyTo})` : "") +
+          (params.bcc ? ` (bcc ${params.bcc})` : "") +
+          `: ${info.messageId}`
+      );
     } catch (error: any) {
       this.logger.error(
         `Failed to send email to ${params.to}: ${error?.message ?? error}`

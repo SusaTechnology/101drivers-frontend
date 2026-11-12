@@ -102,6 +102,10 @@ export class JwtStrategyBase
   return {
     id: user.id,
     username: user.username,
+    // The admin UI pre-fills "send from my email" flows (meeting requests)
+    // from /auth/me for sessions stored before that field was persisted
+    // client-side. `user` is a full-table read, so the column is present.
+    email: user.email ?? null,
     roles,
     // Re-read from the DB on every request, so granting/revoking the
     // super-admin flag takes effect on the actor's next request — no

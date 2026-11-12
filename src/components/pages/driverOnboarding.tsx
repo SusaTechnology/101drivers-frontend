@@ -11,7 +11,7 @@ import {
 import { Handshake, AlertTriangle } from "lucide-react";
 import { SEOHead } from "../shared/SEOHead";
 import { MobileOnlySignupCard } from "../shared/MobileOnlySignupCard";
-import { shouldShowMobileOnlySignup } from "../../lib/device";
+import { shouldShowMobileOnlySignup, deviceTouchHint } from "../../lib/device";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -322,6 +322,11 @@ function DriverOnboardingForm() {
     DriverSignupPayload
   >({
     apiEndPoint: `${import.meta.env.VITE_API_URL}/api/auth/signup/driver/`, // Adjust endpoint as needed
+    // The signup device gate is the ONLY consumer of this header, and it
+    // reads it ONLY on POST /auth/signup/driver — so this is the only
+    // request in the app allowed to carry it (desktop requests without
+    // touch stay 403-able by design; see mobile-only-signup.guard).
+    headers: { "x-device-touch": deviceTouchHint() },
     onSuccess: (data, variables) => {
       toast.success("Code sent to your email", {
         description: `${data.message}`,

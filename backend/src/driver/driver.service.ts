@@ -18,6 +18,8 @@ import {
   NotificationEvent as PrismaNotificationEvent,
   Prisma,
   User as PrismaUser,
+  EnumAdminAuditLogAction,
+  EnumAdminAuditLogActorType,
 } from "@prisma/client";
 
 import { PrismaService } from "../prisma/prisma.service";
@@ -28,6 +30,7 @@ import { UpdateDriverProfileBody } from "./dto/driverProfile.dto";
 import { EnumDriverStatus } from "@prisma/client";
 import { DriverApprovalEngine } from "../domain/driver/driverApproval.engine";
 import { CompleteDriverOnboardingDto } from "./dto/driverOnboardingComplete.dto";
+import { UpdateDriverOnboardingDto } from "./dto/driverOnboardingUpdate.dto";
 import {
   licenseIdentityHash,
   normalizeSsn,
@@ -531,11 +534,15 @@ async requestMeetingDriver(input: {
   driverId: string;
   actorUserId?: string | null;
   message: string;
+  fromMode?: "platform" | "mine" | null;
+  fromEmail?: string | null;
 }): Promise<any> {
   await this.driverApprovalEngine.requestMeetingDriver({
     driverId: input.driverId,
     actorUserId: input.actorUserId ?? null,
     message: input.message,
+    fromMode: input.fromMode ?? null,
+    fromEmail: input.fromEmail ?? null,
   });
 
   return this.domain.findUnique({ id: input.driverId });
@@ -647,16 +654,28 @@ async driverLookupList(): Promise<
    * Throws a NEUTRAL 409: no hint about who the existing account is.
    */
   private async assertIdentityNotTaken(
-    dto: CompleteDriverOnboardingDto
+    // ssn stays optional in the caller's shape: the license-update path
+    // (which has no SSN at all) passes only the license fields, and an
+    // absent SSN never runs the clash check below.
+    dto: { ssn?: string; licenseNumber: string; licenseState: string },
+    excludeDriverId?: string
   ): Promise<void> {
     const [ssnClash, licenseClash] = await Promise.all([
-      this.prisma.driver.findFirst({
-        where: { ssnHash: ssnIdentityHash(dto.ssn) },
-        select: { id: true },
-      }),
+      // The self-service edit path may omit the SSN (keep what's on file) —
+      // an absent SSN never runs the clash check.
+      dto.ssn
+        ? this.prisma.driver.findFirst({
+            where: {
+              ssnHash: ssnIdentityHash(dto.ssn),
+              ...(excludeDriverId ? { id: { not: excludeDriverId } } : {}),
+            },
+            select: { id: true },
+          })
+        : Promise.resolve(null),
       this.prisma.driver.findFirst({
         where: {
           licenseNumberHash: licenseIdentityHash(dto.licenseNumber, dto.licenseState),
+          ...(excludeDriverId ? { id: { not: excludeDriverId } } : {}),
         },
         select: { id: true },
       }),
@@ -700,6 +719,9 @@ async driverLookupList(): Promise<
       userId: true,
       status: true,
       onboardingCompletedAt: true,
+      // The actor email for the lastOnboardingUpdateBy stamp (the driver
+      // themself on this path).
+      user: { select: { email: true } },
     },
   });
 
@@ -750,6 +772,10 @@ async driverLookupList(): Promise<
           selfiePhotoUrl: dto.selfiePhotoUrl.trim(),
           status: EnumDriverStatus.PENDING_APPROVAL,
           onboardingCompletedAt: new Date(),
+          // "Last Updated" stamp for the admin Users surface — the
+          // initial submission IS the first onboarding-detail update.
+          lastOnboardingUpdateAt: new Date(),
+          lastOnboardingUpdateBy: driver.user?.email ?? null,
           ...(dto.agreementAcceptedAt
             ? { agreementAcceptedAt: new Date(dto.agreementAcceptedAt) }
             : {}),
@@ -817,6 +843,9 @@ async completeOnboardingByToken(
       userId: true,
       status: true,
       onboardingCompletedAt: true,
+      // The actor email for the lastOnboardingUpdateBy stamp (the driver
+      // themself on this path).
+      user: { select: { email: true } },
     },
   });
 
@@ -866,6 +895,10 @@ async completeOnboardingByToken(
           selfiePhotoUrl: dto.selfiePhotoUrl.trim(),
           status: EnumDriverStatus.PENDING_APPROVAL,
           onboardingCompletedAt: new Date(),
+          // "Last Updated" stamp for the admin Users surface — the
+          // initial submission IS the first onboarding-detail update.
+          lastOnboardingUpdateAt: new Date(),
+          lastOnboardingUpdateBy: driver.user?.email ?? null,
           ...(dto.agreementAcceptedAt
             ? { agreementAcceptedAt: new Date(dto.agreementAcceptedAt) }
             : {}),
@@ -892,7 +925,193 @@ async completeOnboardingByToken(
   return this.domain.findUnique({ id: driver.id });
 }
 
-async getDriverDeliveriesByStatus(input: {
+  // ─────────────────────────────────────────────────────────────────────
+  // Onboarding-data edit (self-service)
+  //
+  // A driver who has ALREADY completed onboarding but is not approved yet
+  // (PENDING_APPROVAL / MEETING_REQUESTED / ON_HOLD / REJECTED) can review
+  // and correct what they submitted — prefilled with the stored values,
+  // including the license/selfie photos. Neither method ever touches
+  // `status` or `onboardingCompletedAt`: an edit updates data only, so the
+  // approval engine's transitions stay exactly as they were.
+  // ─────────────────────────────────────────────────────────────────────
+
+  /**
+   * The ONE status in which the driver may edit their submitted onboarding
+   * data — PENDING_APPROVAL only (owner decision). The background check
+   * starts after approval, so restricting edits to this window means the
+   * identity documents can never change underneath a running check;
+   * MEETING_REQUESTED / ON_HOLD / REJECTED and everything later go through
+   * support instead.
+   */
+  private static readonly ONBOARDING_EDITABLE_STATUSES: EnumDriverStatus[] = [
+    EnumDriverStatus.PENDING_APPROVAL,
+  ];
+
+  /**
+   * Prefill payload for the driver's license-update page (own data only).
+   * License fields only — the page cannot touch anything else, so the GET
+   * never ships DOB, address, or SSN material either (minimal exposure).
+   */
+  async getOnboardingData(driverId: string): Promise<any> {
+    const driver = await this.prisma.driver.findUnique({
+      where: { id: driverId },
+      select: {
+        status: true,
+        onboardingCompletedAt: true,
+        licenseNumber: true,
+        licenseState: true,
+        licenseFrontUrl: true,
+        licenseBackUrl: true,
+      },
+    });
+
+    if (!driver) {
+      throw new NotFoundException("Driver not found");
+    }
+
+    return {
+      driverStatus: driver.status,
+      onboardingCompleted: !!driver.onboardingCompletedAt,
+      onboardingCompletedAt: driver.onboardingCompletedAt?.toISOString() ?? null,
+      editable:
+        !!driver.onboardingCompletedAt &&
+        DriverService.ONBOARDING_EDITABLE_STATUSES.includes(driver.status),
+      licenseNumber: driver.licenseNumber,
+      licenseState: driver.licenseState,
+      licenseFrontUrl: driver.licenseFrontUrl,
+      licenseBackUrl: driver.licenseBackUrl,
+    };
+  }
+
+  async updateOnboardingData(
+    driverId: string,
+    dto: UpdateDriverOnboardingDto
+  ): Promise<any> {
+    const driver = await this.prisma.driver.findUnique({
+      where: { id: driverId },
+      select: {
+        id: true,
+        status: true,
+        onboardingCompletedAt: true,
+        licenseNumber: true,
+        licenseState: true,
+        licenseFrontUrl: true,
+        licenseBackUrl: true,
+        user: { select: { fullName: true, email: true } },
+      },
+    });
+
+    if (!driver) {
+      throw new BadRequestException("Driver not found");
+    }
+
+    if (!driver.onboardingCompletedAt) {
+      throw new BadRequestException(
+        "Onboarding has not been completed yet — use the onboarding form instead"
+      );
+    }
+
+    if (
+      !DriverService.ONBOARDING_EDITABLE_STATUSES.includes(driver.status)
+    ) {
+      throw new BadRequestException(
+        "Your license information can no longer be edited for your current status. Please contact support if something needs to be corrected."
+      );
+    }
+
+    // One driver account per license — the same neutral 409 as the
+    // completion paths, but EXCLUDING this driver's own row (their stored
+    // hash must not collide with itself). No SSN in the DTO, so the SSN
+    // clash check is skipped inside.
+    await this.assertIdentityNotTaken(
+      {
+        licenseNumber: dto.licenseNumber,
+        licenseState: dto.licenseState,
+      },
+      driverId
+    );
+
+    // License hash is ALWAYS rewritten (number/state may have been
+    // corrected; unchanged prefilled values produce the identical hash).
+    const licenseNumberHash = licenseIdentityHash(
+      dto.licenseNumber,
+      dto.licenseState
+    );
+
+    // Audit snapshot — the license subset a driver edit can touch, plus
+    // the driver's name so the admin Audit Logs summary names the person.
+    // Deliberately excludes ssnHash/ssnEncrypted/licenseNumberHash — no
+    // identity material in the log.
+    const auditFields = (row: Record<string, any>) => ({
+      driverName: row.user?.fullName ?? null,
+      licenseNumber: row.licenseNumber ?? null,
+      licenseState: row.licenseState ?? null,
+      licenseFrontUrl: row.licenseFrontUrl ?? null,
+      licenseBackUrl: row.licenseBackUrl ?? null,
+    });
+
+    try {
+      await this.prisma.$transaction([
+        this.prisma.driver.update({
+          where: { id: driverId },
+          data: {
+            licenseNumber: dto.licenseNumber.trim(),
+            licenseState: dto.licenseState.trim(),
+            licenseFrontUrl: dto.licenseFrontUrl.trim(),
+            licenseBackUrl: dto.licenseBackUrl.trim(),
+            licenseNumberHash,
+            // "Last Updated" stamp for the admin Users surface — the edit
+            // page is the main path that changes onboarding details after
+            // the initial submission; the actor is the driver themself.
+            lastOnboardingUpdateAt: new Date(),
+            lastOnboardingUpdateBy: driver.user?.email ?? null,
+            // status / onboardingCompletedAt are intentionally NOT here —
+            // an edit never changes the application state.
+          },
+        }),
+      ]);
+    } catch (err) {
+      // Two edits racing past the pre-check: the unique indexes decide —
+      // same neutral 409, no information leak.
+      const conflict = identityConflictFrom(err);
+      if (conflict) throw conflict;
+      throw err;
+    }
+
+    const updated = await this.prisma.driver.findUnique({
+      where: { id: driverId },
+      select: {
+        licenseNumber: true,
+        licenseState: true,
+        licenseFrontUrl: true,
+        licenseBackUrl: true,
+        user: { select: { fullName: true } },
+      },
+    });
+
+    await this.prisma.adminAuditLog.create({
+      data: {
+        action: EnumAdminAuditLogAction.OTHER,
+        // Driver-initiated: no admin user behind it, so actorType SYSTEM —
+        // the admin Audit Logs page labels actor-less USER rows "Admin
+        // User", which would be wrong. Admins find these rows by picking
+        // the driver in the filter, by action OTHER, or by searching the
+        // reason text below.
+        actorUserId: null,
+        actorType: EnumAdminAuditLogActorType.SYSTEM,
+        driverId,
+        reason:
+          "Driver license info updated by driver during PENDING_APPROVAL (self-service edit)",
+        beforeJson: (auditFields(driver) as any) ?? Prisma.JsonNull,
+        afterJson: (updated ? auditFields(updated) : null) as any ?? Prisma.JsonNull,
+      },
+    });
+
+    return this.getOnboardingData(driverId);
+  }
+
+  async getDriverDeliveriesByStatus(input: {
   driverId: string;
   status?: string;
   page?: number;

@@ -15,6 +15,10 @@ model User {
   createdAt                   DateTime                @default(now())
   customer                    Customer?               @relation(name: "CustomerOnUser")
   customersApproved           Customer[]              @relation(name: "customersApproved")
+  // Better Auth identity rows (Account = credential/social identities,
+  // Session = Better Auth sessions). See docs/auth/better-auth-plan.md.
+  authAccounts                Account[]               @relation(name: "AuthAccountOnUser")
+  authSessions                Session[]               @relation(name: "AuthSessionOnUser")
   deliveriesCreated           DeliveryRequest[]
   disabledAt                  DateTime?
   disabledReason              String?
@@ -22,7 +26,12 @@ model User {
   driver                      Driver?                 @relation(name: "DriverOnUser")
   driversApproved             Driver[]                @relation(name: "driversApproved")
   email                       String                  @unique
+  // Better Auth identity flag (drivers). Mirrored into emailVerifiedAt by
+  // the Better Auth database hook; legacy OTP flows keep writing
+  // emailVerifiedAt directly. See docs/auth/better-auth-plan.md.
+  emailVerified               Boolean                 @default(false)
   emailVerifiedAt             DateTime?
+  image                       String?
   exportsCreated              EvidenceExport[]
   fullName                    String?
   id                          String                  @id @default(cuid())
@@ -31,7 +40,7 @@ model User {
   lastLoginAt                 DateTime?
   notifEvents                 NotificationEvent[]      @relation("NotificationActor")
   notifEventsReceived         NotificationEvent[]      @relation("NotificationRecipient")
-  password                    String
+  password                    String                  @default("")
   passwordHash                String?
   phone                       String?
   roles                       EnumUserRoles           @default(DRIVER)
@@ -39,7 +48,7 @@ model User {
   scheduleChangesRequested    ScheduleChangeRequest[] @relation(name: "requestedBy")
   statusActions               DeliveryStatusHistory[]
   updatedAt                   DateTime                @updatedAt
-  username                    String                  @unique
+  username                    String                  @unique @default(cuid())
   supportRequestsRaised       SupportRequest[]        @relation(name: "supportRequestsRaised")
   supportRequestsAssigned     SupportRequest[]        @relation(name: "supportRequestsAssigned")
   supportRequestNotesAuthored SupportRequestNote[]    @relation(name: "supportRequestNotesAuthored")
@@ -132,6 +141,17 @@ model Driver {
   id               String                     @id @default(cuid())
   notifications    NotificationEvent[]
   onboardingCompletedAt  DateTime?
+  // ── Last onboarding-detail update (admin Users surface) ──
+  // Stamped by the service on every DRIVER self-service write of onboarding
+  // data: completeOnboarding / completeOnboardingByToken (initial
+  // submission) and updateOnboardingData (the license edit page).
+  // lastOnboardingUpdateBy holds the actor's email — the driver themself —
+  // so the admin Users table column and the user-detail card can show when
+  // the onboarding details last changed and who changed them. NULL = the
+  // row never went through those paths (drivers onboarded before the
+  // column existed — no backfill, same policy as invitedAt/ssnEncrypted).
+  lastOnboardingUpdateAt DateTime?
+  lastOnboardingUpdateBy String?
   onboardingToken  String?
   payoutBatches    PayoutBatch[]
   payouts          DriverPayout[]
@@ -1474,6 +1494,61 @@ model EmailVerificationToken {
   verifiedAt DateTime?
 
   @@index([email, purpose])
+}
+
+// ── Better Auth identity tables (drivers-only integration) ──────────────
+// Managed by Better Auth (betterAuth() + Prisma adapter). The Better Auth
+// "user" model maps onto the EXISTING User model above — there is NO second
+// user table. Column mapping: better-auth `name` → User.fullName;
+// `emailVerified` → User.emailVerified (mirrored into emailVerifiedAt by
+// the Better Auth database hook). Credential password hashes live on
+// Account rows (providerId "credential"), social identities on Account
+// rows (google/microsoft/apple/yahoo). @@unique([providerId, accountId])
+// makes one external identity impossible to attach to two users at the
+// database level. See docs/auth/better-auth-plan.md.
+model Account {
+  id                    String    @id @default(cuid())
+  userId                String
+  accountId             String
+  providerId            String
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+  user                  User      @relation(name: "AuthAccountOnUser", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([providerId, accountId])
+  @@index([userId])
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  userId    String
+  token     String   @unique
+  expiresAt DateTime
+  ipAddress String?
+  userAgent String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user      User     @relation(name: "AuthSessionOnUser", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model Verification {
+  id         String   @id @default(cuid())
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([identifier])
 }
 
 enum EnumUserRoles {

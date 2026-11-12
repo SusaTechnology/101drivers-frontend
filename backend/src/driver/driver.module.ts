@@ -3,14 +3,13 @@ import { AuthModule } from "../auth/auth.module";
 import { DriverModuleBase } from "./base/driver.module.base";
 import { DriverService } from "./driver.service";
 import { DriverController } from "./driver.controller";
-import { DriverOnboardingController } from "./driverOnboarding.controller";
 import { DriverOnboardingPublicController } from "./driverOnboardingPublic.controller";
 import { DriverResolver } from "./driver.resolver";
 import { DriverPolicyService } from "src/domain/driver/driverPolicy.service";
 import { DriverDomain } from "src/domain/driver/driver.domain";
 import { DriverApprovalEngine } from "src/domain/driver/driverApproval.engine";
 import { NotificationEventEngine } from "src/domain/notificationEvent/notificationEvent.engine";
-import { MailService } from "src/common/mail/mail.service";
+import { MailModule } from "src/common/mail/mail.module";
 import { ReferralModule } from "../referral/referral.module";
 import { GeoModule } from "../geo/geo.module";
 
@@ -24,9 +23,18 @@ import { GeoModule } from "../geo/geo.module";
     DriverModuleBase,
     forwardRef(() => AuthModule),
     forwardRef(() => ReferralModule),
+    // MailModule supplies the shared MailService for NotificationEventEngine
+    // and DriverApprovalEngine — a locally-registered MailService would
+    // crash DI (MailService requires AdminGateService, invisible here).
+    MailModule,
   ],
-  controllers: [DriverController, DriverOnboardingController, DriverOnboardingPublicController],
-  providers: [DriverService, DriverResolver, DriverDomain, DriverPolicyService, DriverApprovalEngine, NotificationEventEngine, MailService],
+  // DriverOnboardingPublicController serves /public/drivers/* — a different
+  // base path, so it cannot collide with DriverControllerBase's ":id" routes.
+  // All /drivers/* self-service routes live on DriverController itself (see
+  // the route-order note there); adding another @Controller("drivers") class
+  // AFTER it would get its GET/PATCH routes swallowed by the base ":id".
+  controllers: [DriverController, DriverOnboardingPublicController],
+  providers: [DriverService, DriverResolver, DriverDomain, DriverPolicyService, DriverApprovalEngine, NotificationEventEngine],
   exports: [DriverService],
 })
 export class DriverModule {}

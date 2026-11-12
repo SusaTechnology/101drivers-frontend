@@ -9,11 +9,13 @@ import request from "supertest";
 import { ACGuard } from "nest-access-control";
 import { DefaultAuthGuard } from "../../auth/defaultAuth.guard";
 import { ACLModule } from "../../auth/acl.module";
+import { MobileOnlyDriverGuard } from "../../auth/guards/mobile-only-driver.guard";
 import { AclFilterResponseInterceptor } from "../../interceptors/aclFilterResponse.interceptor";
 import { AclValidateRequestInterceptor } from "../../interceptors/aclValidateRequest.interceptor";
 import { map } from "rxjs";
 import { DriverController } from "../driver.controller";
 import { DriverService } from "../driver.service";
+import { PrismaService } from "../../prisma/prisma.service";
 
 const nonExistingId = "nonExistingId";
 const existingId = "existingId";
@@ -109,6 +111,12 @@ describe("Driver", () => {
           provide: DriverService,
           useValue: service,
         },
+        {
+          // DriverController injects PrismaService to resolve the driver
+          // row from the authenticated userId (see resolveDriverProfileId).
+          provide: PrismaService,
+          useValue: {},
+        },
       ],
       controllers: [DriverController],
       imports: [ACLModule],
@@ -117,6 +125,11 @@ describe("Driver", () => {
       .useValue(basicAuthGuard)
       .overrideGuard(ACGuard)
       .useValue(acGuard)
+      // DriverController also mounts the self-service onboarding routes,
+      // whose MobileOnlyDriverGuard needs PrismaService/AppEventsService —
+      // not provided in this bare module, so stub it like the other guards.
+      .overrideGuard(MobileOnlyDriverGuard)
+      .useValue({ canActivate: () => true })
       .overrideInterceptor(AclFilterResponseInterceptor)
       .useValue(aclFilterResponseInterceptor)
       .overrideInterceptor(AclValidateRequestInterceptor)
