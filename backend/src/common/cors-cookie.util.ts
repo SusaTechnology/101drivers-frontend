@@ -7,29 +7,18 @@ import { CookieOptions } from "express";
 /**
  * Explicit allowlist of production frontend origins.
  *
- * The production frontend lives on 101drivers.com (www included);
- * localhost is allowed for development. Without this list in the repo, a
- * backend deploy would fall back to whatever configuration the server
- * happens to carry — the .com frontend must never be an afterthought here.
+ * The API serves BOTH deployed frontends:
+ *   - https://101drivers.techbee.et  (original deployment)
+ *   - https://101drivers.com         (current primary domain)
+ * plus localhost for development. Without this list in the repo, a backend
+ * deploy would fall back to whatever configuration the server happens to
+ * carry — the .com frontend must never be an afterthought here.
  */
 const ALLOWED_CORS_ORIGINS = new Set<string>([
+  "https://101drivers.techbee.et",
   "https://101drivers.com",
   "https://www.101drivers.com",
 ]);
-
-/**
- * Shared auth-cookie domain — the ROOT_DOMAIN env var when set, otherwise
- * the 101drivers.com primary. Cookies carrying a Domain that does not
- * match the responding host are SILENTLY DROPPED by browsers, so this
- * must always match where the API actually runs (set ROOT_DOMAIN on any
- * non-default deployment).
- */
-function authCookieDomain(): string {
-  const root = (process.env.ROOT_DOMAIN || "101drivers.com")
-    .toLowerCase()
-    .replace(/^https?:\/\//, "");
-  return `.${root}`;
-}
 
 export function configureCors(app: INestApplication) {
   app.use(cookieParser());
@@ -68,16 +57,6 @@ export function configureCors(app: INestApplication) {
       // the browser refuses the cross-site gate cookie.
       "x-admin-gate-token",
       "X-Admin-Gate-Token",
-      // Signup device-gate signal (mobile-only-signup.guard reads it): the
-      // FE tells the server whether the browser is touch-capable so the
-      // gate can tell an iPadOS desktop-mode iPad (touch, "Macintosh" UA —
-      // allowed) from a real Mac (no touch — blocked). Without it here the
-      // browser aborts at preflight for ANY cross-origin request that
-      // carries the header — which is exactly what broke admin sign-in
-      // from the .com frontend ("Failed to fetch" before login), and it
-      // also meant the gate could only ever see the UA string.
-      "x-device-touch",
-      "X-Device-Touch",
     ],
   });
 }
@@ -90,7 +69,7 @@ export function getCookieOptions(isSecureEnv = false): CookieOptions {
     httpOnly: true,
     secure: isHttps,
     sameSite: (isHttps ? "none" : "lax") as "none" | "lax",
-    domain: isHttps ? authCookieDomain() : undefined,
+    domain: isHttps ? ".techbee.et" : undefined,
     path: "/",
     maxAge: 30 * 24 * 60 * 60 * 1000,
   };
@@ -113,7 +92,7 @@ export function getCookieOptionsFromRequest(req: {
     httpOnly: true,
     secure: isHttps,
     sameSite: (isHttps ? "none" : "lax") as "none" | "lax",
-    domain: isHttps ? authCookieDomain() : undefined,
+    domain: isHttps ? ".techbee.et" : undefined,
     path: "/",
     maxAge: 30 * 24 * 60 * 60 * 1000,
   };

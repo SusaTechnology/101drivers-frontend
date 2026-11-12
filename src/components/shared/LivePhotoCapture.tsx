@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Camera, X, AlertCircle, RefreshCw, Copy, Check } from "lucide-react";
+import { Camera, X, AlertCircle, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -50,47 +50,6 @@ type OverlayState = "closed" | "starting" | "live" | "error";
 const MAX_EDGE = 1600;
 const JPEG_QUALITY = 0.85;
 
-// In-app webviews (Facebook, Instagram, WhatsApp, TikTok…) refuse getUserMedia
-// permanently — no site setting can fix them from inside. Detected up front so
-// a doomed prompt is never fired and the driver gets the real-browser escape.
-// Conservative list: real browsers (Safari/Chrome/Firefox on iOS too) must not
-// match.
-const IN_APP_BROWSER_UA =
-  /FBAN|FBAV|FB_IAB|FB4A|Instagram|WhatsApp|LinkedInApp|Snapchat|musical_ly|BytedanceWebApp|TikTok/i;
-const isInAppBrowserUA = () => IN_APP_BROWSER_UA.test(navigator.userAgent);
-
-// Best-effort watch of the browser-level camera permission. Calls onChange
-// with the current state once, then on every change; returns a dispose
-// function, or null where camera can't be watched (older iOS Safari < 16,
-// some webviews) — callers must keep a manual retry path.
-function watchCameraPermission(
-  onChange: (state: "granted" | "denied" | "prompt") => void
-): (() => void) | null {
-  try {
-    if (!navigator.permissions?.query) return null;
-    let disposed = false;
-    let status: PermissionStatus | null = null;
-    navigator.permissions
-      .query({ name: "camera" })
-      .then((s) => {
-        if (disposed) return;
-        status = s;
-        const read = () => onChange(s.state as "granted" | "denied" | "prompt");
-        read();
-        s.onchange = read;
-      })
-      .catch(() => {
-        // Unsupported permission name (older Safari) — manual path stays.
-      });
-    return () => {
-      disposed = true;
-      if (status) status.onchange = null;
-    };
-  } catch {
-    return null;
-  }
-}
-
 export function LivePhotoCapture({
   kind,
   facing,
@@ -106,15 +65,6 @@ export function LivePhotoCapture({
 }: LivePhotoCaptureProps) {
   const [overlay, setOverlay] = useState<OverlayState>("closed");
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  // The DOMException name behind the error (NotAllowedError, NotReadableError,
-  // …) — shown as a small technical line so support can tell the failure
-  // modes apart ("driver allowed it but still blocked" reports).
-  const [errName, setErrName] = useState<string | null>(null);
-  // Webview escape: the error is "you're inside another app's browser" —
-  // offer the Copy-link action in the error panel.
-  const [webviewEscape, setWebviewEscape] = useState(false);
-  // Feedback for the Copy-link tap.
-  const [linkCopied, setLinkCopied] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
 
@@ -128,9 +78,6 @@ export function LivePhotoCapture({
 
   const openCamera = useCallback(async () => {
     if (disabled || uploading) return;
-    setErrName(null);
-    setWebviewEscape(false);
-    setLinkCopied(false);
     if (!window.isSecureContext) {
       setErrorMsg(
         "The camera needs a secure connection. Please open this page using https and try again."
@@ -145,65 +92,37 @@ export function LivePhotoCapture({
       setOverlay("error");
       return;
     }
-    // In-app webviews refuse the camera no matter what the driver allows —
-    // never fire a doomed prompt. Point at the real browser with a one-tap
-    // link copy instead.
-    if (isInAppBrowserUA()) {
-      setWebviewEscape(true);
-      setErrorMsg(
-        "You opened this page inside another app's built-in browser (Facebook, Instagram, WhatsApp…). Those never allow the camera — no setting can change it from in there. Open this page in Safari (iPhone) or Chrome (Android): tap the ⋯ or ••• menu and choose \"Open in Safari / Chrome\", or copy the link below and paste it into the real browser."
-      );
-      setOverlay("error");
-      return;
-    }
     setOverlay("starting");
     setErrorMsg(null);
-    // The camera is BUSY for a beat after a previous stream stops (or while
-    // another app holds it) — browsers report NotReadableError. One silent
-    // retry after a short wait clears the common race; only a persistent
-    // busy surfaces as an error.
-    const acquire = async (): Promise<MediaStream> => {
-      const constraints: MediaStreamConstraints = {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
         video: {
           facingMode: { ideal: facing },
           width: { ideal: 1920 },
           height: { ideal: 1080 },
         },
         audio: false,
-      };
-      try {
-        return await navigator.mediaDevices.getUserMedia(constraints);
-      } catch (err) {
-        if ((err as DOMException)?.name !== "NotReadableError") throw err;
-        await new Promise((resolve) => setTimeout(resolve, 900));
-        return await navigator.mediaDevices.getUserMedia(constraints);
-      }
-    };
-    try {
-      const stream = await acquire();
+      });
       streamRef.current = stream;
-      // The <video> element attaches and starts in the effect below (runs
-      // after the overlay DOM is committed — see the iOS notes there).
       setOverlay("live");
+      // The <video> element mounts with the overlay — attach on the next frame.
+      requestAnimationFrame(() => {
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+          videoRef.current.play().catch(() => {});
+        }
+      });
     } catch (err) {
-      const name = (err as DOMException)?.name || "UnknownError";
-      setErrName(name);
+      const name = (err as DOMException)?.name;
       if (name === "NotAllowedError" || name === "SecurityError") {
         setErrorMsg(
-          "Your browser did not give this page camera access. Try these, in order: " +
-            "(1) if you opened this link from Instagram, Facebook, WhatsApp or Gmail, " +
-            "open it in Safari (iPhone) or Chrome (Android) instead — in-app browsers " +
-            "block the camera even when allowed; (2) allow camera for this site in the " +
-            "browser settings (iPhone: Settings → Safari → Camera → Allow); " +
-            "(3) if you added this app to your home screen, delete and re-add it, or " +
-            "open the site in Safari. Once the setting says Allow, the camera opens " +
-            "here by itself — no other tap needed."
+          "Camera access was blocked. Allow camera access for this site in your browser settings, then try again."
         );
-      } else if (name === "NotReadableError") {
-        setErrorMsg(
-          "The camera is busy in another app. Close any other app using the camera, then tap Try again."
-        );
-      } else if (name === "NotFoundError" || name === "OverconstrainedError") {
+      } else if (
+        name === "NotFoundError" ||
+        name === "OverconstrainedError" ||
+        name === "NotReadableError"
+      ) {
         setErrorMsg(
           "No usable camera was found on this device. Please take this photo on your phone."
         );
@@ -215,95 +134,6 @@ export function LivePhotoCapture({
       setOverlay("error");
     }
   }, [disabled, uploading, facing]);
-
-  // Attach the stream and start playback from an EFFECT, not a rAF callback:
-  // the effect runs after React has committed the overlay's <video>, and the
-  // retry ladder covers iOS Safari's silent black-screen modes — play() fired
-  // before the element has metadata/layout (rejected with nobody noticing,
-  // because the old code swallowed the rejection), and AbortError when
-  // metadata lands mid-play. muted is also set as a PROPERTY here: React's
-  // muted attribute does not reliably reach the DOM property before autoplay
-  // on Safari, which is another way the preview stays black.
-  useEffect(() => {
-    if (overlay !== "live") return;
-    const video = videoRef.current;
-    const stream = streamRef.current;
-    if (!video || !stream) return;
-    video.muted = true;
-    video.srcObject = stream;
-    let cancelled = false;
-    const start = () => {
-      if (cancelled || !video.paused) return;
-      video.play().catch(() => {
-        if (cancelled) return;
-        // First play() raced the decode pipeline — retry once the first
-        // frame is decodable (loadeddata).
-        video.addEventListener(
-          "loadeddata",
-          () => {
-            if (!cancelled) video.play().catch(() => {});
-          },
-          { once: true }
-        );
-      });
-    };
-    if (video.readyState >= 1) start();
-    else video.addEventListener("loadedmetadata", start, { once: true });
-    return () => {
-      cancelled = true;
-    };
-  }, [overlay]);
-
-  // One-tap escape for in-app webviews: hand the driver the URL so they can
-  // finish in the real browser (the OS forbids a page from auto-leaving the
-  // webview, so copy + paste is the shortest honest path).
-  const copyPageLink = useCallback(async () => {
-    const url = window.location.href;
-    try {
-      await navigator.clipboard.writeText(url);
-    } catch {
-      // Clipboard API may be blocked inside webviews — execCommand fallback.
-      const ta = document.createElement("textarea");
-      ta.value = url;
-      ta.style.position = "fixed";
-      ta.style.opacity = "0";
-      document.body.appendChild(ta);
-      ta.select();
-      try {
-        document.execCommand("copy");
-      } catch {
-        // Even copy can be blocked — the menu path in the message remains.
-      }
-      ta.remove();
-    }
-    setLinkCopied(true);
-  }, []);
-
-  // "Once allowed, the system should know": while an error panel is up, watch
-  // the browser's camera permission. The moment the driver flips it to Allow
-  // (browser site settings / the aA menu) and comes back, the camera re-opens
-  // BY ITSELF — no "Try again" tap. Only a state CHANGE to granted triggers
-  // this: an already-granted first read while an error is showing would loop
-  // against a busy camera. Where the Permissions API can't watch camera
-  // (older iOS Safari, some webviews) nothing fires and the manual retry
-  // button remains.
-  useEffect(() => {
-    if (overlay !== "error") return;
-    let prev: "granted" | "denied" | "prompt" | null = null;
-    const stop = watchCameraPermission((state) => {
-      const becameGranted =
-        prev !== null && prev !== "granted" && state === "granted";
-      prev = state;
-      if (becameGranted) {
-        setErrorMsg(null);
-        setErrName(null);
-        setWebviewEscape(false);
-        setLinkCopied(false);
-        openCamera();
-      }
-    });
-    return () => stop?.();
-  }, [overlay, openCamera]);
 
   const closeCamera = useCallback(() => {
     stopStream();
@@ -339,23 +169,6 @@ export function LivePhotoCapture({
   }, [kind, onCapture, stopStream]);
 
   const triggerDisabled = disabled || uploading;
-
-  // Shown in the error panel only when the webview escape is relevant.
-  const copyLinkAction = (
-    <Button type="button" variant="outline" onClick={copyPageLink} className="rounded-xl">
-      {linkCopied ? (
-        <>
-          <Check className="w-4 h-4 mr-2" />
-          Link copied — open it in Safari / Chrome
-        </>
-      ) : (
-        <>
-          <Copy className="w-4 h-4 mr-2" />
-          Copy link for Safari / Chrome
-        </>
-      )}
-    </Button>
-  );
 
   // ── Preview state (parent owns the image) ──
   if (previewUrl) {
@@ -434,8 +247,6 @@ export function LivePhotoCapture({
         <CameraOverlay
           overlay={overlay}
           errorMsg={errorMsg}
-          errName={errName}
-          errorAction={webviewEscape ? copyLinkAction : undefined}
           hint={hint}
           mirrored={facing === "user"}
           videoRef={videoRef}
@@ -463,8 +274,6 @@ export function LivePhotoCapture({
         <CameraOverlay
           overlay={overlay}
           errorMsg={errorMsg}
-          errName={errName}
-          errorAction={webviewEscape ? copyLinkAction : undefined}
           hint={hint}
           mirrored={facing === "user"}
           videoRef={videoRef}
@@ -494,8 +303,6 @@ export function LivePhotoCapture({
       <CameraOverlay
         overlay={overlay}
         errorMsg={errorMsg}
-        errName={errName}
-        errorAction={webviewEscape ? copyLinkAction : undefined}
         hint={hint}
         mirrored={facing === "user"}
         videoRef={videoRef}
@@ -512,10 +319,6 @@ export function LivePhotoCapture({
 interface CameraOverlayProps {
   overlay: OverlayState;
   errorMsg: string | null;
-  /** DOMException name behind errorMsg (for the technical detail line). */
-  errName?: string | null;
-  /** Extra action under the error buttons (webview Copy-link escape). */
-  errorAction?: React.ReactNode;
   hint: string;
   mirrored: boolean;
   videoRef: React.RefObject<HTMLVideoElement | null>;
@@ -527,8 +330,6 @@ interface CameraOverlayProps {
 function CameraOverlay({
   overlay,
   errorMsg,
-  errName,
-  errorAction,
   hint,
   mirrored,
   videoRef,
@@ -539,17 +340,10 @@ function CameraOverlay({
   if (overlay === "closed") return null;
 
   return (
-    // The page draws UNDER the iPhone status bar (viewport-fit=cover), so the
-    // whole overlay — the X in particular — must start below the safe-area
-    // inset or the built-in header swallows the taps. Same convention as
-    // routes/driver.tsx and the app bars.
-    <div
-      className="fixed inset-0 z-[100] bg-black/95 flex flex-col"
-      style={{ paddingTop: "env(safe-area-inset-top, 0px)" }}
-    >
+    <div className="fixed inset-0 z-[100] bg-black/95 flex flex-col">
       <div className="flex items-center justify-between px-4 py-3 text-white">
         <span className="text-sm font-bold">Live camera</span>
-        <button type="button" onClick={onClose} aria-label="Close camera" className="p-2 -mr-2">
+        <button type="button" onClick={onClose} aria-label="Close camera" className="p-2">
           <X className="w-6 h-6" />
         </button>
       </div>
@@ -558,11 +352,6 @@ function CameraOverlay({
         <div className="flex-1 flex flex-col items-center justify-center gap-4 px-8 text-center">
           <AlertCircle className="w-12 h-12 text-amber-400" />
           <p className="text-sm text-slate-200 max-w-sm">{errorMsg}</p>
-          {errName && (
-            <p className="text-[10px] text-slate-500">
-              Technical detail: {errName}
-            </p>
-          )}
           <div className="flex gap-3">
             <Button type="button" variant="outline" onClick={onRetry} className="rounded-xl">
               <RefreshCw className="w-4 h-4 mr-2" />
@@ -572,7 +361,6 @@ function CameraOverlay({
               Close
             </Button>
           </div>
-          {errorAction}
         </div>
       ) : overlay === "starting" ? (
         <div className="flex-1 flex flex-col items-center justify-center gap-3">
@@ -594,11 +382,7 @@ function CameraOverlay({
             />
           </div>
           <p className="text-center text-xs text-slate-300 px-6 pb-2">{hint}</p>
-          {/* Bottom inset: keep the shutter clear of the home indicator. */}
-          <div
-            className="flex items-center justify-center pt-2"
-            style={{ paddingBottom: "calc(2.5rem + env(safe-area-inset-bottom, 0px))" }}
-          >
+          <div className="flex items-center justify-center pb-10 pt-2">
             <button
               type="button"
               onClick={onCapture}

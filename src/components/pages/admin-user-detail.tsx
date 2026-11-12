@@ -1071,32 +1071,25 @@ export default function AdminUserDetailPage({ userId }: AdminUserDetailPageProps
   // Request Meeting — sends the composed email + flips the status in one
   // backend transaction. A failure leaves the driver in Pending Approval
   // and the error surfaces here so the admin can retry.
-  const handleRequestMeeting = useCallback(
-    (message: string, fromMode: 'platform' | 'mine', fromEmail: string) => {
-      if (!user) return;
-      requestMeetingMutation.mutate(
-        {
-          pathParams: { id: user.id },
-          message,
-          actorUserId: getActorUserId(),
-          fromMode,
-          fromEmail,
+  const handleRequestMeeting = useCallback((message: string) => {
+    if (!user) return;
+    requestMeetingMutation.mutate(
+      { pathParams: { id: user.id }, message, actorUserId: getActorUserId() },
+      {
+        onSuccess: () => {
+          toast.success('Meeting request sent', {
+            description: 'The driver was emailed and moved to Meeting Requested.',
+          });
+          setRequestMeetingOpen(false);
+          refetch();
         },
-        {
-          onSuccess: () => {
-            toast.success('Meeting request sent', {
-              description: 'The driver was emailed and moved to Meeting Requested.',
-            });
-            setRequestMeetingOpen(false);
-            refetch();
-          },
-          onError: (error: any) =>
-            toast.error('Failed to send meeting request', {
-              description: error?.message ||
-                'The email could not be sent — the driver stays in Pending Approval. Fix the issue and retry.',
-            }),
-        }
-      );
+        onError: (error: any) =>
+          toast.error('Failed to send meeting request', {
+            description: error?.message ||
+              'The email could not be sent — the driver stays in Pending Approval. Fix the issue and retry.',
+          }),
+      }
+    );
   }, [user, requestMeetingMutation, refetch]);
 
   const handleApproveDriver = () => {
@@ -1615,16 +1608,6 @@ export default function AdminUserDetailPage({ userId }: AdminUserDetailPageProps
                     >
                       <CheckCircle className="w-4 h-4" />
                       Approve Driver
-                    </Button>
-                    {/* Resend — same dialog + same backend endpoint as the
-                        first request; the mail goes out again and the
-                        status stays MEETING_REQUESTED. */}
-                    <Button
-                      onClick={() => setRequestMeetingOpen(true)}
-                      className="inline-flex items-center gap-2 px-6 py-3 rounded-2xl bg-violet-600 text-white hover:opacity-90 transition"
-                    >
-                      <CalendarClock className="w-4 h-4" />
-                      Resend Meeting Request
                     </Button>
                     <Button
                       onClick={() => openDialog('reject-driver')}
@@ -2775,25 +2758,6 @@ export default function AdminUserDetailPage({ userId }: AdminUserDetailPageProps
                               <div className="text-sm">{formatDate(user.driver.onboardingCompletedAt)}</div>
                             </div>
                           )}
-                          {/* Last updated — when the onboarding details last
-                              changed (initial completion, or a later
-                              self-service edit from the license edit page)
-                              and who did it: the actor's email, so the admin
-                              can tell a driver's own edit from any other
-                              writer. Hidden for rows that predate the stamp. */}
-                          {user.driver.lastOnboardingUpdateAt && (
-                            <div>
-                              <Label className="text-xs font-bold text-slate-500">Last updated</Label>
-                              <div className="text-sm">
-                                {formatDateTime(user.driver.lastOnboardingUpdateAt)}
-                                {user.driver.lastOnboardingUpdateBy && (
-                                  <span className="text-xs text-slate-500 dark:text-slate-400">
-                                    {' '}by {user.driver.lastOnboardingUpdateBy}
-                                  </span>
-                                )}
-                              </div>
-                            </div>
-                          )}
                           {user.driver.approvedAt && (
                             <div>
                               <Label className="text-xs font-bold text-slate-500">Approved</Label>
@@ -3383,14 +3347,11 @@ export default function AdminUserDetailPage({ userId }: AdminUserDetailPageProps
 
       {/* Request Meeting — reusable dialog (shared with the Users table).
           Sends the composed email + MEETING_REQUESTED flip in one backend
-          transaction; a failed email changes nothing. When the driver is
-          already Meeting Requested the dialog switches to its "Resend"
-          copy and the same endpoint sends the mail again. */}
+          transaction; a failed email changes nothing. */}
       <RequestMeetingDialog
         open={requestMeetingOpen}
         onOpenChange={setRequestMeetingOpen}
         driverName={user?.fullName}
-        mode={user?.driver?.status === 'MEETING_REQUESTED' ? 'resend' : 'request'}
         pending={requestMeetingMutation.isPending}
         onConfirm={handleRequestMeeting}
       />

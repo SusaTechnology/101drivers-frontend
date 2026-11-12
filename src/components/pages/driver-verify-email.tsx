@@ -6,7 +6,6 @@ import { toast } from 'sonner';
 import { ArrowRight, Mail, RefreshCw, Loader2 } from 'lucide-react';
 import { useDataMutation } from '@/lib/tanstack/dataQuery';
 import { safeLocalStorage, safeSessionStorage } from '@/lib/safeStorage';
-import { deviceTouchHint } from '@/lib/device';
 
 const DRIVER_SIGNUP_DRAFT_KEY = 'driverSignupDraft';
 const DRIVER_PENDING_PAYLOAD_KEY = 'driverPendingPayload';
@@ -112,8 +111,6 @@ export default function DriverVerifyEmailPage() {
     DriverSignupPayload
   >({
     apiEndPoint: `${import.meta.env.VITE_API_URL}/api/auth/signup/driver/`,
-    // Device-gate signal — read by the backend ONLY on this endpoint.
-    headers: { 'x-device-touch': deviceTouchHint() },
     onSuccess: () => {
       setResendError(null);
       setCooldownUntil(Date.now() + RESEND_COOLDOWN_MS); // Start 60s cooldown
@@ -135,8 +132,6 @@ export default function DriverVerifyEmailPage() {
     DriverSignupPayloadWithOtp
   >({
     apiEndPoint: `${import.meta.env.VITE_API_URL}/api/auth/signup/driver`,
-    // Device-gate signal — read by the backend ONLY on this endpoint.
-    headers: { 'x-device-touch': deviceTouchHint() },
     onSuccess: (_data, variables) => {
       toast.success('Application submitted!', {
         description: "We'll contact you when we need more drivers in your area.",

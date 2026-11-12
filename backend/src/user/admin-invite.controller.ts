@@ -24,11 +24,10 @@ import { AdminGuard, SuperAdminGuard } from "../auth/adminAuth.guard";
  *   POST /api/users/:id/admin-demote        — downgrade a super admin to plain admin
  *
  * Which of these require a SUPER admin is decided by the capability
- * registry src/auth/super-admin.ts — today: invite, resend-invite,
- * disable, promote, demote. Those endpoints additionally carry
- * SuperAdminGuard, and every service call asserts the capability again
- * server-side. The actor identity is always taken from the JWT
- * (request.user) — never from the body.
+ * registry src/auth/super-admin.ts — today: disable, promote, demote.
+ * Those endpoints additionally carry SuperAdminGuard, and every service
+ * call asserts the capability again server-side. The actor identity is
+ * always taken from the JWT (request.user) — never from the body.
  *
  * Public (no auth — the invitee has no usable account yet):
  *   GET  /api/auth/accept-invite?token=   — validate a setup link (page load)
@@ -43,12 +42,7 @@ export class AdminInviteController {
 
   @common.Post("users/admin-invite")
   @swagger.ApiOkResponse({ type: Object })
-  // Super-admin-only (src/auth/super-admin.ts): inviting a new
-  // administrator is the most sensitive admin capability. The admin UI
-  // shows the action to super admins only; SuperAdminGuard enforces the
-  // same rule server-side, and the service asserts the capability again
-  // as defense in depth.
-  @common.UseGuards(DefaultAuthGuard, AdminGuard, SuperAdminGuard)
+  @common.UseGuards(DefaultAuthGuard, AdminGuard)
   async inviteAdmin(
     @common.Body() body: UserAdminInviteBodyDto,
     @common.Request() request: any
@@ -66,9 +60,7 @@ export class AdminInviteController {
 
   @common.Post("users/:id/admin-resend-invite")
   @swagger.ApiOkResponse({ type: Object })
-  // Super-admin-only (src/auth/super-admin.ts) — same rule as the
-  // invite itself.
-  @common.UseGuards(DefaultAuthGuard, AdminGuard, SuperAdminGuard)
+  @common.UseGuards(DefaultAuthGuard, AdminGuard)
   async resendAdminInvite(
     @common.Param("id") id: string,
     @common.Body() body: { actorUserId?: string | null },

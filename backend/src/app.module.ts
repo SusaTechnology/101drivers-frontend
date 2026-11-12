@@ -1,5 +1,4 @@
 import { Module } from "@nestjs/common";
-import { BetterAuthModule } from "./better-auth/better-auth.module";
 import { UserModule } from "./user/user.module";
 import { CustomerModule } from "./customer/customer.module";
 import { DriverModule } from "./driver/driver.module";
@@ -59,7 +58,6 @@ import { AuthModule } from "./auth/auth.module";
 import { EmailVerificationModule } from "./auth/email-verification/email-verification.module";
 import { UploadModule } from "./upload/upload.module";
 import { AdminDashboardModule } from "./adminDashboard/adminDashboard.module";
-import { AdminEmailsModule } from "./adminEmails/adminEmails.module";
 import { ReportsModule } from "./reports/reports.module";
 import { EmailVerificationTokenModule } from "./emailVerificationToken/emailVerificationToken.module";
 import { SupportRequestModule } from "./supportRequest/supportRequest.module";
@@ -74,17 +72,13 @@ import { ContentController } from "./content/content.controller";
 import { CmsController } from "./cms/cms.controller";
 import { CmsService } from "./cms/cms.service";
 import { NotificationEventEngine } from "./domain/notificationEvent/notificationEvent.engine";
-import { MailModule } from "./common/mail/mail.module";
+import { MailService } from "./common/mail/mail.service";
 import { PostpaidBillingModule } from "./postpaidBilling/postpaidBilling.module";
 import { GeoModule } from "./geo/geo.module";
 @Module({
   controllers: [StripeWebhookController, InsurancePortalController, ContentController, CmsController],
   imports: [
     ACLModule,
-    // Better Auth (drivers identity) — GLOBAL: JwtAuthGuard in every module
-    // injects BetterAuthService for the hybrid session check. See
-    // src/better-auth/ and docs/auth/better-auth-plan.md.
-    BetterAuthModule,
     // Global leaf pub/sub bus (see common/appEvents) — registered once so
     // AuthService/UserService/TrackingGateway can all inject it without
     // any of them importing each other.
@@ -145,14 +139,8 @@ import { GeoModule } from "./geo/geo.module";
     UploadModule,
     ReferralModule,
     AdminDashboardModule,
-    AdminEmailsModule,
     ReportsModule,
     EmailVerificationModule,
-    // MailModule supplies the shared MailService for the root
-    // NotificationEventEngine and CmsService — a locally-registered
-    // MailService would crash DI (MailService requires AdminGateService,
-    // invisible from the root providers list).
-    MailModule,
     SupportRequestModule,
     SupportRequestNoteModule,
     GatewayModule,
@@ -181,6 +169,7 @@ import { GeoModule } from "./geo/geo.module";
   ],
   providers: [
     NotificationEventEngine,
+    MailService,
     CmsService,
     // Task 19: shared refund state-transition (webhook + reconciler) and
     // the self-healing sweep for refunds whose charge.refunded webhook

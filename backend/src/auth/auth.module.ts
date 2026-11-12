@@ -23,8 +23,6 @@ import { MailModule } from "src/common/mail/mail.module";
 import { NotificationEventEngine } from "src/domain/notificationEvent/notificationEvent.engine";
 import { PrismaService } from "../prisma/prisma.service";
 import { GeoModule } from "../geo/geo.module";
-import { SocialDriverSignupService } from "../better-auth/social-driver-signup.service";
-import { BaDriverController } from "../better-auth/ba-driver.controller";
 @Module({
   imports: [
     GeoModule,
@@ -79,12 +77,8 @@ import { BaDriverController } from "../better-auth/ba-driver.controller";
     EmailVerificationService,
     NotificationEventEngine,
     PrismaService,
-    // Better Auth (drivers) business completion — identity comes from the
-    // Better Auth session; this creates the business Driver row under the
-    // same gates as the legacy signup (see src/better-auth/).
-    SocialDriverSignupService,
   ],
-  controllers: [AuthController, BaDriverController],
+  controllers: [AuthController],
   exports: [AuthService, PasswordService],
 })
 export class AuthModule {}

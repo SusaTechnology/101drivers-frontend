@@ -169,7 +169,7 @@ async function seedCoreDemoActors(bcryptSalt: Salt): Promise<DemoRefs> {
 
   const business2User = await upsertUser({
     username: "dealer2",
-    email: "dealer2@101drivers.com",
+    email: "dealer2@101drivers.techbee.et",
     passwordPlain: "dealer2",
     role: EnumUserRoles.BUSINESS_CUSTOMER,
     fullName: "Golden Gate Auto Group",
@@ -185,14 +185,14 @@ async function seedCoreDemoActors(bcryptSalt: Salt): Promise<DemoRefs> {
     businessWebsite: "https://goldengate-auto.demo",
     businessAddress: "2400 Broadway",
     contactName: "Maya Dealer",
-    contactEmail: "dealer2@101drivers.com",
+    contactEmail: "dealer2@101drivers.techbee.et",
     contactPhone: "+1 510 555 0177",
     phone: "+1 510 555 0177",
   });
 
   const driver2User = await upsertUser({
     username: "driver2",
-    email: "driver2@101drivers.com",
+    email: "driver2@101drivers.techbee.et",
     passwordPlain: "driver2",
     role: EnumUserRoles.DRIVER,
     fullName: "Taylor Driver",
@@ -208,7 +208,7 @@ async function seedCoreDemoActors(bcryptSalt: Salt): Promise<DemoRefs> {
 
   const driver3User = await upsertUser({
     username: "driver3",
-    email: "driver3@101drivers.com",
+    email: "driver3@101drivers.techbee.et",
     passwordPlain: "driver3",
     role: EnumUserRoles.DRIVER,
     fullName: "Jordan Haul",
@@ -1240,7 +1240,7 @@ async function seedDemoDeliveries(refs: DemoRefs) {
     status: EnumNotificationEventStatus.QUEUED,
     subject: "Dispute opened",
     body: "A dispute has been opened for this delivery.",
-    toEmail: "dealer2@101drivers.com",
+    toEmail: "dealer2@101drivers.techbee.et",
   });
 
   await ensureAudit({

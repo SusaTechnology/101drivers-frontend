@@ -25,14 +25,10 @@ export const SUPER_ADMIN_ONLY = {
   /** Re-enable a disabled administrator (super admins only — regular
    *  admins must not restore each other after a super-admin decision). */
   "admins.enable": true,
-  /** Invite a new administrator by email (super admins only — the admin
-   *  UI shows the Invite Admin action to super admins alone, and the
-   *  server now enforces the same rule). Administrators are registered
-   *  ONLY through this invite flow; no other admin-creation path exists. */
-  "admins.invite": true,
-  /** Resend an admin's setup link (super admins only — same rule as
-   *  the invite itself). */
-  "admins.resendInvite": true,
+  /** Invite a new administrator by email. */
+  "admins.invite": false,
+  /** Resend an admin's setup link. */
+  "admins.resendInvite": false,
   /** Raise an admin to super admin. */
   "admins.promote": true,
   /** Downgrade a super admin to a plain admin. */

@@ -93,7 +93,7 @@ export class SupportRequestOrchestratorService {
         channel: EnumNotificationEventChannel.EMAIL,
         type: EnumNotificationEventType.SUPPORT_REQUEST_CREATED,
         templateCode: "support-created",
-        toEmail: "ops@101drivers.com", // 🔥 later replace with real routing
+        toEmail: "ops@101drivers.techbee.et", // 🔥 later replace with real routing
         subject: "New Support Request",
         body: input.message,
         payload: {

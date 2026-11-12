@@ -14,20 +14,6 @@ import { MailService } from "../../common/mail/mail.service";
 import { ReferralTriggerService } from "../../referral/referral-trigger.service";
 import { randomBytes } from "crypto";
 
-/**
- * Base host for driver-facing links in invite/approval emails
- * (onboarding-complete, driver-signin). 101_DOMAIN is the canonical
- * setting (.env.example + MailService already use it); APP_DOMAIN is the
- * legacy name — dotenv never overrides a pre-existing shell value, so a
- * stale exported APP_DOMAIN must not be able to win over 101_DOMAIN.
- * Bare-host fallback last, trailing slashes stripped for safety.
- */
-export function driverLinkHost(): string {
-  const raw =
-    process.env["101_DOMAIN"] || process.env.APP_DOMAIN || "101drivers.com";
-  return raw.replace(/^https?:\/\//, "").replace(/\/+$/, "");
-}
-
 @Injectable()
 export class DriverApprovalEngine {
   constructor(
@@ -133,7 +119,7 @@ export class DriverApprovalEngine {
         //   "Good news! You\u2019ve been selected to move forward with your driver application.",
         //   "Please complete your application by visiting the link below:",
         //   "",
-        //   `https://${driverLinkHost()}/driver-onboarding-complete?token=${onboardingToken}`,
+        //   `https://${(process.env.APP_DOMAIN || "101drivers.com").replace(/^https?:\/\//, "")}/driver-onboarding-complete?token=${onboardingToken}`,
         //   "",
         //   "You will need to provide the following:",
         //   "",
@@ -150,13 +136,9 @@ export class DriverApprovalEngine {
         body: [
           `Hi ${displayName},`,
           "",
-          "Good news \u2014 you\u2019ve been selected to move forward with your 101 Drivers application.",
+          "good news \u2014 you\u2019ve been selected to move forward with your 101 Drivers application.",
           "",
-          "Click the button below, or copy this link, to complete your application:",
-          "",
-          `https://${driverLinkHost()}/driver-onboarding-complete?token=${onboardingToken}`,
-          "",
-          "You\u2019ll need your driver\u2019s license (front and back photos), Social Security number, current residential address, and a selfie for ID verification.",
+          `Complete it here: https://${(process.env.APP_DOMAIN || "101drivers.com").replace(/^https?:\/\//, "")}/driver-onboarding-complete?token=${onboardingToken}. You\u2019ll need your driver\u2019s license front and back, photos, Social Security number, current address, and a selfie for ID verification.`,
           "",
           "Once we receive everything, your application goes into review. A team member may follow up by email or phone with a quick two-to-three-minute call before we run the final background check. It only takes a few minutes and helps us get you approved faster.",
           "",
@@ -170,8 +152,6 @@ export class DriverApprovalEngine {
           driverId: input.driverId,
           invitedAt: afterDriver ? new Date().toISOString() : null,
           note: input.note ?? null,
-          actionUrl: `https://${driverLinkHost()}/driver-onboarding-complete?token=${onboardingToken}`,
-          actionLabel: "Complete Your Application",
         },
       });
     }
@@ -272,7 +252,7 @@ export class DriverApprovalEngine {
           "You now have access to the 101 Drivers platform.",
           "Log in to your account to start viewing available deliveries:",
           "",
-          `https://${driverLinkHost()}/driver-signin`,
+          `https://${(process.env.APP_DOMAIN || "101drivers.com").replace(/^https?:\/\//, "")}/driver-signin`,
           "",
           input.note ? `Note from our team: ${input.note}` : "",
         ]
@@ -283,8 +263,6 @@ export class DriverApprovalEngine {
           driverId: input.driverId,
           approvedAt: afterDriver?.approvedAt ?? null,
           note: input.note ?? null,
-          actionUrl: `https://${driverLinkHost()}/driver-signin`,
-          actionLabel: "Log In to Your Account",
         },
       });
     }
@@ -345,33 +323,10 @@ export class DriverApprovalEngine {
     driverId: string;
     actorUserId?: string | null;
     message: string;
-    /** "mine" = the admin's address as Reply-To + BCC copy; "platform" = plain official send. */
-    fromMode?: "platform" | "mine" | null;
-    /** The editable admin address used when fromMode is "mine". */
-    fromEmail?: string | null;
   }): Promise<void> {
     const message = (input.message ?? "").trim();
     if (!message) {
       throw new BadRequestException("A meeting request message is required");
-    }
-
-    // FROM SCOPE: the mail always LEAVES from the shared platform address
-    // (the SMTP account is only authorized for it — an arbitrary personal
-    // From would fail SPF/DKIM and land in spam). "mine" sets the chosen
-    // address as Reply-To (replies reach the admin directly — plus the
-    // platform record address, so the shared mailbox sees the whole
-    // conversation) and BCCs them a tracking copy; "platform" BCCs the
-    // acting admin's account email so there is ALWAYS a copy for whoever
-    // clicked the button.
-    const fromMode = input.fromMode === "mine" ? "mine" : "platform";
-    const requestedFromEmail = input.fromEmail?.trim().toLowerCase() || null;
-    const emailShape = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (fromMode === "mine") {
-      if (!requestedFromEmail || !emailShape.test(requestedFromEmail)) {
-        throw new BadRequestException(
-          "A valid email address is required to send the meeting request from your address"
-        );
-      }
     }
 
     // Fail fast BEFORE opening the transaction when SMTP is not configured
@@ -381,40 +336,6 @@ export class DriverApprovalEngine {
         "Email sending is not configured on the server (SMTP). Cannot send a meeting request."
       );
     }
-
-    // Who triggered the send (audit + ledger + BCC fallback): the acting
-    // admin's account email and name, resolved from actorUserId.
-    const actor = input.actorUserId
-      ? await this.prisma.user.findUnique({
-          where: { id: input.actorUserId },
-          select: { email: true, fullName: true },
-        })
-      : null;
-    const actorEmail = actor?.email?.trim().toLowerCase() || null;
-    const actorName = actor?.fullName?.trim() || null;
-
-    const platformRecord = this.mailService.platformFromAddress;
-    // Reply-To decides where a driver's "Reply" button sends the answer. In
-    // mine mode that is the admin's mailbox FIRST, plus the platform record
-    // address so the shared mailbox sees the whole conversation: the driver's
-    // reply arrives in both, and the admin's "Reply All" keeps info@ on the
-    // thread. Platform mode leaves replies at the From address (info@).
-    let replyTo: string | null = null;
-    if (fromMode === "mine" && requestedFromEmail) {
-      replyTo =
-        platformRecord && platformRecord !== requestedFromEmail
-          ? `${requestedFromEmail}, ${platformRecord}`
-          : requestedFromEmail;
-    }
-    const bccCandidate =
-      fromMode === "mine" ? requestedFromEmail : actorEmail;
-    // Two silent copies: the triggering admin (so they can see what went out
-    // from their own inbox) and the platform mailbox (shared record — Gmail
-    // files the send in the SMTP account's Sent folder, not the admin's).
-    // The recipient's own address is filtered out once toEmail is known.
-    const bccSet = new Set<string>();
-    if (bccCandidate && bccCandidate.length > 0) bccSet.add(bccCandidate);
-    if (platformRecord) bccSet.add(platformRecord);
 
     // Pre-read for a friendly 404 + email presence + the before/after
     // audit snapshot. The AUTHORITATIVE status guard is the updateMany
@@ -439,15 +360,9 @@ export class DriverApprovalEngine {
       throw new NotFoundException("Driver not found");
     }
 
-    // RESEND: a driver already in MEETING_REQUESTED goes through the exact
-    // same flow — same transaction, same audit, one more email row (the
-    // first mail may have gone unanswered, bounced, or landed in spam).
-    // Only the `resend` provenance flag differs. Anything else (approved,
-    // rejected, on hold, suspended) is still rejected.
-    const resend = driver.status === EnumDriverStatus.MEETING_REQUESTED;
-    if (driver.status !== EnumDriverStatus.PENDING_APPROVAL && !resend) {
+    if (driver.status !== EnumDriverStatus.PENDING_APPROVAL) {
       throw new BadRequestException(
-        "Only drivers with pending approval or an outstanding meeting request can be sent a meeting request email"
+        "Only drivers with pending approval can be requested for a meeting"
       );
     }
 
@@ -458,34 +373,17 @@ export class DriverApprovalEngine {
       );
     }
 
-    // Never BCC the recipient's own address (harmless paranoia).
-    bccSet.delete(toEmail);
-    const bcc = bccSet.size > 0 ? Array.from(bccSet) : null;
-
     const displayName = driver.user?.fullName || "Driver";
     const subject = "Let's schedule your 101 Drivers onboarding meeting";
-    // A personal send signs with the admin's name (falls back to their
-    // address); the platform send keeps the plain team signature.
-    const signatureName =
-      fromMode === "mine" ? actorName || replyTo || "101 Drivers" : "101 Drivers";
-    const senderLabel = actorName
-      ? `${actorName} (${replyTo ?? actorEmail ?? "101 Drivers"})`
-      : replyTo || actorEmail || "101 Drivers";
     const text = [
       `Hi ${displayName},`,
       "",
       message,
       "",
       "Thanks,",
-      signatureName,
-      ...(signatureName !== "101 Drivers" ? ["101 Drivers"] : []),
+      "101 Drivers",
     ].join("\n");
-    const html = this.wrapMeetingEmailHtml(
-      displayName,
-      message,
-      fromMode === "mine" ? signatureName : null,
-      fromMode === "mine" ? senderLabel : null
-    );
+    const html = this.wrapMeetingEmailHtml(displayName, message);
 
     // The interactive transaction carries an SMTP round-trip (bounded by
     // MailService's 15s/30s socket timeouts), so the default 5s transaction
@@ -493,34 +391,26 @@ export class DriverApprovalEngine {
     // and roll back while the email was still in flight.
     await this.prisma.$transaction(
       async (tx) => {
-        // 1. ATOMIC status guard: a first request (PENDING_APPROVAL) or a
-        //    resend (MEETING_REQUESTED — the status is set idempotently)
-        //    passes at commit time. count=0 → someone approved / rejected /
-        //    held concurrently → abort with zero side effects (no duplicate
-        //    email).
+        // 1. ATOMIC status guard: only flips when the row is still
+        //    PENDING_APPROVAL at commit time. count=0 → someone approved /
+        //    rejected / already requested concurrently → abort with zero
+        //    side effects (no duplicate email).
         const updated = await tx.driver.updateMany({
           where: {
             id: input.driverId,
-            status: {
-              in: [
-                EnumDriverStatus.PENDING_APPROVAL,
-                EnumDriverStatus.MEETING_REQUESTED,
-              ],
-            },
+            status: EnumDriverStatus.PENDING_APPROVAL,
           },
           data: { status: EnumDriverStatus.MEETING_REQUESTED },
         });
 
         if (updated.count === 0) {
           throw new BadRequestException(
-            "Driver is no longer pending approval or awaiting a meeting — refresh and try again"
+            "Driver is no longer pending approval — refresh and try again"
           );
         }
 
         // 2. Audit trail — who requested the meeting, when, the exact
-        //    message that went out, and the before/after status. The email
-        //    block records the From scope the admin picked (mine/platform),
-        //    the Reply-To, and the BCC copy address.
+        //    message that went out, and the before/after status.
         await tx.adminAuditLog.create({
           data: {
             action: EnumAdminAuditLogAction.DRIVER_MEETING_REQUEST,
@@ -531,13 +421,6 @@ export class DriverApprovalEngine {
             beforeJson: { status: driver.status } as Prisma.JsonObject,
             afterJson: {
               status: EnumDriverStatus.MEETING_REQUESTED,
-              email: {
-                fromMode,
-                ...(resend ? { resend: true } : {}),
-                ...(replyTo ? { replyTo } : {}),
-                ...(bcc ? { bcc } : {}),
-                ...(actorEmail ? { triggeredBy: actorEmail } : {}),
-              },
             } as Prisma.JsonObject,
           },
         });
@@ -545,9 +428,7 @@ export class DriverApprovalEngine {
         // 3. Driver-facing NotificationEvent row (driver inbox / bell data
         //    source). Created with status SENT + sentAt because the send
         //    below happens before commit — if it throws, this row never
-        //    materializes. The payload carries the full provenance so the
-        //    admin panel can show exactly who triggered the email without
-        //    anyone hunting through personal Sent folders.
+        //    materializes.
         await tx.notificationEvent.create({
           data: {
             actorUserId: input.actorUserId ?? null,
@@ -564,13 +445,6 @@ export class DriverApprovalEngine {
             payload: {
               driverId: input.driverId,
               message,
-              fromMode,
-              ...(resend ? { resend: true } : {}),
-              ...(replyTo ? { replyTo } : {}),
-              ...(bcc ? { bcc } : {}),
-              ...(actorEmail ? { triggeredBy: actorEmail } : {}),
-              ...(actorName ? { triggeredByName: actorName } : {}),
-              ...(input.actorUserId ? { triggeredByUserId: input.actorUserId } : {}),
             },
           },
         });
@@ -582,8 +456,6 @@ export class DriverApprovalEngine {
           subject,
           text,
           html,
-          replyTo,
-          bcc,
         });
       },
       { maxWait: 10_000, timeout: 60_000 }
@@ -591,16 +463,8 @@ export class DriverApprovalEngine {
   }
 
   /** Plain-text meeting email → simple branded HTML (same style the
-   *  NotificationEventEngine uses for its generic emails). `signatureName`
-   *  and `senderLabel` are set for personal ("from my address") sends:
-   *  the signature names the admin and a small footer line tells the
-   *  driver who sent it and that replies reach them and the team inbox. */
-  private wrapMeetingEmailHtml(
-    displayName: string,
-    message: string,
-    signatureName?: string | null,
-    senderLabel?: string | null
-  ): string {
+   *  NotificationEventEngine uses for its generic emails). */
+  private wrapMeetingEmailHtml(displayName: string, message: string): string {
     const escape = (value: string): string =>
       value
         .replace(/&/g, "&amp;")
@@ -621,16 +485,7 @@ export class DriverApprovalEngine {
         <h2>Let's schedule your onboarding meeting</h2>
         <p>Hi ${escape(displayName)},</p>
         <p>${escapedMessage}</p>
-        <p>Thanks,${
-          signatureName ? `<br />${escape(signatureName)}<br />` : "<br />"
-        }101 Drivers</p>${
-        senderLabel
-          ? `
-        <p style="color:#666; font-size:12px; margin-top:16px;">Sent by ${escape(
-          senderLabel
-        )} on behalf of the 101 Drivers team — replies reach them and the team inbox.</p>`
-          : ""
-      }
+        <p>Thanks,<br />101 Drivers</p>
       </div>
     `;
   }
@@ -1062,9 +917,9 @@ export class DriverApprovalEngine {
           `Hi ${displayName},`,
           "",
           "This is a reminder to complete your driver application with 101 Drivers.",
-          "Click the button below, or copy this link, to finish your onboarding:",
+          "Please visit the link below to finish your onboarding:",
           "",
-          `https://${driverLinkHost()}/driver-onboarding-complete?token=${onboardingToken}`,
+          `https://${(process.env.APP_DOMAIN || "101drivers.techbee.et").replace(/^https?:\/\//, "")}/driver-onboarding-complete?token=${onboardingToken}`,
           "",
           "You will need to provide the following:",
           "",
@@ -1083,8 +938,6 @@ export class DriverApprovalEngine {
           driverId: input.driverId,
           invitedAt: afterDriver ? new Date().toISOString() : null,
           note: input.note ?? null,
-          actionUrl: `https://${driverLinkHost()}/driver-onboarding-complete?token=${onboardingToken}`,
-          actionLabel: "Complete Your Application",
         },
       });
     }

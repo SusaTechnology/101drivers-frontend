@@ -6,7 +6,7 @@ import { Salt } from "../../src/auth/password.service";
 export async function seedBusinessCustomer(bcryptSalt: Salt) {
   const user = await upsertUser({
     username: "business",
-    email: "business.customer@101drivers.com",
+    email: "business.customer@101drivers.techbee.et",
     passwordPlain: "business",
     role: EnumUserRoles.BUSINESS_CUSTOMER,
     fullName: "Bay Auto Sales",
@@ -22,7 +22,7 @@ export async function seedBusinessCustomer(bcryptSalt: Salt) {
     businessWebsite: "https://example.com",
     businessAddress: "500 El Camino Real",
     contactName: "Jordan Sales",
-    contactEmail: "business.customer@101drivers.com",
+    contactEmail: "business.customer@101drivers.techbee.et",
     contactPhone: "+1 650 555 0199",
     phone: "+1 650 555 0199",
   });

@@ -9,10 +9,10 @@ import { SupportRequestDomain } from "../domain/supportRequest/supportRequest.do
 import { SupportRequestPolicyService } from "../domain/supportRequest/supportRequestPolicy.service";
 import { SupportRequestOrchestratorService } from "../support-logistics/support-request-orchestrator.service";
 import { NotificationEventEngine } from "src/domain/notificationEvent/notificationEvent.engine";
-import { MailModule } from "src/common/mail/mail.module";
+import { MailService } from "src/common/mail/mail.service";
 
 @Module({
-  imports: [SupportRequestModuleBase, forwardRef(() => AuthModule), GatewayModule, MailModule],
+  imports: [SupportRequestModuleBase, forwardRef(() => AuthModule), GatewayModule],
   controllers: [SupportRequestController],
   providers: [
     SupportRequestService,
@@ -21,6 +21,7 @@ import { MailModule } from "src/common/mail/mail.module";
     SupportRequestPolicyService,
     SupportRequestOrchestratorService,
     NotificationEventEngine,
+    MailService
   ],
   exports: [SupportRequestService],
 })

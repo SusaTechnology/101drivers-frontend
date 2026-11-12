@@ -1132,31 +1132,9 @@ async getAdminDeliveries(input: {
 
   const staleCutoff = new Date(Date.now() - 30 * 60 * 1000);
 
-  // The admin-deliveries filter accepts ONE status or a comma-separated
-  // list. Older clients — cached PWA bundles and the mobile app — still
-  // send statuses that no longer exist in EnumDeliveryRequestStatus
-  // ("OPEN", "UNASSIGNED"); passed straight through, Prisma 500s with
-  // "Invalid value for argument `status`" (seen in the PM2 log).
-  // Normalize: split on commas, keep only real enum values, and filter
-  // with { in }. Legacy "all" means no filter. A filter whose values are
-  // ALL unknown stays an impossible filter — { in: [] } matches ZERO
-  // rows, never silently "everything".
-  const rawStatusParts = (input.status ?? "")
-    .split(",")
-    .map((s) => s.trim())
-    .filter((s) => s.length > 0 && s !== "all");
-  const knownStatuses = new Set<string>(
-    Object.values(EnumDeliveryRequestStatus),
-  );
-  const requestedStatuses = rawStatusParts.filter((s) =>
-    knownStatuses.has(s),
-  ) as EnumDeliveryRequestStatus[];
-
   const where: Prisma.DeliveryRequestWhereInput = {
     // CLOSED is now a real DB status — just filter by status directly
-    ...(rawStatusParts.length > 0
-      ? { status: { in: requestedStatuses } }
-      : {}),
+    ...(input.status ? { status: input.status as any } : {}),
     ...(input.customerId ? { customerId: input.customerId } : {}),
     ...(input.customerType
       ? { customer: { customerType: input.customerType as any } }

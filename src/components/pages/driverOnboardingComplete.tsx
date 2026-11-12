@@ -48,14 +48,11 @@ import {
   EyeOff,
   Lock,
   AlertCircle,
-  Camera,
   FileCheck,
   Clock,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { LivePhotoCapture } from "@/components/shared/LivePhotoCapture";
-import { MobileOnlySignupCard } from "../shared/MobileOnlySignupCard";
-import { deviceTouchHint, shouldShowMobileOnlySignup } from "@/lib/device";
 import {
   useDataQuery,
   useDataMutation,
@@ -73,10 +70,7 @@ const isValidZipFormat = (zip: string | null | undefined): boolean =>
 
 const API_URL = import.meta.env.VITE_API_URL;
 
-// Exported for the onboarding-data EDIT page — same visual language, same
-// state list (only CA is enabled; the dropdown stays editable for
-// out-of-state licenses).
-export const US_STATES = [
+const US_STATES = [
   // { value: "AL", label: "Alabama" },
   // { value: "AK", label: "Alaska" },
   // { value: "AZ", label: "Arizona" },
@@ -367,16 +361,10 @@ export function DriverOnboardingComplete({ token }: DriverOnboardingCompleteProp
       };
       let res: Response;
       if (usingToken) {
-        // Token-based: call public endpoint (no auth needed). The touch
-        // hint lets the server's mobile-only gate tell the iPadOS
-        // desktop-mode iPad (touch) apart from a real Mac — same header
-        // the signup request sends.
+        // Token-based: call public endpoint (no auth needed)
         res = await fetch(`${API_URL}/api/public/drivers/onboarding-complete`, {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "x-device-touch": deviceTouchHint(),
-          },
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ ...payload, token }),
         });
       } else {
@@ -384,10 +372,7 @@ export function DriverOnboardingComplete({ token }: DriverOnboardingCompleteProp
         // retries automatically on 401 when the access token has expired.
         res = await authFetchRaw(`${API_URL}/api/drivers/onboarding-complete`, {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "x-device-touch": deviceTouchHint(),
-          },
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
         });
       }
@@ -535,16 +520,6 @@ export function DriverOnboardingComplete({ token }: DriverOnboardingCompleteProp
       (el as HTMLElement | null)?.focus?.({ preventScroll: true });
     });
   };
-
-  // ==================== DEVICE GATE ====================
-  // Driver onboarding is PHONE/TABLET ONLY (owner rule) — the same gate
-  // as the signup form. Runs FIRST, before every other branch, so a
-  // desktop/laptop never sees the form from either entry path (the
-  // status-board button or the guard's auto-redirect). The server
-  // enforces the same rule on both onboarding-complete endpoints.
-  if (shouldShowMobileOnlySignup()) {
-    return <MobileOnlySignupCard />;
-  }
 
   // ==================== AUTH / TOKEN GUARD RENDERING ====================
 
@@ -1306,9 +1281,8 @@ export function DriverOnboardingComplete({ token }: DriverOnboardingCompleteProp
 }
 
 // ==================== HEADER SUB-COMPONENT ====================
-// Exported for the onboarding-data EDIT page (identical shell).
 
-export function Header({
+function Header({
   mobileMenuOpen,
   setMobileMenuOpen,
 }: {
@@ -1413,9 +1387,8 @@ export function Header({
 }
 
 // ==================== FOOTER SUB-COMPONENT ====================
-// Exported for the onboarding-data EDIT page (identical shell).
 
-export function Footer() {
+function Footer() {
   return (
     <footer className="bg-white dark:bg-slate-950 border-t border-slate-200 dark:border-slate-800 pt-10 pb-10">
       <div className="max-w-[1440px] mx-auto px-6 lg:px-8">

@@ -1019,7 +1019,7 @@ export class StripePaymentController {
             'Driver payouts for deliveries booked through the 101 Drivers marketplace',
           dob,
           ssnLast4: driver.ssnLastFour || undefined,
-          businessUrl: process.env.FRONTEND_URL || 'https://101drivers.com',
+          businessUrl: process.env.FRONTEND_URL || 'https://101drivers.techbee.et',
           address: {
             line1: driver.residentialAddressLine1 || undefined,
             line2: driver.residentialAddressLine2 || undefined,
@@ -1052,7 +1052,7 @@ export class StripePaymentController {
       // ── End pre-fill ────────────────────────────────────────────
 
       // Generate onboarding link — point to existing /driver/wallet page
-      const baseUrl = process.env.FRONTEND_URL || 'https://101drivers.com';
+      const baseUrl = process.env.FRONTEND_URL || 'https://101drivers.techbee.et';
       const accountLink = await this.stripeService.createAccountLink({
         accountId,
         refreshUrl: `${baseUrl}/driver/wallet`,

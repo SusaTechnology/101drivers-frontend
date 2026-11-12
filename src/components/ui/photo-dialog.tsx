@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useRef, useState } from "react";
+import React, { useRef } from "react";
 import {
   Dialog,
   DialogContent,
@@ -9,7 +9,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Download, Camera, RotateCw } from "lucide-react";
+import { Download, Camera } from "lucide-react";
 import { useFileUpload } from "@/lib/tanstack/dataQuery";
 import { toast } from "sonner";
 
@@ -41,26 +41,6 @@ export function PhotoDialog({
   onDownload,
   onUpdate,
 }: PhotoDialogProps) {
-  // View-only rotation (90° steps) — license photos frequently arrive
-  // sideways and the admin needs to READ them, not just see them.
-  // Deliberately NOT persisted: these images are evidence (license,
-  // selfie, delivery proof); overwriting the stored file from a viewer
-  // would silently rewrite what was submitted. Reset whenever the dialog
-  // opens or the image swaps (front → back) so a stale angle never leaks
-  // into the next photo.
-  const [rotation, setRotation] = useState(0);
-
-  useEffect(() => {
-    setRotation(0);
-  }, [src, open]);
-
-  // A 90°/270° rotation swaps the image's visual width and height, but a
-  // transform never changes the layout box — a wide license photo rotated
-  // upright would overflow the dialog horizontally. Constraining the
-  // layout box to ≤60vh on the long edge while sideways keeps the rotated
-  // result inside the same area the unrotated image occupied.
-  const sideways = rotation % 180 !== 0;
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="rounded-2xl max-w-lg">
@@ -75,42 +55,32 @@ export function PhotoDialog({
           <img
             src={src}
             alt={title}
-            className={`object-contain rounded-xl transition-transform duration-200 max-h-[60vh] ${
-              sideways ? "max-w-[60vh]" : "max-w-full"
-            }`}
-            style={{ transform: `rotate(${rotation}deg)` }}
+            className="max-w-full max-h-[60vh] object-contain rounded-xl"
           />
-          <div className="flex gap-3">
-            <Button
-              variant="outline"
-              onClick={() => setRotation((r) => (r + 90) % 360)}
-              className="rounded-xl"
-              aria-label="Rotate photo 90 degrees clockwise"
-            >
-              <RotateCw className="w-4 h-4 mr-1.5" />
-              Rotate
-            </Button>
-            {showDownload && onDownload && (
-              <Button
-                variant="outline"
-                onClick={() => onDownload(src, title)}
-                className="rounded-xl"
-              >
-                <Download className="w-4 h-4 mr-1.5" />
-                Download
-              </Button>
-            )}
-            {showUpdate && onUpdate && (
-              <Button
-                onClick={onUpdate}
-                disabled={uploading}
-                className="rounded-xl"
-              >
-                <Camera className="w-4 h-4 mr-1.5" />
-                {uploading ? "Uploading..." : "Update Photo"}
-              </Button>
-            )}
-          </div>
+          {(showDownload || showUpdate) && (
+            <div className="flex gap-3">
+              {showDownload && onDownload && (
+                <Button
+                  variant="outline"
+                  onClick={() => onDownload(src, title)}
+                  className="rounded-xl"
+                >
+                  <Download className="w-4 h-4 mr-1.5" />
+                  Download
+                </Button>
+              )}
+              {showUpdate && onUpdate && (
+                <Button
+                  onClick={onUpdate}
+                  disabled={uploading}
+                  className="rounded-xl"
+                >
+                  <Camera className="w-4 h-4 mr-1.5" />
+                  {uploading ? "Uploading..." : "Update Photo"}
+                </Button>
+              )}
+            </div>
+          )}
         </div>
       </DialogContent>
     </Dialog>

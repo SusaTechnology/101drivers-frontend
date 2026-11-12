@@ -47,10 +47,9 @@ export class AdminGateController {
     }
 
     // HOST-ONLY gate cookies — deliberately NOT the shared auth options'
-    // Domain=.<root domain> (see cors-cookie.util). A Set-Cookie whose
-    // Domain doesn't match the responding host (e.g. an /api proxy on
-    // 101drivers.com) is SILENTLY DROPPED by the browser, so the door
-    // would relock on every reload.
+    // Domain=.techbee.et. A Set-Cookie whose Domain doesn't match the
+    // responding host (e.g. an /api proxy on 101drivers.com) is SILENTLY
+    // DROPPED by the browser, so the door would relock on every reload.
     // The gate cookie only ever needs to travel back to the API host that
     // set it — a host-only cookie does exactly that, on every shape of
     // deployment. Policy is otherwise the shared one (httpOnly/secure/

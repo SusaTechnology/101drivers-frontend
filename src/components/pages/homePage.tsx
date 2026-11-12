@@ -150,14 +150,11 @@ export default function LandingPage() {
   // ─── Selected signup card in the #dealers section ────────────────
   // The navbar's Business and Personal tabs BOTH land on #dealers now —
   // the clicked tab is expressed by coloring the matching card (dark bg +
-  // lime ring + check). SHARED STATE: the #dealers cards and the hero
-  // quote-form chooser are ONE choice — selecting Business/Personal in
-  // either place selects it in both. Derived from deliveryType below
-  // (defaults to BUSINESS, the hardcoded "recommended" look, while the
-  // hero chooser is still untouched/null for a new visitor). Clicking a
+  // lime ring + check). Defaults to BUSINESS, which was the hardcoded
+  // "recommended" look before the cards became switchable. Clicking a
   // card, the navbar tabs (event), or arriving via #dealers-business /
-  // #dealers-personal all set the same state (see setSignupCard below,
-  // an alias of handleDeliveryTypeChange).
+  // #dealers-personal all set it.
+  const [signupCard, setSignupCard] = useState<SignupCard>("BUSINESS");
 
   // ─── Guest daily quote budget (client mirror) ────────────────────
   // The SERVER owns the budget (per-IP daily counter, 429 once over);
@@ -190,10 +187,6 @@ export default function LandingPage() {
   const [deliveryType, setDeliveryType] = useState<HomeDeliveryType | null>(
     isLoggedInCustomer ? (savedPrefill.deliveryType ?? "BUSINESS") : (savedPrefill.deliveryType ?? null)
   );
-
-  // The #dealers cards read the SAME state as the hero chooser (see the
-  // comment above); null → BUSINESS keeps the pre-existing default look.
-  const signupCard: SignupCard = deliveryType ?? "BUSINESS";
 
   // ─── Live pricing config ───────────────────────────────────────────
   // Fetches the admin-configured default pricing config from the
@@ -608,11 +601,6 @@ export default function LandingPage() {
       );
     } catch { /* storage unavailable */ }
   }, [deliveryType, pickupAddress, dropoffAddress]);
-
-  // One setter for BOTH card sections (hero chooser + #dealers cards),
-  // the navbar tabs (SELECT_SIGNUP_CARD_EVENT) and the #dealers-* hash:
-  // selecting Business/Personal anywhere updates the one shared state.
-  const setSignupCard = handleDeliveryTypeChange;
 
   // ─── "Continue" — the button once the free budget is gone ──────
   // Spec: after the cap, the quote button NEVER calculates again and

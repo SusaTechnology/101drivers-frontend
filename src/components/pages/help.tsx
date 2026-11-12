@@ -359,7 +359,7 @@ export default function HelpPage({ type }: { type?: 'customer' | 'driver' }) {
                       className="w-full [&>button]:w-full"
                       buttonClassName="text-xs"
                     />
-                    <a href="mailto:ops@101drivers.com?subject=Customer Support Request" className="block">
+                    <a href="mailto:ops@101drivers.techbee.et?subject=Customer Support Request" className="block">
                       <Button size="sm" variant="outline" className="w-full text-xs font-bold rounded-xl">
                         <Mail className="h-3 w-3 mr-1" />
                         Email Us
@@ -441,7 +441,7 @@ export default function HelpPage({ type }: { type?: 'customer' | 'driver' }) {
                       className="w-full [&>button]:w-full"
                       buttonClassName="text-xs"
                     />
-                    <a href="mailto:ops@101drivers.com?subject=Driver Support Request" className="block">
+                    <a href="mailto:ops@101drivers.techbee.et?subject=Driver Support Request" className="block">
                       <Button size="sm" variant="outline" className="w-full text-xs font-bold rounded-xl">
                         <Mail className="h-3 w-3 mr-1" />
                         Email Us
@@ -473,7 +473,7 @@ export default function HelpPage({ type }: { type?: 'customer' | 'driver' }) {
                   className="w-full sm:w-auto [&>button]:w-full"
                   buttonClassName="px-6"
                 />
-                <a href="mailto:ops@101drivers.com?subject=Support Request from Help Center">
+                <a href="mailto:ops@101drivers.techbee.et?subject=Support Request from Help Center">
                   <Button className="bg-lime-500 hover:bg-lime-600 text-slate-950 font-bold rounded-xl px-6">
                     <Mail className="h-4 w-4 mr-2" />
                     Email Support

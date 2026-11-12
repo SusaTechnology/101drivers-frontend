@@ -1,12 +1,12 @@
 import { useEffect } from 'react'
-import { createFileRoute, Outlet, useLocation, useNavigate } from '@tanstack/react-router'
+import { createFileRoute, Outlet, useLocation } from '@tanstack/react-router'
 import DriverBottomNav from '@/components/layout/DriverBottomNav'
 import type { DriverTabId } from '@/components/layout/DriverBottomNav'
 import { DriverRouteGuard } from '@/components/auth/DriverRouteGuard'
 import { socketJoinDriverFeed, socketLeaveDriverFeed } from '@/lib/socket'
 import { trackSeenDeliveries } from '@/lib/driver-feed-tracker'
 import { unlockAudio } from '@/lib/sound'
-import { getUser, setUser, useDataQuery } from '@/lib/tanstack/dataQuery'
+import { getUser, useDataQuery } from '@/lib/tanstack/dataQuery'
 
 // Routes that should NOT show the bottom nav
 const HIDE_NAV_ROUTES = [
@@ -62,41 +62,6 @@ function DriverLayout() {
       trackSeenDeliveries(seedData.items.map((item: any) => item.deliveryId).filter(Boolean))
     }
   }, [seedData])
-
-  // ── Server-truth status revalidation (the mid-session eviction) ──
-  // localStorage's driverStatus is a snapshot from login time. If the
-  // admin SUSPENDS / REJECTS / downgrades a driver while their session is
-  // alive, every localStorage gate still passes and the driver keeps the
-  // dashboard forever. The layout mounts ONCE for all /driver/* pages, so
-  // this is the single central place to re-check: fetch the driver
-  // record, and when the CURRENT status (or onboarding flag) no longer
-  // matches the stored snapshot, refresh the stored user and — if the
-  // driver is no longer approved — send them to the status board, which
-  // renders the fresh status card. First paint still uses localStorage,
-  // so approved drivers never see a flicker or a spinner.
-  const navigate = useNavigate()
-  const { data: freshProfile } = useDataQuery<any>({
-    apiEndPoint: `${import.meta.env.VITE_API_URL}/api/drivers/${driverId}`,
-    queryKey: ['driverStatusRevalidation', driverId],
-    noFilter: true,
-    enabled: Boolean(driverId),
-    staleTime: 30_000,
-  })
-
-  useEffect(() => {
-    if (!freshProfile?.status) return
-    const stored = getUser()
-    if (!stored?.roles?.includes('DRIVER')) return
-    const freshOnboarded = Boolean(freshProfile.onboardingCompletedAt)
-    const changed =
-      freshProfile.status !== stored.driverStatus ||
-      freshOnboarded !== Boolean(stored.onboardingCompleted)
-    if (!changed) return
-    setUser({ ...stored, driverStatus: freshProfile.status, onboardingCompleted: freshOnboarded })
-    if (freshProfile.status !== 'APPROVED') {
-      navigate({ to: '/driver-application-submitted' })
-    }
-  }, [freshProfile, navigate])
 
   const pathname = location.pathname
   const hideNav = HIDE_NAV_ROUTES.some((route) => pathname.startsWith(route))

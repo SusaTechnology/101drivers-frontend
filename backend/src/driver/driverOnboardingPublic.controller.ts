@@ -2,7 +2,6 @@ import * as common from "@nestjs/common";
 import * as swagger from "@nestjs/swagger";
 import { DriverService } from "./driver.service";
 import { CompleteDriverOnboardingDto } from "./dto/driverOnboardingComplete.dto";
-import { MobileOnlySignupGuard } from "../auth/guards/mobile-only-signup.guard";
 
 @swagger.ApiTags("drivers")
 @common.Controller("public/drivers")
@@ -56,14 +55,9 @@ export class DriverOnboardingPublicController {
   }
 
   @common.Post("onboarding-complete")
-  // Driver onboarding is PHONE/TABLET ONLY — same desktop gate as driver
-  // signup (the email-token link and the status-board button both land
-  // here, so a desktop/laptop must be turned away server-side too).
-  @common.UseGuards(MobileOnlySignupGuard)
   @swagger.ApiOkResponse({ description: "Onboarding completed successfully" })
   @swagger.ApiBadRequestResponse({ description: "Invalid input or driver not eligible" })
   @swagger.ApiNotFoundResponse({ description: "Invalid or expired token" })
-  @swagger.ApiForbiddenResponse({ description: "Desktop/laptop browsers are not allowed" })
   async completeOnboardingByToken(
     @common.Body() body: CompleteDriverOnboardingDto & { token: string },
   ) {

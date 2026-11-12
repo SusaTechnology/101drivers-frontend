@@ -9,6 +9,8 @@ import type {
   UseMutationResult,
 } from "@tanstack/react-query";
 
+import { deviceTouchHint } from "@/lib/device";
+
 // import { sessionActions } from "@/lib/store/global-state/auth/auth-slice";
 let accessToken: string | null = null;
 let refreshPromise: Promise<string> | null = null;
@@ -56,12 +58,12 @@ async function baseFetch(
     credentials: "include",
     headers: {
       // "x-tenant-code": tenantCode,
-      // NO x-device-touch here: the header is a signup device-gate signal
-      // the backend reads ONLY on POST /auth/signup/driver. Attaching it
-      // to every request forces a CORS preflight on all of them, and any
-      // deployment whose API predates the allowlist entry blocks every
-      // call ("Failed to fetch"). Call sites that need it pass
-      // request.headers explicitly.
+      // Touch-capability hint for the signup device gate — lets the server
+      // tell an iPadOS desktop-mode iPad (touch, UA says "Macintosh",
+      // allowed) apart from a real Mac (no touch, blocked). See
+      // src/lib/device.ts; mirrors the client gate. Per-request headers
+      // can still override.
+      "x-device-touch": deviceTouchHint(),
       ...(token && { Authorization: `Bearer ${token}` }),
       ...request.headers,
     },
@@ -73,11 +75,9 @@ async function baseFetch(
   return resolveResponse(res);
 }
 async function refreshToken(tenantCode: string) {
-  // Same API base every other client module uses (VITE_API_URL); no
-  // hardcoded deployment host — with the env unset this falls back to a
-  // same-origin /api path, which works behind the /api proxy shape.
-  const apiBase = (import.meta.env.VITE_API_URL as string | undefined) || "";
-  const res = await fetch(`${apiBase}/api/auth/auth/refresh-token`, {
+  const res = await fetch(
+    "https://api.techbee.et/api/auth/auth/refresh-token",
+    {
       method: "GET",
       credentials: "include",
       headers: { "x-tenant-code": tenantCode },

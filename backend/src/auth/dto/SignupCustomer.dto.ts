@@ -3,7 +3,7 @@ import { IsEmail, IsOptional, IsString, MinLength } from "class-validator";
 
 export class SignupCustomerDto {
   @ApiProperty({
-    example: "dealer.contact@101drivers.com",
+    example: "dealer.contact@101drivers.techbee.et",
     description: "Verified contact person email used for login",
   })
   @IsEmail()

@@ -25,7 +25,6 @@
     "@tiptap/extension-text-align": "^3.27.3",
     "@tiptap/react": "^3.27.3",
     "@tiptap/starter-kit": "^3.27.3",
-    "better-auth": "^1.7.21",
     "browser-image-compression": "^2.0.2",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",

@@ -453,7 +453,7 @@ export class AuthService {
     const base = getCookieOptionsFromRequest(request);
 
     const host = (request.hostname || "").toLowerCase();
-    const root = (process.env.ROOT_DOMAIN || "101drivers.com").toLowerCase();
+    const root = (process.env.ROOT_DOMAIN || "techbee.et").toLowerCase();
 
     const candidates = Array.from(
       new Set<string | undefined>([
