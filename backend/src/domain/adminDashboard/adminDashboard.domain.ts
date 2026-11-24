@@ -14,6 +14,7 @@ import {
   Prisma,
 } from "@prisma/client";
 import { PrismaService } from "../../prisma/prisma.service";
+import { parseEnumList } from "../../common/enum-list.util";
 import { businessStartOfDay, businessEndOfDay, businessStartOfMonth, businessMinus } from "../../delivery-logistics/business-time";
 import {
   AdminDashboardOverviewQuery,
@@ -2388,10 +2389,14 @@ export class AdminDashboardDomain {
       });
     }
 
-    if (filters.statuses?.length) {
+    // Accept every URL shape (see parseEnumList) — the overview endpoint
+    // reads query params without DTO validation, so `statuses` can arrive
+    // as a CSV or JSON-encoded string; Prisma used to 500 on that.
+    const statuses = parseEnumList(filters.statuses, EnumDeliveryRequestStatus);
+    if (statuses?.length) {
       and.push({
         status: {
-          in: filters.statuses,
+          in: statuses,
         },
       });
     }

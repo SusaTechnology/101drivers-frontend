@@ -3432,3 +3432,20 @@ Verification: vite build green (18.5s, sw stamped); FE tsc baseline unchanged (1
 
 Stage Summary:
 - Scanning the QR during desktop-driver onboarding lands on the onboarding page on the phone. Deploy FE.
+
+---
+Task ID: 76
+Agent: Main Agent
+Task: Fix Prisma 500s on admin deliveries/overview — enum filter params arriving as strings
+
+Work Log:
+- Production log showed two Prisma crashes blocking admin pages (the user-visible "booking error"): adminDashboard getSummaryCards ("Argument `in`: Expected EnumDeliveryRequestStatus[] ... provided String") and deliveryRequest getAdminDeliveries count ("Invalid value for argument `status`", payload showed status: "DRAFT,QUOTED,LISTED,BOOKED,UNASSIGNED,ACTIVE").
+- Root causes: (1) AdminDashboardController.getOverview uses plainToInstance WITHOUT validate — the DTO's @IsArray/@IsEnum(each) never run, so a CSV or JSON-encoded array string flows into `in:`; (2) AdminDeliveryListQueryDto.status is a plain string, and getAdminDeliveries cast it `as any` into Prisma equality.
+- Fix: new backend/src/common/enum-list.util.ts (parseEnumList) accepting single value / CSV / JSON-array string / real array, dropping unknown tokens; wired into getAdminDeliveries (status?: string|string[]|null → status: { in: [...] }) and adminDashboard buildDeliveryWhere.
+- Recovery note: the sandbox recycle reset the checkout to the stale 09828203 lineage again; the first commit (d85e4e3f) sat on that stale base and was rejected by push (non-fast-forward). Fix re-applied onto 5b5a43b4 (Better Auth + Task 75 intact) — this commit is the clean one.
+
+Verification: npm ci --legacy-peer-deps (npm 11 strict peers conflict with the lockfile otherwise) + prisma generate + tsc --noEmit: only the 2 pre-existing spec-file baseline errors remain; zero errors in changed files.
+
+Stage Summary:
+- Admin deliveries list + overview endpoints now accept every URL filter shape; stale/CSV/JSON-array status params no longer 500. Deploy backend.
+- UNRELATED finding: NotificationEventEngine keeps failing "550 5.1.1 Mailbox <ops@101drivers.com> does not exist" — the notification recipient mailbox must be created (or its recipient changed); not a code bug.
