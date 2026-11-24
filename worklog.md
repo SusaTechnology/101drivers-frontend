@@ -3449,3 +3449,20 @@ Verification: npm ci --legacy-peer-deps (npm 11 strict peers conflict with the l
 Stage Summary:
 - Admin deliveries list + overview endpoints now accept every URL filter shape; stale/CSV/JSON-array status params no longer 500. Deploy backend.
 - UNRELATED finding: NotificationEventEngine keeps failing "550 5.1.1 Mailbox <ops@101drivers.com> does not exist" — the notification recipient mailbox must be created (or its recipient changed); not a code bug.
+
+---
+Task ID: 77
+Agent: Main Agent
+Task: Fix ACL interceptor 500s — overridden tip endpoints lost @UseRoles + guards metadata
+
+Work Log:
+- Production log: TypeError "Cannot read properties of undefined (reading 'role')" at aclFilterResponse.interceptor.ts:26 on every /tips call (burst cadence = dashboard polling).
+- Root cause (2 layers): (a) TipController overrides tips()/tip() with AclFilterResponseInterceptor but no @UseRoles, and the child class re-declares NO @UseGuards — Nest reads class metadata from context.getClass() (the subclass), so DefaultAuthGuard/ACGuard declared on TipControllerBase were invisible: the controller served without auth AND the interceptor crashed on the missing "roles" metadata. (b) The same crash shape is possible fleet-wide wherever the metadata is absent.
+- Fix: defensive pass-through in BOTH ACL interceptors when no roles metadata is resolved (auth still applies via guards; only ACL filtering/validation is skipped); TipController now re-declares class-level @UseGuards(DefaultAuthGuard, ACGuard) — same convention as customer/driver controllers — and the two GET overrides carry @UseRoles (read:any for the list, read:own for the single read, mirroring the base contract; ownership still enforced in-code by the owner filters).
+- Scan (scripts/scan_acl_missing_roles.py): 3 candidates found, 1 false positive (driver.controller.ts:1005 has UseRoles past the scan window) — no other endpoint affected.
+- SECURITY NOTE: the /tips endpoints have been serving without authentication since the override was introduced (unauthenticated callers hit the interceptor 500 first, so nothing leaked in practice — but any code path returning early would have). Class-level guards now close that hole.
+- Recovery note: the recycle reset the checkout to the stale 09828203 lineage a third time; worktree-vs-lineage diff for the 3 edited files was empty, so the edits were carried onto ae6d5b3a (Better Auth + Task 76 intact) via backup/copy-back — this commit is the clean one.
+- Verification: tsc --noEmit on the carried tree → only the 2 pre-existing spec baseline errors; backend/src/upload re-restored from origin/master (recycle dirt).
+
+Stage Summary:
+- /tips 500s fixed; tip controller authentication restored; ACL interceptors crash-proofed. Deploy backend.

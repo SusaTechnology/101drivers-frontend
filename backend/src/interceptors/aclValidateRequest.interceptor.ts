@@ -23,6 +23,13 @@ export class AclValidateRequestInterceptor implements NestInterceptor {
       [context.getHandler(), context.getClass()]
     );
 
+    // Same subclass-metadata trap as AclFilterResponseInterceptor: a route
+    // without resolved @UseRoles metadata has nothing to validate — pass
+    // through instead of crashing on `permissionsRoles.role`.
+    if (!permissionsRoles?.role) {
+      return next.handle();
+    }
+
     const type = context.getType();
 
     const inputDataToValidate =

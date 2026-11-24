@@ -22,6 +22,16 @@ export class AclFilterResponseInterceptor implements NestInterceptor {
       [context.getHandler(), context.getClass()]
     );
 
+    // No @UseRoles metadata resolved for this route → nothing to enforce.
+    // Class-level metadata on a PARENT controller is invisible through a
+    // subclass (context.getClass() returns the subclass), so overridden
+    // handlers can lose the metadata their base had — that 500'd every
+    // call to the overridden tip endpoints. Auth still applies via the
+    // guards; this only skips ACL response filtering instead of crashing.
+    if (!permissionsRoles?.role) {
+      return next.handle();
+    }
+
     const permission = this.rolesBuilder.permission({
       role: permissionsRoles.role,
       action: permissionsRoles.action,

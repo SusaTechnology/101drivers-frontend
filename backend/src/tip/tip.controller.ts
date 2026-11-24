@@ -1,6 +1,7 @@
 import * as common from "@nestjs/common";
 import * as swagger from "@nestjs/swagger";
 import * as nestAccessControl from "nest-access-control";
+import * as defaultAuthGuard from "../auth/defaultAuth.guard";
 import { Request } from "express";
 import { TipService } from "./tip.service";
 import { TipControllerBase } from "./base/tip.controller.base";
@@ -15,6 +16,12 @@ import { isRecordNotFoundError } from "../prisma.util";
 
 @swagger.ApiTags("tips")
 @common.Controller("tips")
+// Class-level guards must be RE-DECLARED on the subclass: Nest reads class
+// decorator metadata from context.getClass() (this class), so the guards
+// declared on TipControllerBase are invisible here. Without this, every
+// route on this controller — including the inherited base ones — served
+// without authentication. (Same convention as customer/driver controllers.)
+@common.UseGuards(defaultAuthGuard.DefaultAuthGuard, nestAccessControl.ACGuard)
 export class TipController extends TipControllerBase {
   constructor(
     protected readonly service: TipService,
@@ -48,6 +55,11 @@ export class TipController extends TipControllerBase {
    * so the base select/shape stays the single source of truth.
    */
   @common.UseInterceptors(AclFilterResponseInterceptor)
+  @nestAccessControl.UseRoles({
+    resource: "Tip",
+    action: "read",
+    possession: "any",
+  })
   @common.Get()
   async tips(@common.Req() request: Request): Promise<Tip[]> {
     if (!this.isAdminRequest(request)) {
@@ -74,6 +86,11 @@ export class TipController extends TipControllerBase {
    * GET /tips/:id — same ownership rule for the single-tip read.
    */
   @common.UseInterceptors(AclFilterResponseInterceptor)
+  @nestAccessControl.UseRoles({
+    resource: "Tip",
+    action: "read",
+    possession: "own",
+  })
   @common.Get("/:id")
   async tip(
     @common.Param() params: TipWhereUniqueInput,
