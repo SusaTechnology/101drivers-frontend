@@ -29,7 +29,7 @@ function isSupportRoute(pathname: string): boolean {
 
 /**
  * CENTRAL driver access decision — owner rule: ONLY an APPROVED driver
- * whose onboarding is complete may see dashboard pages. Every other
+ * may see dashboard pages. Every other
  * driver status goes to ONE screen, the status board
  * (/driver-application-submitted), which renders each status's card and
  * specific message. This function is the single source of truth; the
@@ -48,7 +48,8 @@ function isSupportRoute(pathname: string): boolean {
  * async check (that would reintroduce the flicker).
  */
 type GuardState =
-  | "authenticated"      // APPROVED + onboarded → render children
+  | "authenticated"      // APPROVED → render children (onboarding is a
+  //                        login/admin-time fact, never re-gated here)
   | "needs_signin"       // no session → /driver-signin
   | "forbidden_role"     // session exists, not a DRIVER role → access denied
   | "needs_onboarding"   // APPROVED but onboarding incomplete → the form
@@ -80,11 +81,16 @@ function computeDriverGuardAccess(
 
   // Step 3: status — the owner's rule in one place.
   if (user.driverStatus === "APPROVED") {
-    // Approved: the only status with a dashboard. They must still finish
-    // onboarding first — the form, not the board, is where their work is.
-    return user.onboardingCompleted
-      ? { state: "authenticated", message: "" }
-      : { state: "needs_onboarding", message: "" };
+    // Approved: the only status with a dashboard — ALWAYS let them through,
+    // never the onboarding form, never a redirect. Approval only happens
+    // after onboarding completes server-side, so a stale stored
+    // `onboardingCompleted: false` (a session persisted from before the
+    // approval, or an older backend whose refresh response omits the
+    // onboarding fields) must not bounce APPROVED drivers through the
+    // onboarding-complete page on every navigation — that bounce-then-
+    // forward loop was the "click a tab → onboarding flash → map" bug.
+    // The DriverLayout's server revalidation still enforces real access.
+    return { state: "authenticated", message: "" };
   }
 
   // WAITLISTED, INVITED, PENDING, PENDING_APPROVAL, MEETING_REQUESTED,

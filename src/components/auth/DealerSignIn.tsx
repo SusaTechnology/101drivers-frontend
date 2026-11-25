@@ -230,25 +230,13 @@ export function DealerSignIn({
           // customerType from the API.
           navigate({ to: "/dealer-dashboard" });
         } else if (userType === "driver") {
-          // Owner decision: APPROVED drivers go straight to work — the
-          // dashboard when their onboarding is done, the onboarding form
-          // when it isn't. Only drivers with pending business (invited /
-          // pending / waitlisted / on hold / rejected) land on the status
-          // board. One navigation per destination, no intermediate screen.
-          if (data.driverStatus === "APPROVED" && data.onboardingCompleted) {
-            navigate({ to: "/driver/dashboard" });
-          } else if (
-            data.driverStatus === "APPROVED" &&
-            data.onboardingToken
-          ) {
-            navigate({
-              to: "/driver-onboarding-complete",
-              search: { token: data.onboardingToken } as never,
-            });
-          } else if (data.driverStatus === "APPROVED") {
-            // Approved but neither onboarded nor holding a token — send
-            // them to the dashboard; the driver route guard decides from
-            // there instead of this handler guessing again.
+          // Owner decision: APPROVED drivers go straight to the dashboard —
+          // in every case, never to the onboarding form. A stale stored
+          // onboarding flag or a leftover onboarding token must not reroute
+          // them (approval only happens after onboarding completes
+          // server-side). Everyone else (invited / pending / waitlisted /
+          // on hold / rejected) lands on the status board.
+          if (data.driverStatus === "APPROVED") {
             navigate({ to: "/driver/dashboard" });
           } else {
             navigate({ to: "/driver-application-submitted" });

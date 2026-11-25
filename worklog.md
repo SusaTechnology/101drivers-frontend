@@ -3466,3 +3466,18 @@ Work Log:
 
 Stage Summary:
 - /tips 500s fixed; tip controller authentication restored; ACL interceptors crash-proofed. Deploy backend.
+
+---
+Task ID: 78
+Agent: Main Agent
+Task: APPROVED driver bounced through onboarding-complete on every navigation — guard/login/refresh-session fixes
+
+Work Log:
+- Symptom: approved driver (login response: driverStatus APPROVED, onboardingCompleted true) lands on the map, then tab clicks flash the onboarding-complete page before returning to the map.
+- Root cause chain: the stored localStorage session can go stale relative to the driver's current approval state — a session persisted from BEFORE the approval keeps onboardingCompleted:false/driverStatus PENDING, and the 10-minute token-refresh merge wiped driverStatus/onboardingToken whenever a backend response omitted those fields (data.driverStatus ?? null). The guard then gated APPROVED drivers on the stored onboardingCompleted flag → needs_onboarding → bounce to /driver-onboarding-complete → that page's server check forwards approved drivers back to the dashboard — the observed loop, on every navigation.
+- Fixes on the current tree (which already fail-closes non-approved statuses to the status board): (1) DriverRouteGuard: APPROVED short-circuits to authenticated BEFORE the onboarding flag check — an approved driver is never redirected to onboarding-complete in any way; the stored flag is login/admin-time truth and never re-gates routing (DriverLayout server revalidation still enforces real access); (2) DealerSignIn driver redirect: APPROVED → /driver/dashboard unconditionally (dropped the onboardingCompleted/token branches); (3) token-refresh merge (dataQuery.ts): driverStatus/customerApprovalStatus/onboardingToken now preserve the stored value when the response omits the field instead of nulling it.
+- Process note: the sandbox recycle had reset the checkout to the stale 09828203 lineage mid-task; the first fix round was written against stale files whose lineage diff vs the good tree was NON-empty (310 lines on the guard alone), so the stale-based edits were discarded and re-applied onto the current versions — this commit contains only the re-applied fixes.
+- Verification: vite build exit 0 (after installing the better-auth module the current lockfile already declared); diff scope = the 3 source files + this entry only.
+
+Stage Summary:
+- Approved drivers: zero redirects, zero flicker, straight to driver routes. Non-approved drivers: status board on every driver route, map never rendered. Deploy FE (backend not required).

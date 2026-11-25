@@ -529,10 +529,14 @@ async function refreshAccessToken(): Promise<string> {
         fullName: data.fullName ?? prev?.fullName ?? null,
         profileId: data.profileId ?? prev?.profileId ?? null,
         roles: data.roles,
-        customerApprovalStatus: data.customerApprovalStatus ?? null,
-        driverStatus: data.driverStatus ?? null,
+        // Preserve the stored value when the response omits the field — an
+        // older backend that predates these fields must not wipe what
+        // login stored on every 10-minute token refresh (that wipe made
+        // the driver route guard misjudge the session until re-login).
+        customerApprovalStatus: data.customerApprovalStatus ?? prev?.customerApprovalStatus ?? null,
+        driverStatus: data.driverStatus ?? prev?.driverStatus ?? null,
         onboardingCompleted: data.onboardingCompleted ?? prev?.onboardingCompleted ?? false,
-        onboardingToken: data.onboardingToken ?? null,
+        onboardingToken: data.onboardingToken ?? prev?.onboardingToken ?? null,
         isActive: data.isActive,
         // Keep the elevated-admin flag fresh across token refreshes;
         // fallback preserves the value stored at login.
