@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   GoneException,
   Injectable,
   NotFoundException,
@@ -13,6 +14,7 @@ import {
   EnumDeliveryStatusHistoryActorType,
   EnumDeliveryStatusHistoryFromStatus,
   EnumDeliveryStatusHistoryToStatus,
+  EnumDriverStatus,
   EnumTrackingSessionStatus,
   Prisma,
 } from "@prisma/client";
@@ -1271,6 +1273,17 @@ async completeTrip(input: {
 
       if (!driver) {
         throw new NotFoundException("Driver profile not found");
+      }
+
+      // Operational status gate (shared by the HTTP location-ping endpoint
+      // via DriverApprovedGuard and by the socket driver:location path —
+      // this is the single choke point for both). A driver who is not
+      // currently APPROVED must not write tracking data: the status is
+      // already SELECTed here, so this check costs nothing extra.
+      if (driver.status !== EnumDriverStatus.APPROVED) {
+        throw new ForbiddenException(
+          `Driver account is not approved (current status: ${driver.status})`
+        );
       }
 
       await tx.driverLocation.upsert({

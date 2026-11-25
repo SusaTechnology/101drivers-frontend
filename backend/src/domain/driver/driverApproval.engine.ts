@@ -1,4 +1,4 @@
-import { BadRequestException, Inject, Injectable, NotFoundException, forwardRef } from "@nestjs/common";
+import { BadRequestException, Inject, Injectable, Logger, NotFoundException, forwardRef } from "@nestjs/common";
 import {
   EnumAdminAuditLogAction,
   EnumAdminAuditLogActorType,
@@ -12,6 +12,7 @@ import { PrismaService } from "../../prisma/prisma.service";
 import { NotificationEventEngine } from "../notificationEvent/notificationEvent.engine";
 import { MailService } from "../../common/mail/mail.service";
 import { ReferralTriggerService } from "../../referral/referral-trigger.service";
+import { APP_EVENT, AppEventsService } from "../../common/appEvents/appEvents.service";
 import { randomBytes } from "crypto";
 
 /**
@@ -42,7 +43,54 @@ export class DriverApprovalEngine {
     // will pick up the slack. We never rethrow into the approval flow.
     @Inject(forwardRef(() => ReferralTriggerService))
     private readonly referralTrigger: ReferralTriggerService,
+    private readonly appEvents: AppEventsService,
   ) {}
+
+  private readonly logger = new Logger(DriverApprovalEngine.name);
+
+  /**
+   * Post-commit lifecycle ping. Called AFTER the driver.update and the
+   * audit row have succeeded — never before persistence, so a crashed
+   * emit can never announce a change that didn't happen. Carries only
+   * identifiers (bus contract: receivers refetch server truth); the
+   * tracking gateway targets the driver's user room and the client
+   * revalidates /auth/session. Fire-and-forget: a ping failure must
+   * never fail the admin operation that already committed.
+   */
+  private async notifyStatusChanged(
+    driverId: string,
+    status: EnumDriverStatus
+  ): Promise<void> {
+    try {
+      const driver = await this.prisma.driver.findUnique({
+        where: { id: driverId },
+        select: { userId: true },
+      });
+      if (!driver?.userId) {
+        this.logger.warn(
+          `driver ${driverId} has no owning user; status ping for ${status} skipped`
+        );
+        return;
+      }
+      this.appEvents.emit(APP_EVENT.DRIVER_STATUS_CHANGED, {
+        driverId,
+        userId: driver.userId,
+        status,
+        changedAt: new Date().toISOString(),
+      });
+      this.logger.log(
+        `driver ${driverId} -> ${status} (user ${driver.userId}); revalidation ping sent`
+      );
+    } catch (error) {
+      // The status change is already committed — a failed ping only means
+      // the driver's next periodic revalidation catches up instead.
+      this.logger.warn(
+        `driver status ping failed for ${driverId}: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
+    }
+  }
 
   /**
    * INVITE: Admin invites a waitlisted driver to complete the full application.
@@ -114,6 +162,8 @@ export class DriverApprovalEngine {
         afterJson: afterDriver ?? Prisma.JsonNull,
       },
     });
+
+    void this.notifyStatusChanged(input.driverId, EnumDriverStatus.INVITED);
 
     const toEmail = driver.user?.email?.trim().toLowerCase() || null;
     const displayName = driver.user?.fullName || "Driver";
@@ -253,6 +303,8 @@ export class DriverApprovalEngine {
         afterJson: afterDriver ?? Prisma.JsonNull,
       },
     });
+
+    void this.notifyStatusChanged(input.driverId, EnumDriverStatus.APPROVED);
 
     const toEmail = driver.user?.email?.trim().toLowerCase() || null;
     const displayName = driver.user?.fullName || "Driver";
@@ -588,6 +640,15 @@ export class DriverApprovalEngine {
       },
       { maxWait: 10_000, timeout: 60_000 }
     );
+
+    // The $transaction has committed (update + audit + notification rows +
+    // the email send all rolled into one). Only now may the lifecycle ping
+    // go out — announcing a meeting request that later rolled back would
+    // leave the driver's UI out of sync with the database.
+    void this.notifyStatusChanged(
+      input.driverId,
+      EnumDriverStatus.MEETING_REQUESTED
+    );
   }
 
   /** Plain-text meeting email → simple branded HTML (same style the
@@ -688,6 +749,8 @@ export class DriverApprovalEngine {
         afterJson: afterDriver ?? Prisma.JsonNull,
       },
     });
+
+    void this.notifyStatusChanged(input.driverId, EnumDriverStatus.SUSPENDED);
   }
 
   /**
@@ -709,6 +772,18 @@ export class DriverApprovalEngine {
 
     if (!driver) {
       throw new NotFoundException("Driver not found");
+    }
+
+    // Lifecycle guard: unsuspend means SUSPENDED → APPROVED. Without this
+    // check any source status (WAITLISTED / INVITED / REJECTED / ...) could
+    // be flipped straight to APPROVED here, bypassing the approval funnel
+    // and its audit trail. Reinstating a non-suspended driver is either a
+    // no-op (already APPROVED) or must go through the proper transition
+    // (reject → approve, hold release, etc.).
+    if (driver.status !== EnumDriverStatus.SUSPENDED) {
+      throw new BadRequestException(
+        "Only suspended drivers can be unsuspended"
+      );
     }
 
     const beforeJson = driver;
@@ -739,6 +814,8 @@ export class DriverApprovalEngine {
         afterJson: afterDriver ?? Prisma.JsonNull,
       },
     });
+
+    void this.notifyStatusChanged(input.driverId, EnumDriverStatus.APPROVED);
   }
 
   /**
@@ -826,6 +903,8 @@ export class DriverApprovalEngine {
         afterJson: afterDriver ?? Prisma.JsonNull,
       },
     });
+
+    void this.notifyStatusChanged(input.driverId, EnumDriverStatus.ON_HOLD);
   }
 
   /**
@@ -891,6 +970,8 @@ export class DriverApprovalEngine {
         afterJson: afterDriver ?? Prisma.JsonNull,
       },
     });
+
+    void this.notifyStatusChanged(input.driverId, restoreStatus);
   }
 
   /**
@@ -975,6 +1056,8 @@ export class DriverApprovalEngine {
         afterJson: afterDriver ?? Prisma.JsonNull,
       },
     });
+
+    void this.notifyStatusChanged(input.driverId, EnumDriverStatus.REJECTED);
 
     // NO EMAIL on rejection (owner decision): rejection is a silent admin
     // state change. Unlike invite/approve (which email instructions), a

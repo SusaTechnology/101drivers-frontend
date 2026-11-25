@@ -92,15 +92,44 @@ export class TrackingGateway
     // Relay cross-cutting domain pings onto the staff-ops socket room.
     // The bus is contentless by design — receivers refetch server truth.
     if (this.appEvents) {
-      this.unsubscribeAppEvents = this.appEvents.on((event) => {
+      this.unsubscribeAppEvents = this.appEvents.on((event, payload) => {
         if (event === APP_EVENT.USER_STATS_CHANGED) {
           this.emitUserStatsChanged();
         }
         if (event === APP_EVENT.ANALYTICS_CHANGED) {
           this.emitMetricsChanged();
         }
+        if (event === APP_EVENT.DRIVER_STATUS_CHANGED) {
+          this.emitDriverStatusUpdated(payload);
+        }
       });
     }
+  }
+
+  /**
+   * Relay a committed driver lifecycle transition to the affected driver's
+   * user room. Room authorization is by socket identity (the gateway's
+   * join:user handler only admits a client into its OWN `user:<sub>` room),
+   * so a client can never subscribe to another driver's lifecycle pings.
+   * The payload is identifiers-only and never authorization: the client
+   * reacts by refetching /auth/session, so a duplicated ping is a no-op
+   * and a missed ping is recovered by periodic revalidation.
+   */
+  private emitDriverStatusUpdated(
+    payload?: { driverId?: string; userId?: string; status?: string; changedAt?: string }
+  ): void {
+    if (!payload?.userId) {
+      this.logger.warn("driver:status-changed without userId — ping dropped");
+      return;
+    }
+    this.server.to(`user:${payload.userId}`).emit("driver:status-updated", {
+      driverId: payload.driverId ?? null,
+      status: payload.status ?? null,
+      changedAt: payload.changedAt ?? null,
+    });
+    this.logger.log(
+      `driver:status-updated → user:${payload.userId} (driver ${payload.driverId ?? "?"} = ${payload.status ?? "?"})`
+    );
   }
 
   onModuleDestroy() {

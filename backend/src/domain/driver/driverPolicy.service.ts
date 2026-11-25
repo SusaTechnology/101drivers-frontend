@@ -20,6 +20,22 @@ export class DriverPolicyService {
     this.ensureUserProvided(row);
     this.ensureDriverStatus(row.status);
 
+    // LIFECYCLE LOCK (create): driver rows are born WAITLISTED — that is
+    // the schema default and what both signup flows (password + social)
+    // write directly. Allowing arbitrary statuses here would let a caller
+    // mint a row that is already APPROVED / SUSPENDED / REJECTED, bypassing
+    // the funnel and its audit trail entirely. Lifecycle moves happen
+    // through DriverApprovalEngine endpoints AFTER creation.
+    if (
+      row.status !== undefined &&
+      row.status !== EnumDriverStatus.WAITLISTED
+    ) {
+      throw new AppException(
+        "new driver rows must start as WAITLISTED — status transitions go through the driver lifecycle endpoints",
+        ErrorCodes.INVALID_OPERATION
+      );
+    }
+
     if (row.approvedAt && row.status !== EnumDriverStatus.APPROVED) {
       throw new AppException(
         "approvedAt is only allowed when status is APPROVED",
@@ -81,6 +97,21 @@ export class DriverPolicyService {
     if ("user" in (data as any) || "userId" in (data as any)) {
       throw new AppException(
         "user relation cannot be changed",
+        ErrorCodes.INVALID_OPERATION
+      );
+    }
+
+    // LIFECYCLE LOCK (update): driver status is owned exclusively by
+    // DriverApprovalEngine (invite / approve / reject / suspend / unsuspend
+    // / hold / release / meeting-request — each with source-status
+    // validation and an AdminAuditLog row). grants.json grants every role
+    // Driver update:any, so without this lock ANY authenticated user —
+    // including a SUSPENDED or REJECTED driver — could self-approve through
+    // generic PATCH /drivers/:id with zero audit trail. The engine's
+    // endpoints are the only legal status mutation path.
+    if ("status" in (data as any)) {
+      throw new AppException(
+        "driver status cannot be changed through generic updates — use the driver lifecycle endpoints (approve/suspend/reject/hold/...)",
         ErrorCodes.INVALID_OPERATION
       );
     }

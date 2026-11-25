@@ -337,6 +337,60 @@ export class AuthService {
     } as UserInfo;
   }
 
+  /**
+   * GET /auth/session — the authoritative current-session snapshot.
+   *
+   * Re-reads the user row (isActive enforced exactly like the JWT strategy)
+   * and resolveAuthMeta, so every lifecycle field reflects the database at
+   * call time. Deliberately token-free: issuing/rotating tokens stays with
+   * login and refresh, so calling this endpoint can never invalidate or
+   * replace a live session — it only reports it.
+   */
+  async session(request: Request): Promise<UserInfo> {
+    const authUser = request.user as
+      | { id: string; username: string; roles: string[]; isSuperAdmin?: boolean }
+      | undefined;
+
+    if (!authUser?.id) {
+      throw new UnauthorizedException("Not authenticated");
+    }
+
+    const user = await this.prisma.user.findUnique({
+      where: { id: authUser.id },
+      select: {
+        id: true,
+        username: true,
+        email: true,
+        fullName: true,
+        isActive: true,
+        isSuperAdmin: true,
+      },
+    });
+
+    if (!user || !user.isActive) {
+      // Same contract as the JWT strategy: an inactive or deleted user has
+      // no session, regardless of a still-valid token signature.
+      throw new UnauthorizedException("Session expired. Please login again.");
+    }
+
+    const authMeta = await this.resolveAuthMeta(user.id, authUser.roles);
+
+    return {
+      id: user.id,
+      profileId: authMeta.profileId,
+      username: user.username,
+      email: user.email ?? null,
+      fullName: user.fullName ?? null,
+      roles: authUser.roles,
+      customerApprovalStatus: authMeta.customerApprovalStatus,
+      driverStatus: authMeta.driverStatus,
+      onboardingCompleted: authMeta.onboardingCompleted,
+      onboardingToken: authMeta.onboardingToken,
+      isActive: user.isActive,
+      isSuperAdmin: user.isSuperAdmin === true,
+    } as UserInfo;
+  }
+
   async refreshToken(request: Request, response: Response): Promise<UserInfo> {
     // Credential resolution: the httpOnly cookie is preferred, but browsers
     // that block cross-site cookies (iOS standalone PWAs, Safari ITP, Chrome

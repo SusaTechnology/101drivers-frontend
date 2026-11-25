@@ -6,6 +6,7 @@ import { DriverPayoutService } from "./driverPayout.service";
 import { DriverPayoutControllerBase } from "./base/driverPayout.controller.base";
 import { PrismaService } from "../prisma/prisma.service";
 import { PaymentPayoutEngine } from "../domain/deliveryRequest/paymentPayout.engine";
+import { DriverApprovedGuard } from "../auth/guards/driver-approved.guard";
 import { Inject, Optional } from "@nestjs/common";
 import {
   PayoutSettings,
@@ -154,6 +155,10 @@ export class DriverPayoutController extends DriverPayoutControllerBase {
   }
 
   @common.Post("my-bank-account")
+  // Payout destination changes are operational: only an APPROVED driver
+  // may add or replace their bank account (GET stays open — reading an
+  // existing account is not an operational action).
+  @common.UseGuards(DriverApprovedGuard)
   @nestAccessControl.UseRoles({
     resource: "DriverPayout",
     action: "update",
@@ -300,6 +305,10 @@ export class DriverPayoutController extends DriverPayoutControllerBase {
   // ── Withdrawal Endpoints ─────────────────────────────────────────
 
   @common.Post("request-withdrawal")
+  // Money movement is operational: the driver must CURRENTLY be APPROVED —
+  // a suspended driver must not be able to move funds (the payout engine
+  // only checks settings/balance/Stripe).
+  @common.UseGuards(DriverApprovedGuard)
   @swagger.ApiOkResponse({ description: "Free withdrawal requested — 1-2 business days" })
   @nestAccessControl.UseRoles({
     resource: "DriverPayout",
@@ -315,6 +324,7 @@ export class DriverPayoutController extends DriverPayoutControllerBase {
   }
 
   @common.Post("request-instant-payout")
+  @common.UseGuards(DriverApprovedGuard)
   @swagger.ApiOkResponse({ description: "Instant payout — arrives in minutes, $1.50 fee" })
   @nestAccessControl.UseRoles({
     resource: "DriverPayout",

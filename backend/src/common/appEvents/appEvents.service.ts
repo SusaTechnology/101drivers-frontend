@@ -38,21 +38,41 @@ export const APP_EVENT = {
    *  or a signup attempt was blocked — the admin metrics page should
    *  re-read server truth (throttled at the emit sites, not here). */
   ANALYTICS_CHANGED: "analytics:changed",
+  /** A driver lifecycle transition committed (approve / suspend / reject /
+   *  hold / release / invite / meeting). Emitted by DriverApprovalEngine
+   *  AFTER the database write and audit row succeed. The tracking gateway
+   *  relays it as a `driver:status-updated` socket ping to the affected
+   *  driver's user room; the client treats it as a REVALIDATION SIGNAL and
+   *  refetches /auth/session — the event payload is never authorization. */
+  DRIVER_STATUS_CHANGED: "driver:status-changed",
 } as const;
 
 export type AppEventName = (typeof APP_EVENT)[keyof typeof APP_EVENT];
 
-type AppEventListener = (event: AppEventName) => void;
+/**
+ * Optional routing hint for events whose receiver needs to know WHERE to
+ * look. Kept to identifiers only — receivers must refetch server truth,
+ * so carrying a full snapshot here would only invite stale-trust bugs.
+ */
+export type AppEventPayload = {
+  driverId?: string;
+  /** Owning user id — the socket room target for driver lifecycle events. */
+  userId?: string;
+  status?: string;
+  changedAt?: string;
+};
+
+type AppEventListener = (event: AppEventName, payload?: AppEventPayload) => void;
 
 @Injectable()
 export class AppEventsService {
   private readonly logger = new Logger("AppEventsService");
   private readonly listeners = new Set<AppEventListener>();
 
-  emit(event: AppEventName): void {
+  emit(event: AppEventName, payload?: AppEventPayload): void {
     for (const listener of this.listeners) {
       try {
-        listener(event);
+        listener(event, payload);
       } catch (error) {
         // A listener failure must never break the emitter's business flow.
         this.logger.warn(

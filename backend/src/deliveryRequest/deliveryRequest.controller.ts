@@ -11,6 +11,8 @@ import { Request } from "express";
 import { plainToClass } from "class-transformer";
 import { ApiNestedQuery } from "../decorators/api-nested-query.decorator";
 import * as defaultAuthGuard from "../auth/defaultAuth.guard";
+import { DriverApprovedGuard } from "../auth/guards/driver-approved.guard";
+import { EnumDriverStatus } from "@prisma/client";
 import { AclValidateRequestInterceptor } from "../interceptors/aclValidateRequest.interceptor";
 import { AclFilterResponseInterceptor } from "../interceptors/aclFilterResponse.interceptor";
 import { DeliveryRequestCreateInput } from "./base/DeliveryRequestCreateInput";
@@ -134,6 +136,35 @@ export class DeliveryRequestController extends DeliveryRequestControllerBase {
   private assertAdmin(request: Request): void {
     if (!this.isAdminRequest(request)) {
       throw new common.ForbiddenException("Admin access required");
+    }
+  }
+
+  /**
+   * Operational gate for DRIVER actors on shared endpoints. The delivery
+   * state machine is legitimately driven by customers and admins too, so
+   * a hard DriverApprovedGuard cannot be applied at the decorator level —
+   * instead, when the authenticated actor carries the DRIVER role (and is
+   * not an admin), their CURRENT Driver.status is read from the database:
+   * anything but APPROVED is rejected. This keeps a suspended / rejected /
+   * pending driver out of every state transition (including
+   * transition-status, which would otherwise bypass the start/complete
+   * trip gates) while leaving customer and admin flows untouched.
+   */
+  private async assertDriverOperationalIfDriver(request: Request): Promise<void> {
+    if (this.isAdminRequest(request)) return;
+    const user = this.sessionUser(request);
+    if (!user?.id) return;
+    const roles: string[] = Array.isArray(user?.roles) ? user.roles : [];
+    if (!roles.includes(EnumUserRoles.DRIVER)) return;
+
+    const driver = await this.prisma.driver.findFirst({
+      where: { userId: user.id },
+      select: { status: true },
+    });
+    if (driver && driver.status !== EnumDriverStatus.APPROVED) {
+      throw new common.ForbiddenException(
+        `Driver account is not approved (current status: ${driver.status})`
+      );
     }
   }
 
@@ -1126,6 +1157,12 @@ async getDriverJobDetail(
     if (!this.isAdminRequest(request)) {
       await this.assertDeliveryParticipantOrAdmin(params.id, request);
     }
+    // Operational gate: DRIVER actors must currently be APPROVED — the
+    // generic state machine must not become a side door around the
+    // start/complete trip gates for a suspended or pending driver.
+    // Customers and admins are unaffected (they are legitimate actors on
+    // their own deliveries).
+    await this.assertDriverOperationalIfDriver(request);
     const sessionUser = this.sessionUser(request);
     return this.service.transitionDeliveryStatus({
       deliveryId: params.id,
@@ -1137,6 +1174,7 @@ async getDriverJobDetail(
     });
   }
   @common.Post("driver/location-ping")
+  @common.UseGuards(DriverApprovedGuard)
   @swagger.ApiOkResponse({ type: Object })
   @nestAccessControl.UseRoles({
     resource: "DeliveryRequest",
@@ -1230,6 +1268,7 @@ async getDriverJobDetail(
   }
 
   @common.Post(":id/start-trip")
+  @common.UseGuards(DriverApprovedGuard)
   @swagger.ApiOkResponse({ type: DeliveryRequest })
   @nestAccessControl.UseRoles({
     resource: "DeliveryRequest",
@@ -1286,8 +1325,13 @@ async checkPickupProximity(
 })
 async verifyPickupPin(
   @common.Param() params: DeliveryRequestWhereUniqueInput,
-  @common.Body() body: VerifyPickupPinBody
+  @common.Body() body: VerifyPickupPinBody,
+  @common.Req() request: Request
 ): Promise<{ valid: boolean }> {
+  // Participant binding: only the assigned driver, the owning customer or
+  // an admin may verify this delivery's PIN — an unbound endpoint would be
+  // a brute-force oracle over every delivery's pickup PIN.
+  await this.assertDeliveryParticipantOrAdmin(params.id, request);
   return this.service.verifyPickupPin({
     deliveryId: params.id,
     pin: body.pin,
@@ -1304,8 +1348,12 @@ async verifyPickupPin(
 })
 async verifyVin(
   @common.Param() params: DeliveryRequestWhereUniqueInput,
-  @common.Body() body: VerifyVinBody
+  @common.Body() body: VerifyVinBody,
+  @common.Req() request: Request
 ): Promise<{ valid: boolean }> {
+  // Participant binding: same contract as verify-pin — the VIN oracle must
+  // only answer to delivery participants, not to any authenticated caller.
+  await this.assertDeliveryParticipantOrAdmin(params.id, request);
   return this.service.verifyVin({
     deliveryId: params.id,
     vin: body.vin,
@@ -1313,6 +1361,7 @@ async verifyVin(
 }
 
 @common.Post(":id/complete-trip")
+@common.UseGuards(DriverApprovedGuard)
 @swagger.ApiOkResponse({ type: DeliveryRequest })
 @nestAccessControl.UseRoles({
   resource: "DeliveryRequest",

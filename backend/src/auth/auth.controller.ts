@@ -69,6 +69,22 @@ export class AuthController {
     return request.user;
   }
 
+  /**
+   * Authoritative current-session sync for an already authenticated
+   * client. Same UserInfo shape as login/refresh (minus the token fields —
+   * rotation stays owned by the refresh endpoint), so the frontend session
+   * merge treats all three identically. Driver lifecycle fields are read
+   * fresh from the database (resolveAuthMeta), making this the canonical
+   * "refetch server truth" target for session revalidation and realtime
+   * status pings — identity comes from the verified token, never from
+   * client-provided IDs.
+   */
+  @UseGuards(JwtAuthGuard)
+  @Get("session")
+  async session(@Req() request: Request): Promise<UserInfo> {
+    return this.authService.session(request);
+  }
+
   @Post("signup/driver")
   @HttpCode(HttpStatus.OK)
   // Mobile-only gate: the USER AGENT is the signal — desktop patterns get a

@@ -10,6 +10,7 @@ import { DriverDomain } from "src/domain/driver/driver.domain";
 import { DriverApprovalEngine } from "src/domain/driver/driverApproval.engine";
 import { NotificationEventEngine } from "src/domain/notificationEvent/notificationEvent.engine";
 import { MailModule } from "src/common/mail/mail.module";
+import { AppEventsModule } from "src/common/appEvents/appEvents.module";
 import { ReferralModule } from "../referral/referral.module";
 import { GeoModule } from "../geo/geo.module";
 
@@ -27,6 +28,11 @@ import { GeoModule } from "../geo/geo.module";
     // and DriverApprovalEngine — a locally-registered MailService would
     // crash DI (MailService requires AdminGateService, invisible here).
     MailModule,
+    // AppEventsModule supplies the in-process event bus that
+    // DriverApprovalEngine pings after every committed lifecycle transition
+    // (APP_EVENT.DRIVER_STATUS_CHANGED → tracking gateway → driver's user
+    // room). A leaf module — importing it can never close a cycle.
+    AppEventsModule,
   ],
   // DriverOnboardingPublicController serves /public/drivers/* — a different
   // base path, so it cannot collide with DriverControllerBase's ":id" routes.

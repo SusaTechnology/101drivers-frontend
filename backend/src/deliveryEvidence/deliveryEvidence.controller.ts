@@ -16,6 +16,8 @@ import { DeliveryEvidence } from "./base/DeliveryEvidence";
 import { DeliveryEvidenceFindManyArgs } from "./base/DeliveryEvidenceFindManyArgs";
 import { DeliveryEvidenceWhereUniqueInput } from "./base/DeliveryEvidenceWhereUniqueInput";
 import { DeliveryEvidenceUpdateInput } from "./base/DeliveryEvidenceUpdateInput";
+import { PrismaService } from "../prisma/prisma.service";
+import { EnumDriverStatus, EnumUserRoles } from "@prisma/client";
 @swagger.ApiTags("deliveryEvidences")
 @common.Controller("deliveryEvidences")
 @swagger.ApiBearerAuth()
@@ -23,10 +25,72 @@ import { DeliveryEvidenceUpdateInput } from "./base/DeliveryEvidenceUpdateInput"
 export class DeliveryEvidenceController extends DeliveryEvidenceControllerBase {
   constructor(
     protected readonly service: DeliveryEvidenceService,
+    private readonly prisma: PrismaService,
     @nestAccessControl.InjectRolesBuilder()
     protected readonly rolesBuilder: nestAccessControl.RolesBuilder
   ) {
     super(service, rolesBuilder);
+  }
+
+  /**
+   * Participant-or-admin gate for delivery-attached record creation.
+   * Proof-of-delivery rows previously trusted the request body's
+   * `delivery.connect` with no ownership check — any authenticated caller
+   * could fabricate evidence on ANY delivery. The contract mirrors the
+   * deliveryRequest controller: owning customer, currently-ASSIGNED
+   * driver, or admin. For DRIVER actors the current Driver.status must
+   * also be APPROVED (a suspended driver must not create records).
+   */
+  private async assertDeliveryParticipantOrAdmin(
+    deliveryId: string,
+    request?: Request
+  ): Promise<void> {
+    const user = (request as any).user;
+    if (!user?.id) {
+      throw new common.UnauthorizedException("Not authenticated");
+    }
+    const roles: string[] = Array.isArray(user.roles) ? user.roles : [];
+    if (roles.includes(EnumUserRoles.ADMIN)) return;
+
+    const delivery = await this.prisma.deliveryRequest.findUnique({
+      where: { id: deliveryId },
+      select: {
+        customerId: true,
+        assignments: {
+          where: { unassignedAt: null },
+          select: { driverId: true },
+        },
+      },
+    });
+    if (!delivery) {
+      throw new errors.NotFoundException(
+        `No resource was found for delivery ${deliveryId}`
+      );
+    }
+
+    const customer = await this.prisma.customer.findUnique({
+      where: { userId: user.id },
+      select: { id: true },
+    });
+    if (customer && delivery.customerId === customer.id) return;
+
+    const driver = await this.prisma.driver.findFirst({
+      where: { userId: user.id },
+      select: { id: true, status: true },
+    });
+    if (driver && delivery.assignments.some((a) => a.driverId === driver.id)) {
+      if (driver.status !== EnumDriverStatus.APPROVED) {
+        throw new common.ForbiddenException(
+          `Driver account is not approved (current status: ${driver.status})`
+        );
+      }
+      return;
+    }
+
+    // 404 rather than 403 — do not reveal other customers' deliveries.
+    throw new errors.NotFoundException(
+      `No resource was found for delivery ${deliveryId}`
+    );
   }
 @common.UseInterceptors(AclValidateRequestInterceptor)
   @common.Post()
@@ -40,8 +104,15 @@ export class DeliveryEvidenceController extends DeliveryEvidenceControllerBase {
     type: errors.ForbiddenException,
   })
   async createDeliveryEvidence(
-    @common.Body() data: DeliveryEvidenceCreateInput
+    @common.Body() data: DeliveryEvidenceCreateInput,
+    @common.Req() request?: Request
   ): Promise<DeliveryEvidence> {
+    // Ownership: the delivery id comes from the body, so it must be
+    // validated against the session before any row is written.
+    const deliveryId = (data as any)?.delivery?.connect?.id;
+    if (typeof deliveryId === "string" && deliveryId) {
+      await this.assertDeliveryParticipantOrAdmin(deliveryId, request);
+    }
     return await this.service.createDeliveryEvidence({
       data: {
         ...data,
