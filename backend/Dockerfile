@@ -1,5 +1,9 @@
 # multi-stage: base (build)
-FROM node:18.13.0 AS base
+# Node 22+ — better-auth ships ESM-only and the compiled CJS backend
+# require()s it; require(ESM) is unsupported on the previous node:18.13
+# base (ERR_REQUIRE_ESM at boot). 22.x is an active LTS line where
+# require(ESM) works without flags.
+FROM node:22 AS base
 
 # create directory where the application will be built
 WORKDIR /app
@@ -24,7 +28,9 @@ COPY . .
 RUN npm run build
 
 # multi-stage: production (runtime)
-FROM node:18.13.0-slim AS production
+# Same major as the base stage so native modules copied via node_modules
+# match the runtime ABI (both were built for the same Node version).
+FROM node:22-slim AS production
 
 # create arguments of builds time variables
 ARG user=amplication

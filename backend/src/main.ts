@@ -1,4 +1,4 @@
-import { ValidationPipe } from "@nestjs/common";
+import { Logger, ValidationPipe } from "@nestjs/common";
 import { HttpAdapterHost, NestFactory } from "@nestjs/core";
 import { OpenAPIObject, SwaggerModule } from "@nestjs/swagger";
 import { HttpExceptionFilter } from "./filters/HttpExceptions.filter";
@@ -31,9 +31,18 @@ async function main() {
   // BetterAuthService.onModuleInit (async provider config — Apple ES256).
   const betterAuthService = app.get(BetterAuthService);
   if (!betterAuthService.handler) {
-    throw new Error("Better Auth handler was not initialized");
+    // Better Auth is an OPTIONAL driver-identity layer. If its handler could
+    // not be built (e.g. a Node runtime without require(ESM) support), boot
+    // MUST continue without the mount: legacy JWT keeps every existing user
+    // (dealers, admins, drivers) signed in, and /api/better-auth/* simply
+    // 404s until the runtime is fixed. Crashing here would take the whole
+    // deployment down for a feature that has its own fail-safe.
+    new Logger("Bootstrap").warn(
+      "Better Auth handler unavailable — mount skipped; social sign-in disabled (legacy auth unaffected)."
+    );
+  } else {
+    app.use(betterAuthService.mountPath, betterAuthService.handler);
   }
-  app.use(betterAuthService.mountPath, betterAuthService.handler);
 
   configureCors(app);
 
