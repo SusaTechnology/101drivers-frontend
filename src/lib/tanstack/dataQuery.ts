@@ -646,6 +646,38 @@ export async function revalidateSession(opts?: {
 
   const seq = ++sessionRevalidateSeq;
   const request = (async (): Promise<SessionUser> => {
+    // Better Auth (social) sessions carry a sentinel access token ("better-
+    // auth") — the legacy /auth/session endpoint validates real JWTs only,
+    // so fetching it here would 401 on every call. The registered bridge
+    // refresh is the authoritative sync path for those sessions: it re-
+    // validates the cookie/bearer session and lands fresh driver context
+    // (roles/driverStatus/onboarding) into the SAME cache. Failures keep
+    // the cached session — a dead bridge session throws the canonical
+    // "Session expired" after clearAuth, which the regular expiry path owns.
+    if (betterAuthBridge?.isSession()) {
+      try {
+        await betterAuthBridge.refresh();
+        if (seq !== sessionRevalidateSeq) {
+          return getUser() as SessionUser;
+        }
+        lastSessionRevalidatedAt = Date.now();
+        const merged = getUser() as SessionUser;
+        for (const listener of sessionListeners) {
+          try {
+            listener(merged);
+          } catch {
+            // A broken listener must never break the revalidation.
+          }
+        }
+        return merged;
+      } catch {
+        console.warn(
+          `session revalidate (${reason}): better-auth refresh failed — keeping cached session`
+        );
+        return getUser() as SessionUser;
+      }
+    }
+
     const attempt = (): Promise<Response> =>
       fetchWithTimeout(`${import.meta.env.VITE_API_URL}/api/auth/session`, {
         method: "GET",
