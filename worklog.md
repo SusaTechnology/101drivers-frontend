@@ -3481,3 +3481,18 @@ Work Log:
 
 Stage Summary:
 - Approved drivers: zero redirects, zero flicker, straight to driver routes. Non-approved drivers: status board on every driver route, map never rendered. Deploy FE (backend not required).
+
+---
+Task ID: 79
+Agent: Main Agent
+Task: Harden authentication, driver lifecycle, and session synchronization (multi-phase)
+
+Work Log:
+- Audit (2 Explore agents + line-level re-verification on the current tree): auth inventory (JWT claims deliberately exclude driver status; strategy re-reads user per request), lifecycle engine with transition checks but non-transactional writes, ONE Socket.IO gateway (tracking) with identity-checked user rooms, AdminAuditLog exists. Confirmed gaps: grants.json Driver update:any + value-only policy validation = self-approval hole; unsuspendDriver lacked source-status check; delivery lifecycle had ZERO driver-status references (start/complete/transition/ping); payout + bank endpoints skipped status; evidence/compliance trusted body IDs; verify-pin/vin were unbound oracles; no realtime driver-status event.
+- Backend (commit aef4443b, 13 files): GET /auth/session (resolveAuthMeta-based, token-free, DB-fresh); DriverApprovedGuard (DB re-read per request, ADMIN bypass, driver stashed on request) applied to start-trip/complete-trip/location-ping/request-withdrawal/request-instant-payout/POST my-bank-account; transition-status inline DRIVER-status check (customers/admins unaffected); pin/vin bound to delivery participants; evidence/compliance creation bound to participants + verifiedBy admin-only; ingestDriverLocation status choke point (HTTP + socket); driverPolicy lifecycle locks (generic create: WAITLISTED only; generic update: no status key — engine is the single writer); unsuspend requires SUSPENDED source; all 8 engine transitions emit DRIVER_STATUS_CHANGED post-commit via extended AppEventsService (optional payload); tracking gateway relays driver:status-updated to user:<userId>.
+- Frontend (commit 5aaaa794, 10 files): mergeSessionUser (explicit omitted/preserved vs null/false server-fact semantics — single owner for refresh + session merges); revalidateSession (GET /auth/session, 30s freshness, in-flight dedupe, sequence guard vs stale overwrites, failure-safe — never logs out on transient errors); refresh merge switched to mergeSessionUser; driver layout swapped to revalidateSession + user-room join + socket-ping eviction; provider startup revalidation + React Query notifier; tab-foreground revalidation; computeDriverGuardAccess exported for tests.
+- Tests: FE vitest — session-state.test.ts (9 merge-semantics cases incl. the omitted-field wipe incident) + driverGuardPolicy.test.ts (18 lifecycle-policy cases: incident, all 8 statuses, null/unknown fail-closed, support-route exception, unauthenticated, non-driver). BE jest — driverPolicy.service.spec (10), driverApproval.engine.spec (3: funnel bypass, commit+audit+ping, ping-failure resilience), driver-approved.guard.spec (5). Results: FE 27/27 (npx vitest run <files>), BE 23/23 (npx jest <specs>), backend tsc 2 pre-existing spec errors (baseline), FE vite build exit 0.
+- Verification notes: root `npm test` (vitest run unfiltered) sweeps backend jest specs and fails — pre-existing repo-wide runner split, not introduced by this task; scoped runs are the meaningful gates. Sandbox recycle again reset the checkout mid-task (caught via rev-parse guard before every commit).
+
+Stage Summary:
+- Backend deploy required (aef4443b) then FE deploy (5aaaa794). No DB migrations. No env changes. Sessions preserved (no schema/auth-flow changes). Redirect loops impossible: guard short-circuit + fail-closed + single policy.
