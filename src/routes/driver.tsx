@@ -1,12 +1,12 @@
-import { useEffect } from 'react'
+import { useCallback, useEffect } from 'react'
 import { createFileRoute, Outlet, useLocation, useNavigate } from '@tanstack/react-router'
 import DriverBottomNav from '@/components/layout/DriverBottomNav'
 import type { DriverTabId } from '@/components/layout/DriverBottomNav'
 import { DriverRouteGuard } from '@/components/auth/DriverRouteGuard'
-import { socketJoinDriverFeed, socketLeaveDriverFeed } from '@/lib/socket'
+import { socketJoinDriverFeed, socketLeaveDriverFeed, socketJoinUser, onDriverStatusUpdated } from '@/lib/socket'
 import { trackSeenDeliveries } from '@/lib/driver-feed-tracker'
 import { unlockAudio } from '@/lib/sound'
-import { getUser, setUser, useDataQuery } from '@/lib/tanstack/dataQuery'
+import { getUser, revalidateSession, useDataQuery } from '@/lib/tanstack/dataQuery'
 
 // Routes that should NOT show the bottom nav
 const HIDE_NAV_ROUTES = [
@@ -63,40 +63,50 @@ function DriverLayout() {
     }
   }, [seedData])
 
-  // ── Server-truth status revalidation (the mid-session eviction) ──
-  // localStorage's driverStatus is a snapshot from login time. If the
-  // admin SUSPENDS / REJECTS / downgrades a driver while their session is
-  // alive, every localStorage gate still passes and the driver keeps the
-  // dashboard forever. The layout mounts ONCE for all /driver/* pages, so
-  // this is the single central place to re-check: fetch the driver
-  // record, and when the CURRENT status (or onboarding flag) no longer
-  // matches the stored snapshot, refresh the stored user and — if the
-  // driver is no longer approved — send them to the status board, which
-  // renders the fresh status card. First paint still uses localStorage,
-  // so approved drivers never see a flicker or a spinner.
+  // ── Authoritative session revalidation (the mid-session eviction) ──
+  // localStorage's driverStatus is a snapshot from login time — fast for
+  // first paint, but it can silently go stale when an admin approves,
+  // suspends, rejects or holds the driver mid-session. The layout mounts
+  // ONCE for all /driver/* pages, so this is the single central place to
+  // re-sync: revalidateSession() fetches the authoritative session
+  // (GET /auth/session — DB-fresh lifecycle fields; 30s freshness gate,
+  // deduplicated, failure-safe) and lands server truth in the cache. If
+  // the CURRENT status is no longer APPROVED, the driver is sent to the
+  // status board, which renders the fresh status card. The realtime
+  // driver:status-updated ping (an admin acted while the app is open)
+  // triggers the same revalidation immediately — the ping is a signal,
+  // the refetched session is the truth. First paint still uses
+  // localStorage, so approved drivers never see a flicker or a spinner.
   const navigate = useNavigate()
-  const { data: freshProfile } = useDataQuery<any>({
-    apiEndPoint: `${import.meta.env.VITE_API_URL}/api/drivers/${driverId}`,
-    queryKey: ['driverStatusRevalidation', driverId],
-    noFilter: true,
-    enabled: Boolean(driverId),
-    staleTime: 30_000,
-  })
+
+  const evictIfNotApproved = useCallback(
+    (fresh: ReturnType<typeof getUser>) => {
+      if (!fresh?.roles?.includes('DRIVER')) return
+      if (fresh.driverStatus && fresh.driverStatus !== 'APPROVED') {
+        navigate({ to: '/driver-application-submitted' })
+      }
+    },
+    [navigate]
+  )
 
   useEffect(() => {
-    if (!freshProfile?.status) return
-    const stored = getUser()
-    if (!stored?.roles?.includes('DRIVER')) return
-    const freshOnboarded = Boolean(freshProfile.onboardingCompletedAt)
-    const changed =
-      freshProfile.status !== stored.driverStatus ||
-      freshOnboarded !== Boolean(stored.onboardingCompleted)
-    if (!changed) return
-    setUser({ ...stored, driverStatus: freshProfile.status, onboardingCompleted: freshOnboarded })
-    if (freshProfile.status !== 'APPROVED') {
-      navigate({ to: '/driver-application-submitted' })
+    if (!driverId) return
+    // Own-user room: carries notification events AND the lifecycle pings.
+    socketJoinUser()
+    let cancelled = false
+    revalidateSession({ reason: 'driver-layout-mount' }).then((fresh) => {
+      if (!cancelled) evictIfNotApproved(fresh)
+    })
+    const offStatusPing = onDriverStatusUpdated(() => {
+      revalidateSession({ force: true, reason: 'driver-status-event' }).then((fresh) => {
+        if (!cancelled) evictIfNotApproved(fresh)
+      })
+    })
+    return () => {
+      cancelled = true
+      offStatusPing()
     }
-  }, [freshProfile, navigate])
+  }, [driverId, evictIfNotApproved])
 
   const pathname = location.pathname
   const hideNav = HIDE_NAV_ROUTES.some((route) => pathname.startsWith(route))

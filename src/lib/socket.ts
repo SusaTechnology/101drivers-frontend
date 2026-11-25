@@ -52,6 +52,34 @@ function rejoinAllRooms(): void {
   }
 }
 
+// ── Driver lifecycle ping listeners ─────────────────────────────────
+type DriverStatusPayload = {
+  driverId?: string | null;
+  status?: string | null;
+  changedAt?: string | null;
+};
+type DriverStatusHandler = (payload: DriverStatusPayload) => void;
+const driverStatusHandlers = new Set<DriverStatusHandler>();
+
+/**
+ * Subscribe to `driver:status-updated` pings — emitted when a committed
+ * backend driver lifecycle transition lands (approve / suspend / reject /
+ * hold / release / invite / meeting). Returns an unsubscriber.
+ *
+ * The ping is a REVALIDATION SIGNAL, not the source of truth and never
+ * authorization: handlers must refetch server truth (revalidateSession),
+ * duplicate pings are harmless, and a missed ping is recovered by
+ * periodic revalidation.
+ */
+export function onDriverStatusUpdated(
+  handler: DriverStatusHandler
+): () => void {
+  driverStatusHandlers.add(handler);
+  return () => {
+    driverStatusHandlers.delete(handler);
+  };
+}
+
 /**
  * Connect to the tracking WebSocket namespace with JWT auth.
  *
@@ -104,6 +132,21 @@ export function socketConnect(token?: string | null): Socket | null {
   // ── Shared driver-feed listener (single listener, persists for socket lifetime) ──
   socket.on('delivery:feed-update', (data) => {
     handleFeedEvent(data);
+  });
+
+  // ── Driver lifecycle pings (backend DriverApprovalEngine → gateway) ──
+  // The event is a REVALIDATION SIGNAL, never authorization: handlers are
+  // expected to refetch server truth (revalidateSession), not to act on
+  // the payload. Registered handlers survive reconnects because the same
+  // socket object is reused for the whole session.
+  socket.on('driver:status-updated', (data) => {
+    for (const handler of driverStatusHandlers) {
+      try {
+        handler(data);
+      } catch (err) {
+        console.warn('[Socket] driver:status-updated handler failed:', err);
+      }
+    }
   });
 
   socket.on('connect', () => {

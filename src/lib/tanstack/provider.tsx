@@ -2,7 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { ThemeProvider } from '@/lib/theme'
 import { Toaster } from 'sonner'
 import type { ReactNode } from 'react'
-import { getLastKnownRoles, registerSignOutCacheClear } from './dataQuery'
+import { getLastKnownRoles, onSessionUpdated, registerSignOutCacheClear, revalidateSession } from './dataQuery'
 import { isAdminGatePath } from '@/lib/adminGate'
 import { UploadFeedbackOverlay } from '@/lib/uploadFeedback'
 import { installResumeSync } from './resume-sync'
@@ -64,6 +64,19 @@ installResumeSync(queryClient)
 // cached data (notification inbox, dashboards) because query keys carry no
 // user identity.
 registerSignOutCacheClear(() => queryClient.clear())
+
+// ── Authoritative session sync wiring ────────────────────────────────
+// Startup: when the app loads with a live session, re-fetch server truth
+// (GET /auth/session) so the cached user reflects the CURRENT approval /
+// role state — a session cached before an admin action self-heals here
+// without a re-login. The notifier mirrors every revalidated snapshot into
+// the React Query cache so anything reading ["currentUser"] stays in sync.
+// Both are safe at module scope: revalidateSession dedupes, gates on its
+// 30s freshness window, and keeps the cached session on any failure.
+onSessionUpdated((user) => {
+  queryClient.setQueryData(['currentUser'], user)
+})
+void revalidateSession({ reason: 'app-startup' })
 
 // Global handler: when any query/mutation fails with "Session expired",
 // redirect to the correct role-specific login instead of showing a broken retry UI.

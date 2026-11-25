@@ -55,7 +55,9 @@ type GuardState =
   | "needs_onboarding"   // APPROVED but onboarding incomplete → the form
   | "status_board";      // every non-approved status → the board
 
-function computeDriverGuardAccess(
+// Exported for the lifecycle-policy regression tests (vitest) — the guard
+// itself stays a thin synchronous wrapper around this pure decision.
+export function computeDriverGuardAccess(
   pathname: string,
 ): { state: GuardState; message: string } {
   // Step 1: authentication

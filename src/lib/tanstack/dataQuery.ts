@@ -514,34 +514,11 @@ async function refreshAccessToken(): Promise<string> {
     // NOTE: profileId is null for admins (resolveAuthMeta only resolves a
     // profile for customers/drivers), so it must NOT be required here —
     // the old strict `data.profileId` check silently skipped the user
-    // refresh for every admin session. Merge over the previous user object
-    // so nothing is lost, with the fresh backend values winning.
+    // refresh for every admin session. The merge itself is centralized in
+    // mergeSessionUser (explicit omitted-vs-null-vs-false semantics — the
+    // single owner of session-merge rules for refresh AND /auth/session).
     if (data.id && data.username && data.roles) {
-      const prev = getUser();
-      setUser({
-        ...prev,
-        id: data.id,
-        username: data.username,
-        // The refresh response is a full UserInfo (email included). Merge it
-        // so sessions stored before email was persisted client-side heal
-        // here — the "send from my email" pre-fill depends on it.
-        email: data.email ?? prev?.email ?? null,
-        fullName: data.fullName ?? prev?.fullName ?? null,
-        profileId: data.profileId ?? prev?.profileId ?? null,
-        roles: data.roles,
-        // Preserve the stored value when the response omits the field — an
-        // older backend that predates these fields must not wipe what
-        // login stored on every 10-minute token refresh (that wipe made
-        // the driver route guard misjudge the session until re-login).
-        customerApprovalStatus: data.customerApprovalStatus ?? prev?.customerApprovalStatus ?? null,
-        driverStatus: data.driverStatus ?? prev?.driverStatus ?? null,
-        onboardingCompleted: data.onboardingCompleted ?? prev?.onboardingCompleted ?? false,
-        onboardingToken: data.onboardingToken ?? prev?.onboardingToken ?? null,
-        isActive: data.isActive,
-        // Keep the elevated-admin flag fresh across token refreshes;
-        // fallback preserves the value stored at login.
-        isSuperAdmin: data.isSuperAdmin ?? prev?.isSuperAdmin ?? false,
-      });
+      setUser(mergeSessionUser(getUser(), data));
     }
 
     return newAccessToken;
@@ -552,6 +529,194 @@ async function refreshAccessToken(): Promise<string> {
     throw error;
   }
   
+}
+
+// ==================== SESSION STATE SYNC ====================
+//
+// One owner for "how a server session snapshot lands in the client cache".
+// The cache exists ONLY for fast initial rendering (no flicker, no
+// per-navigation spinners) — it is never authorization; every operational
+// API re-verifies driver status server-side (DriverApprovedGuard et al.).
+
+/** The user fields a session payload may carry (login / refresh / session). */
+const SESSION_USER_FIELDS = [
+  "id",
+  "profileId",
+  "username",
+  "email",
+  "fullName",
+  "roles",
+  "customerApprovalStatus",
+  "driverStatus",
+  "onboardingCompleted",
+  "onboardingToken",
+  "isActive",
+  "isSuperAdmin",
+] as const;
+
+type SessionUser = NonNullable<typeof currentUser>;
+
+/**
+ * Merge a server session snapshot into the cached user with EXPLICIT
+ * semantics per property:
+ *   - omitted from the response  → PRESERVE the cached value (an older
+ *     backend that predates a field must not erase what login stored —
+ *     that wipe is what once bounced approved drivers into onboarding),
+ *   - explicitly `null`          → take the null (the server says the
+ *     relation is gone; null is a fact, not an omission),
+ *   - explicitly `false`         → take the false (never treated as
+ *     missing — `??` cannot distinguish these, hence `key in response`),
+ *   - a new valid value          → take it (fresh server truth wins).
+ * A response for a DIFFERENT user id replaces the cache wholesale (account
+ * switch), and an empty cache trusts the server outright.
+ */
+export function mergeSessionUser(
+  prev: typeof currentUser,
+  incoming: Record<string, unknown> | null | undefined
+): SessionUser {
+  if (!incoming) return prev as SessionUser;
+  if (!prev) return incoming as SessionUser;
+  if (
+    typeof incoming.id === "string" &&
+    incoming.id &&
+    incoming.id !== prev.id
+  ) {
+    return incoming as SessionUser;
+  }
+
+  const merged: Record<string, unknown> = { ...prev };
+  for (const key of SESSION_USER_FIELDS) {
+    if (key in incoming) {
+      merged[key] = incoming[key];
+    }
+  }
+  return merged as SessionUser;
+}
+
+/** Fired after revalidateSession lands authoritative state in the cache. */
+type SessionListener = (user: SessionUser) => void;
+const sessionListeners = new Set<SessionListener>();
+
+/** Subscribe to cache updates from session revalidation (returns unsubscriber). */
+export function onSessionUpdated(listener: SessionListener): () => void {
+  sessionListeners.add(listener);
+  return () => {
+    sessionListeners.delete(listener);
+  };
+}
+
+// Freshness policy: a revalidated session is trusted for 30s (mirrors the
+// driver layout's previous 30s revalidation window). Tab-foreground and
+// mount triggers inside the window are no-ops, so quick tab switches stay
+// free of request storms while real absences still re-sync.
+const SESSION_REVALIDATE_FRESH_MS = 30_000;
+let lastSessionRevalidatedAt = 0;
+let sessionRevalidateSeq = 0;
+let sessionRevalidateInFlight: Promise<SessionUser> | null = null;
+
+/**
+ * Re-fetch the authoritative session (GET /auth/session) and merge it into
+ * the cache. Failure-safe by design:
+ *   - network/timeout/5xx → keep the cached session, never log out, never
+ *     redirect (correctness is enforced server-side per request anyway);
+ *   - 401/403 → one silent refresh retry, then keep the cache too (the
+ *     normal query-level "Session expired" path owns hard expiry UX);
+ *   - concurrent calls are deduplicated into one request;
+ *   - a superseded response can never overwrite newer state (sequence
+ *     guard) — no stale-response race.
+ */
+export async function revalidateSession(opts?: {
+  force?: boolean;
+  reason?: string;
+}): Promise<SessionUser> {
+  const cached = getUser();
+  if (!isAuthenticated()) return cached as SessionUser;
+
+  const reason = opts?.reason ?? "unspecified";
+  if (
+    !opts?.force &&
+    cached &&
+    Date.now() - lastSessionRevalidatedAt < SESSION_REVALIDATE_FRESH_MS
+  ) {
+    return cached as SessionUser;
+  }
+  if (sessionRevalidateInFlight) {
+    return sessionRevalidateInFlight;
+  }
+
+  const seq = ++sessionRevalidateSeq;
+  const request = (async (): Promise<SessionUser> => {
+    const attempt = (): Promise<Response> =>
+      fetchWithTimeout(`${import.meta.env.VITE_API_URL}/api/auth/session`, {
+        method: "GET",
+        credentials: "include",
+        headers: { Authorization: `Bearer ${getAccessToken() ?? ""}` },
+      });
+
+    try {
+      let response = await attempt();
+      if ((response.status === 401 || response.status === 403) && getRefreshToken()) {
+        try {
+          await refreshShared();
+        } catch {
+          // Refresh failure keeps the cached session; hard expiry is owned
+          // by the regular query path — this function must not fight it.
+        }
+        response = await attempt();
+      }
+
+      if (!response.ok) {
+        console.warn(
+          `session revalidate (${reason}): HTTP ${response.status} — keeping cached session`
+        );
+        return getUser() as SessionUser;
+      }
+
+      const fresh = await response.json();
+      // Out-of-order guard: a newer revalidation superseded this one.
+      if (seq !== sessionRevalidateSeq) {
+        return getUser() as SessionUser;
+      }
+
+      const merged = mergeSessionUser(getUser(), fresh);
+      setUser(merged);
+      lastSessionRevalidatedAt = Date.now();
+      for (const listener of sessionListeners) {
+        try {
+          listener(merged);
+        } catch {
+          // A broken listener must never break the revalidation.
+        }
+      }
+      return merged;
+    } catch (error) {
+      console.warn(
+        `session revalidate (${reason}) failed — keeping cached session:`,
+        error instanceof Error ? error.message : error
+      );
+      return getUser() as SessionUser;
+    }
+  })();
+
+  sessionRevalidateInFlight = request;
+  try {
+    return await request;
+  } finally {
+    if (sessionRevalidateInFlight === request) {
+      sessionRevalidateInFlight = null;
+    }
+  }
+}
+
+// Foreground revalidation: when the tab comes back, re-sync if the cache
+// went stale while hidden. Registered once at module load; the freshness
+// gate makes quick tab switches free.
+if (typeof document !== "undefined") {
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") {
+      void revalidateSession({ reason: "tab-foreground" });
+    }
+  });
 }
 
 // ==================== ERROR PARSING ====================
