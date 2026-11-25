@@ -102,7 +102,13 @@ describe("AuthService", () => {
 
   describe("Testing the authService.login()", () => {
     it("should return userInfo object for correct username and password", async () => {
-      const loginResult = await service.login(VALID_CREDENTIALS);
+      // login() now also sets the access-token cookie on the response
+      // (signature predates this suite's last update — insurance-portal
+      // work); the minimal stubs keep the assertion on the returned
+      // userInfo unchanged.
+      const loginResult = await service.login(VALID_CREDENTIALS, {} as any, {
+        cookie: () => undefined,
+      } as any);
       expect(loginResult).toEqual({
         username: USER.username,
         roles: USER.roles,

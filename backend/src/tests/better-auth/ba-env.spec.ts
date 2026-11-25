@@ -196,4 +196,42 @@ describe("readBetterAuthEnv", () => {
     delete (noSecretEnv as Record<string, string | undefined>).JWT_SECRET;
     await expect(readBetterAuthEnv(noSecretEnv)).rejects.toThrow(/no secret/);
   });
+
+  it("kill switch: BETTER_AUTH_ENABLED=false keeps everything dormant (wins over the secret check)", async () => {
+    // No secret source at all — the kill switch must STILL win (early
+    // return before the secret validation) so disabling can never fail.
+    const deadEnv: NodeJS.ProcessEnv = {
+      NODE_ENV: "production",
+      BETTER_AUTH_ENABLED: "false",
+      GOOGLE_CLIENT_ID: "gid",
+      GOOGLE_CLIENT_SECRET: "gsecret",
+    } as NodeJS.ProcessEnv;
+    delete (deadEnv as Record<string, string | undefined>).JWT_ACCESS_SECRET;
+    delete (deadEnv as Record<string, string | undefined>).JWT_SECRET;
+
+    const env = await readBetterAuthEnv(deadEnv);
+    expect(env.enabled).toBe(false);
+    expect(env.enabledProviderIds).toEqual([]);
+    expect(env.providers.google).toBeUndefined();
+    expect(env.secret).toBe("");
+  });
+
+  it("kill switch: only false/0/no disable — missing var or typo stays enabled", async () => {
+    const unset = await readBetterAuthEnv(BASE_ENV);
+    expect(unset.enabled).toBe(true);
+
+    const typo = await readBetterAuthEnv({
+      ...BASE_ENV,
+      BETTER_AUTH_ENABLED: "flase",
+    } as NodeJS.ProcessEnv);
+    expect(typo.enabled).toBe(true);
+
+    for (const value of ["no", "0", "FALSE"]) {
+      const env = await readBetterAuthEnv({
+        ...BASE_ENV,
+        BETTER_AUTH_ENABLED: value,
+      } as NodeJS.ProcessEnv);
+      expect(env.enabled).toBe(false);
+    }
+  });
 });

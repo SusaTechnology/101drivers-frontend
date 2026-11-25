@@ -20,6 +20,7 @@ import { Test } from "@nestjs/testing";
 import { ACGuard } from "nest-access-control";
 import request from "supertest";
 import { DriverController } from "./driver.controller";
+import { BetterAuthService } from "../better-auth/better-auth.service";
 import { DriverService } from "./driver.service";
 import { DriverDomain } from "../domain/driver/driver.domain";
 import { DefaultAuthGuard } from "../auth/defaultAuth.guard";
@@ -151,6 +152,13 @@ describe("Driver self-service onboarding — real pipeline", () => {
       controllers: [DriverController],
       providers: [
         { provide: PrismaService, useValue: prismaFake },
+        {
+          // Better Auth (social driver identity) — the hybrid
+          // DefaultAuthGuard consults it first; a null session falls
+          // straight through to the legacy JWT path this spec exercises.
+          provide: BetterAuthService,
+          useValue: { getSessionFromRequest: async () => null },
+        },
         {
           // The real JwtStrategyBase.validate() logic, pointed at the
           // in-memory user store (JwtStrategy only ever calls

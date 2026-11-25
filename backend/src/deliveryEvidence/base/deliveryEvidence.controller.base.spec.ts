@@ -14,6 +14,24 @@ import { AclValidateRequestInterceptor } from "../../interceptors/aclValidateReq
 import { map } from "rxjs";
 import { DeliveryEvidenceController } from "../deliveryEvidence.controller";
 import { DeliveryEvidenceService } from "../deliveryEvidence.service";
+import { PrismaService } from "../../prisma/prisma.service";
+
+// The custom controller injects PrismaService for the participant gate on
+// delivery-attached creates. The generated CREATE_INPUT carries no
+// delivery.connect, so the gate short-circuits — the fake only needs to
+// satisfy DI, with participant-consistent shapes in case a future test
+// attaches a delivery (user-1 owns customer c1).
+const prismaFake = {
+  deliveryRequest: {
+    findUnique: async () => ({ customerId: "c1", assignments: [] }),
+  },
+  customer: {
+    findUnique: async () => ({ id: "c1" }),
+  },
+  driver: {
+    findFirst: async () => null,
+  },
+};
 
 const nonExistingId = "nonExistingId";
 const existingId = "existingId";
@@ -72,6 +90,7 @@ const basicAuthGuard = {
     const argumentHost = context.switchToHttp();
     const request = argumentHost.getRequest();
     request.user = {
+      id: "user-1",
       roles: ["user"],
     };
     return true;
@@ -109,6 +128,7 @@ describe("DeliveryEvidence", () => {
           provide: DeliveryEvidenceService,
           useValue: service,
         },
+        { provide: PrismaService, useValue: prismaFake },
       ],
       controllers: [DeliveryEvidenceController],
       imports: [ACLModule],

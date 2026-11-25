@@ -20,6 +20,13 @@ export interface BaProviderConfig {
 }
 
 export interface BetterAuthEnv {
+  /**
+   * Kill switch — BETTER_AUTH_ENABLED=false keeps Better Auth fully
+   * dormant: nothing initializes, nothing mounts, /api/better-auth/*
+   * 404s. The robust version of "comment the call site out": the code
+   * is preserved and re-enabling is an env change + restart.
+   */
+  enabled: boolean;
   /** Better Auth session-cookie signing secret. */
   secret: string;
   /** Explicit API base URL (recommended in production, behind proxies). */
@@ -67,6 +74,25 @@ export async function readBetterAuthEnv(
 ): Promise<BetterAuthEnv> {
   const nodeEnv = (env.NODE_ENV || "production").trim().toLowerCase();
   const isDev = nodeEnv === "development" || nodeEnv === "dev";
+
+  // ── Kill switch (evaluated FIRST — even before the secret check) ──
+  // BETTER_AUTH_ENABLED=false keeps Better Auth fully dormant: no auth
+  // instance, no handler, no mount (main.ts skips null handlers), so
+  // /api/better-auth/* — including the email/password endpoints — is
+  // unreachable. Anything other than false/0/no leaves it enabled, so
+  // a missing variable (or a typo) can never silently disable it.
+  const killSwitch = str(env.BETTER_AUTH_ENABLED)?.toLowerCase();
+  if (killSwitch === "false" || killSwitch === "0" || killSwitch === "no") {
+    return {
+      enabled: false,
+      secret: "",
+      trustedOrigins: [],
+      secureCookies: !isDev,
+      cookieSameSite: !isDev ? "none" : "lax",
+      providers: {},
+      enabledProviderIds: [],
+    };
+  }
 
   // Secret: prefer a dedicated BETTER_AUTH_SECRET; fall back to the existing
   // access-token secret so a deploy without the new variable still boots
@@ -152,6 +178,7 @@ export async function readBetterAuthEnv(
   const enabledProviderIds = Object.keys(providers) as BaProviderId[];
 
   return {
+    enabled: true,
     secret,
     baseURL: str(env.BETTER_AUTH_URL),
     trustedOrigins,

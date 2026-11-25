@@ -48,6 +48,16 @@ export class BetterAuthService implements OnModuleInit {
   async onModuleInit(): Promise<void> {
     try {
       const env = await readBetterAuthEnv();
+      if (!env.enabled) {
+        // Kill switch (BETTER_AUTH_ENABLED=false): keep the code, run
+        // nothing. auth/handler stay null so main.ts skips the mount and
+        // getSessionFromRequest falls straight through to legacy JWT.
+        this.enabledProviderIds = [];
+        this.logger.warn(
+          "Better Auth disabled via BETTER_AUTH_ENABLED=false — nothing initialized or mounted; legacy JWT auth unaffected."
+        );
+        return;
+      }
       this.enabledProviderIds = env.enabledProviderIds;
       // better-auth ships ESM-only, while this backend compiles to CJS. A
       // STATIC import would crash the WHOLE backend at boot on Node runtimes

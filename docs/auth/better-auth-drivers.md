@@ -35,6 +35,15 @@ See `backend/.env.example` (`Better Auth` section). Highlights:
 A provider with missing credentials is **disabled**, never a crash. The
 frontend renders only what `GET /api/auth/ba/providers` reports.
 
+### Kill switch
+
+`BETTER_AUTH_ENABLED=false` (env) keeps Better Auth **fully dormant** — the
+auth instance is never built, the handler is never mounted
+(`/api/better-auth/*` 404s, including email/password), and the frontend
+capability map reports every provider disabled. Legacy JWT auth is
+untouched. Only `false`/`0`/`no` disable it; an unset variable (or a typo)
+can never silently turn it off. Re-enabling is an env change + restart.
+
 ## Mount point
 
 `toNodeHandler(auth)` mounted on the Express instance at **`/api/better-auth`**
